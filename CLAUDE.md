@@ -15,12 +15,12 @@ All these MUST be followed:
 - **Implement EXACTLY ONE task at a time - NEVER implement multiple tasks together, even if they seem related or similar**
 - 🚨 **ONE TASK ONLY: Even if tasks 7 & 8 are both "Delete operations", implement them separately**. **Even if it feels inefficient or slow, ONE TASK AT A TIME is mandatory.** **No exceptions. No batching. No grouping. ONE TASK ONLY.**
 - **NO BATCHING: Do not group tasks together for "efficiency" - this violates the one-task rule**
-- Implementation of "one task" includes: planning, implementing code and tests, running validations, and committing
+- Implementation of "one task" includes: planning, implementing code and tests, running validations, and preparing for commit
 - Update progress in `IMPLEMENTATION_PLAN.md`. After each task, mark it as done.
 - Never skip tasks.
 - You are allowed to finish implementing the plan, even if you need to compact the conversation.
 
-Do not stop between tasks to ask for user confirmation or feedback, unless you encounter a problem you cannot solve.
+**After completing each task (validations passing), STOP and ask for user approval before committing.**
 
 ### **Commit Message Format**
 
@@ -51,7 +51,7 @@ Add size tracking for in-memory cache items.
 
 2. **Implement** - Write the code and all tests together. Include updates to existing tests if identified in planning.
 
-3. **Validate and commit** - Run `./devtools/run_all_agent_validations.sh` and fix any failures. Repeat until all validations pass (zero errors, zero warnings). Once passing, commit the work and update `IMPLEMENTATION_PLAN.md`.
+3. **Validate and prepare** - Run `./devtools/run_all_agent_validations.sh` and fix any failures. Repeat until all validations pass (zero errors, zero warnings). Once passing, update `IMPLEMENTATION_PLAN.md` and ask user for approval to commit.
 
 **Progress Tracking:**
 - Use clear markdown comments to show progress (e.g., `## Task Plan: SQLite Connection Setup`)
@@ -94,7 +94,7 @@ When fixing validation failures, follow this process:
 
 5. **Apply fix and re-run** - Run validations again until passing
 
-**Rule: Both code AND tests must match the spec. If validation passes and both match spec, commit immediately.**
+**Rule: Both code AND tests must match the spec. If validation passes and both match spec, ask user for approval to commit.**
 
 ### **🚫 FORBIDDEN PHRASES 🚫**
 
