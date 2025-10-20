@@ -10,7 +10,7 @@ The technical specification is in the `docs/tech_spec/` directory, where the cen
 ### **Implementing tasks**
 All these MUST be followed:
 - Implementation MUST follow the sequence in `IMPLEMENTATION_PLAN.md`
-- **Requirements source**: Get detailed behavior requirements from `spec.md`, NOT from IMPLEMENTATION_PLAN.md
+- **Requirements source**: Get detailed behavior requirements from the spec, NOT from IMPLEMENTATION_PLAN.md
 - Implement tasks in order
 - **Implement EXACTLY ONE task at a time - NEVER implement multiple tasks together, even if they seem related or similar**
 - 🚨 **ONE TASK ONLY: Even if tasks 7 & 8 are both "Delete operations", implement them separately**. **Even if it feels inefficient or slow, ONE TASK AT A TIME is mandatory.** **No exceptions. No batching. No grouping. ONE TASK ONLY.**
@@ -47,14 +47,14 @@ Add size tracking for in-memory cache items.
 
 **Work through these 3 sub-tasks sequentially:**
 
-1. **Plan** - Read `spec.md` for this task's requirements. Describe the behavior to implement in detail. Design tests for the new behavior. Identify if any existing tests need updates to cover modified functionality.
+1. **Plan** - Read the spec for this task's requirements. Describe the behavior to implement in detail. Design tests for the new behavior. Identify if any existing tests need updates to cover modified functionality.
 
 2. **Implement** - Write the code and all tests together. Include updates to existing tests if identified in planning.
 
 3. **Validate and commit** - Run `./devtools/run_all_agent_validations.sh` and fix any failures. Repeat until all validations pass (zero errors, zero warnings). Once passing, commit the work and update `IMPLEMENTATION_PLAN.md`.
 
 **Progress Tracking:**
-- Use clear markdown comments to show progress (e.g., `## Task 5 Plan: SQLite Connection Setup`)
+- Use clear markdown comments to show progress (e.g., `## Task Plan: SQLite Connection Setup`)
 - Do NOT use TodoWrite for task tracking (wastes tokens)
 - Only use TodoWrite if a single task has >5 complex sub-tasks or user explicitly requests it
 
@@ -79,7 +79,7 @@ When fixing validation failures, follow this process:
 1. **Identify the failure** - What exactly is failing? (test, type check, lint, etc.)
 
 2. **Check the spec first** - Before changing ANY code or test:
-   - Re-read the relevant section of `spec.md`
+   - Re-read the relevant section of the spec
    - Confirm what the correct behavior should be
    - Verify your understanding matches the spec
 

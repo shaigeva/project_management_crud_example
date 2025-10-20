@@ -1,6 +1,5 @@
 {
   "permissions": {
-    "defaultMode": "acceptEdits",
     "allow": [
       "Edit(*)",
       "Write(*)",
@@ -15,10 +14,15 @@
       "Bash(git add:*)",
       "Bash(git commit -m:*)",
       "Bash(git add -A && git commit -m:*)",
-      "Bash(git add :* && git commit -m:*)"
+      "Bash(git add :* && git commit -m:*)",
+      "Read(//Users/shai/proj/shaig/learn/ai_framework_posts/task_manager_python_simple/tests/**)",
+      "Read(//Users/shai/proj/shaig/learn/ai_framework_posts/task_manager_python_simple/**)",
+      "Read(//Users/shai/proj/shaig/learn/ai_framework_posts/task_manager_python_simple/task_manager_python_simple/**)",
+      "Bash(uv add:*)"
     ],
     "deny": [],
-    "ask": []
+    "ask": [],
+    "defaultMode": "acceptEdits"
   },
   "outputStyle": "default"
 }
