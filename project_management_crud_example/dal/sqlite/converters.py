@@ -7,6 +7,8 @@ enabling seamless data flow between layers.
 All conversion functions are explicit and type-safe, avoiding the use of
 model_validate() to ensure clear separation and evolution paths between
 ORM and business models.
+
+The stub entity converters serve as a template/scaffolding for creating real converters.
 """
 
 from typing import List
@@ -15,21 +17,30 @@ from project_management_crud_example import domain_models
 from project_management_crud_example.dal.sqlite import orm_data_models
 
 
-def orm_item_to_business_item(orm_item: orm_data_models.ItemORM) -> domain_models.Item:
-    """Convert an ORM Item model to a business Item model.
+def orm_stub_entity_to_business_stub_entity(
+    orm_stub_entity: orm_data_models.StubEntityORM,
+) -> domain_models.StubEntity:
+    """Convert an ORM StubEntity model to a business StubEntity model.
 
     This provides explicit type safety and clear conversion logic,
     avoiding the hidden coupling of model_validate().
+
+    Template for creating real entity converters.
     """
-    return domain_models.Item(
-        id=str(orm_item.id),
-        name=orm_item.name,  # type: ignore[arg-type]
-        description=orm_item.description,  # type: ignore[arg-type]
-        created_at=orm_item.created_at,  # type: ignore[arg-type]
-        updated_at=orm_item.updated_at,  # type: ignore[arg-type]
+    return domain_models.StubEntity(
+        id=str(orm_stub_entity.id),
+        name=orm_stub_entity.name,  # type: ignore[arg-type]
+        description=orm_stub_entity.description,  # type: ignore[arg-type]
+        created_at=orm_stub_entity.created_at,  # type: ignore[arg-type]
+        updated_at=orm_stub_entity.updated_at,  # type: ignore[arg-type]
     )
 
 
-def orm_items_to_business_items(orm_items: List[orm_data_models.ItemORM]) -> List[domain_models.Item]:
-    """Convert a list of ORM Items to business Items."""
-    return [orm_item_to_business_item(orm_item) for orm_item in orm_items]
+def orm_stub_entities_to_business_stub_entities(
+    orm_stub_entities: List[orm_data_models.StubEntityORM],
+) -> List[domain_models.StubEntity]:
+    """Convert a list of ORM StubEntities to business StubEntities.
+
+    Template for creating real entity list converters.
+    """
+    return [orm_stub_entity_to_business_stub_entity(orm_stub_entity) for orm_stub_entity in orm_stub_entities]

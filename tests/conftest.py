@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from project_management_crud_example.app import app
 from project_management_crud_example.dal.sqlite.database import Database
-from project_management_crud_example.dal.sqlite.repository import ItemRepository
+from project_management_crud_example.dal.sqlite.repository import StubEntityRepository
 from project_management_crud_example.dependencies import get_db_session
 
 
@@ -73,13 +73,13 @@ def test_session(test_db: Database) -> Generator[Session, None, None]:
 
 
 @pytest.fixture
-def test_item_repo(test_session: Session) -> ItemRepository:
-    """Get an item repository for testing.
+def test_stub_entity_repo(test_session: Session) -> StubEntityRepository:
+    """Get a stub entity repository for testing.
 
-    This fixture provides an ItemRepository instance connected to the
-    test database session.
+    This fixture provides a StubEntityRepository instance connected to the
+    test database session. Template for creating real repository fixtures.
     """
-    return ItemRepository(test_session)
+    return StubEntityRepository(test_session)
 
 
 @pytest.fixture

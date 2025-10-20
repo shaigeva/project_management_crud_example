@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from project_management_crud_example.dependencies import get_database
-from project_management_crud_example.routers import api, health
+from project_management_crud_example.routers import health, stub_entity_api
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="Project Management API",
-    description="Backend service for a project management system built with FastAPI and SQLite",
+    description="Backend service with stub entity template/scaffolding built with FastAPI and SQLite",
     version="0.1.0",
     lifespan=lifespan,
     docs_url="/docs",
@@ -53,7 +53,7 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(api.router)
+app.include_router(stub_entity_api.router)
 app.include_router(health.router)
 
 

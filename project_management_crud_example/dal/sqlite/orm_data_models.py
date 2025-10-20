@@ -3,6 +3,8 @@
 This module contains all SQLAlchemy ORM models for database operations.
 This is part of the Data Access Layer (DAL) and should only contain
 database-specific models and logic.
+
+The StubEntityORM model serves as a template/scaffolding for creating real ORM models.
 """
 
 import uuid
@@ -21,10 +23,10 @@ def generate_uuid() -> str:
 
 
 # SQLAlchemy ORM Models
-class ItemORM(Base):
-    """SQLAlchemy ORM model for items."""
+class StubEntityORM(Base):
+    """SQLAlchemy ORM model for stub entities - template for creating real ORM models."""
 
-    __tablename__ = "items"
+    __tablename__ = "stub_entities"
 
     # Using String for UUID storage in SQLite (36 characters for standard UUID format)
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -41,4 +43,4 @@ class ItemORM(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<Item(id='{self.id}', name='{self.name}')>"
+        return f"<StubEntity(id='{self.id}', name='{self.name}')>"
