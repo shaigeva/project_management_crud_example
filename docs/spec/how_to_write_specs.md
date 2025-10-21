@@ -2,6 +2,51 @@
 
 This guide defines how to write behavioral specifications and corresponding tests in this project.
 
+## How to Update Specifications
+
+### Specification File Structure
+
+**Main spec** (`docs/spec/main_spec.md`):
+- High-level feature list
+- Rationale for each feature
+- Status and requirement counts (inline)
+- Links to detailed specs
+
+**Detailed specs** (`docs/spec/detailed/feature_xxx_detailed_spec.md`):
+- Detailed requirements with unique IDs (REQ-XXX-YYY)
+- Scenario descriptions
+- Observable behaviors
+- Explicit test specifications
+- Edge cases
+- Status for each requirement (inline)
+
+### Requirement Format
+
+Each requirement must have:
+
+1. **Unique ID**: `REQ-{FEATURE}-{NUMBER}`
+   - Example: REQ-PROJ-001, REQ-TASK-003
+
+2. **Status** (inline): 🔴 Not Implemented | ✅ Implemented | ⚠️ Needs Fix
+
+3. **Type**: Product Behavior (preferred) or Technical Behavior (if necessary)
+
+4. **Scenario**: Explicit description of when this behavior occurs
+
+5. **Observable Behavior**: What external systems can verify
+
+6. **Test Specification**: Explicit test names with descriptions
+
+7. **Edge Cases**: List of edge cases to test
+
+### Status Tracking (Inline Only)
+
+**No separate tracking files.** Status lives in spec files:
+
+- Each requirement has its own status marker
+- Feature status calculated from requirements (e.g., "🟡 4/8 implemented")
+- Update status when behavior is implemented and tested
+
 ## Core Principle: Product Behavior Over Technical Details
 
 ### What is Product Behavior?
