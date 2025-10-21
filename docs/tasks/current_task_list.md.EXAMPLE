@@ -1,0 +1,138 @@
+# Current Task List
+
+**Created**: 2024-01-20
+**Spec Reference**: [Projects Detailed Spec](../spec/detailed/projects_detailed_spec.md)
+**Covers Requirements**: REQ-PROJ-001, REQ-PROJ-002, REQ-PROJ-003
+
+---
+
+## Task 1: Implement Project domain models
+**Status**: ⏳ Pending
+**Implements**: REQ-PROJ-001 (partial - data structures)
+
+### Spec Behaviors This Task Enables
+From REQ-PROJ-001:
+- Project has required fields: id, name, description, created_at, updated_at
+- Description is optional
+- All fields have appropriate types
+
+### Implementation Checklist
+- [ ] Create `ProjectData` in `domain_models.py` (name, description)
+- [ ] Create `Project` model extending ProjectData (add id, timestamps)
+- [ ] Create `ProjectCreateCommand` for creation
+- [ ] Create `ProjectUpdateCommand` for updates
+- [ ] Add field validation (name 1-255 chars, description optional max 1000)
+
+### Tests for This Task
+From Task 1 alone (domain models):
+- test_project_data_with_valid_fields_validates
+- test_project_data_without_name_fails_validation
+- test_project_data_with_empty_name_fails_validation
+- test_project_data_with_too_long_name_fails_validation
+
+Note: Full REQ-PROJ-001 tests require Tasks 1, 2, 3 complete.
+
+---
+
+## Task 2: Implement Project repository
+**Status**: ⏳ Pending
+**Implements**: REQ-PROJ-001 (partial - persistence)
+**Dependencies**: Task 1
+
+### Spec Behaviors This Task Enables
+From REQ-PROJ-001:
+- Projects can be created and persisted
+- Projects can be retrieved by ID
+- Projects can be listed
+
+### Implementation Checklist
+- [ ] Create `ProjectORM` in `dal/sqlite/orm_data_models.py`
+- [ ] Create converters in `dal/sqlite/converters.py`
+- [ ] Create `ProjectRepository` with methods:
+  - `create_project(command) -> Project`
+  - `get_project_by_id(id) -> Project | None`
+  - `get_all_projects() -> list[Project]`
+  - `delete_project(id) -> bool`
+- [ ] Update database.py to include projects table
+
+### Tests for This Task
+Repository-level tests (test through repository, not HTTP):
+- test_create_project_then_get_by_id_returns_it
+- test_create_project_appears_in_get_all
+- test_get_project_by_non_existent_id_returns_none
+- test_get_all_projects_when_empty_returns_empty_list
+
+Note: Full REQ-PROJ-001 tests require Task 3 (API) complete.
+
+---
+
+## Task 3: Implement Project API endpoints
+**Status**: ⏳ Pending
+**Implements**: REQ-PROJ-001, REQ-PROJ-002, REQ-PROJ-003, REQ-PROJ-007
+**Dependencies**: Task 2
+
+### Spec Behaviors This Task Completes
+- ✅ REQ-PROJ-001: Full create & retrieve workflow
+- ✅ REQ-PROJ-002: Get project by ID
+- ✅ REQ-PROJ-003: List all projects
+- ✅ REQ-PROJ-007: Validation errors
+
+### Implementation Checklist
+- [ ] Create `routers/projects_api.py` with endpoints:
+  - POST /projects (create)
+  - GET /projects/{id} (get by ID)
+  - GET /projects (list all)
+  - DELETE /projects/{id} (delete)
+- [ ] Add `get_project_repo` dependency in `dependencies.py`
+- [ ] Include router in `app.py`
+- [ ] Add proper error handling (404, 400/422)
+
+### Tests for This Task (API Level - Priority 1)
+These tests verify the COMPLETE product behavior from specs:
+
+**From REQ-PROJ-001:**
+- test_after_create_project_get_by_id_returns_the_project
+- test_after_create_project_appears_in_list
+- test_create_project_without_description_succeeds
+- test_create_project_returns_all_required_fields
+- test_create_project_with_max_length_name_succeeds
+- test_create_project_with_special_characters_succeeds
+- test_create_project_with_unicode_succeeds
+- test_create_multiple_projects_with_same_name_succeeds
+
+**From REQ-PROJ-002:**
+- test_get_existing_project_by_id_returns_project
+- test_get_non_existent_project_returns_404
+
+**From REQ-PROJ-003:**
+- test_get_all_projects_when_empty_returns_empty_array
+- test_get_all_projects_returns_all_created_projects
+- test_get_all_projects_after_delete_excludes_deleted
+
+**From REQ-PROJ-007:**
+- test_create_project_without_name_returns_validation_error
+- test_create_project_with_empty_name_returns_validation_error
+- test_create_project_with_name_too_long_returns_validation_error
+- test_create_project_with_invalid_data_type_returns_validation_error
+
+### When Task 3 is Done
+Mark in specs:
+- REQ-PROJ-001: 🔴 → ✅
+- REQ-PROJ-002: 🔴 → ✅
+- REQ-PROJ-003: 🔴 → ✅
+- REQ-PROJ-007: 🔴 → ✅
+
+Update main_spec.md:
+- Projects status: 🔴 0/8 → 🟡 4/8 (50%)
+
+---
+
+## Completion Checklist
+
+When ALL tasks are done:
+- [ ] All tasks marked ✅ Done
+- [ ] All spec requirements marked ✅ Implemented
+- [ ] All validations pass (zero errors/warnings)
+- [ ] Feature status updated in main_spec.md
+- [ ] Archive this file to `archive/2024-01-20_projects_crud.md`
+- [ ] Delete or clear `current_task_list.md`
