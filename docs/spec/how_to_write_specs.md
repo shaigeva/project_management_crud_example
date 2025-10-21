@@ -33,11 +33,13 @@ Each requirement must have:
 
 4. **Scenario**: Explicit description of when this behavior occurs
 
-5. **Observable Behavior**: What external systems can verify
+5. **Observable Behavior**: What external systems can verify (high-level description)
 
-6. **Test Specification**: Explicit test names with descriptions
+6. **Acceptance Criteria**: Detailed, testable criteria for this behavior
 
-7. **Edge Cases**: List of edge cases to test
+7. **Edge Cases**: List of edge cases to consider
+
+**Note**: Requirements define WHAT behaviors are needed, not HOW to test them. Test planning happens during task implementation (see `docs/how_to_implement_tasks.md`).
 
 ### Status Tracking (Inline Only)
 
@@ -115,18 +117,21 @@ Each requirement must have:
 When [user/system action occurs]
 
 **Observable Behavior**:
-- [What happens that can be verified externally]
-- [What API calls would prove this worked]
-- [What state changes are observable]
+[High-level description of what happens that external systems can verify]
 
-**Test Specification**:
-1. **Test**: `test_after_creating_project_get_returns_the_project`
-   - **Verifies**: Created project is retrievable via GET
-   - **Steps**: POST /projects → capture ID → GET /projects/{id} → verify data matches
+**Acceptance Criteria**:
+- After creating resource, GET returns that resource with all submitted data
+- Created resource appears in list endpoint
+- Resource includes system-generated fields (id, timestamps)
+- Subsequent GET requests return consistent data
+- [Other specific, testable criteria]
 
-2. **Test**: `test_created_project_appears_in_list`
-   - **Verifies**: Created project appears in GET /projects list
-   - **Steps**: POST /projects → GET /projects → verify new project is in list
+**Edge Cases**:
+- Minimum/maximum length inputs
+- Special characters in fields
+- Optional vs required fields
+- Concurrent operations
+- [Other edge cases to consider]
 ```
 
 ### Example: Good Product Behavior Requirement
@@ -140,41 +145,24 @@ When [user/system action occurs]
 When a user creates a project with valid data (name, description)
 
 **Observable Behavior**:
-- User receives a response containing the created project with a unique ID
-- Subsequent GET request to /projects/{id} returns the same project
-- The project appears in the list returned by GET /projects
-- Project data (name, description) matches what was submitted
-- Project includes timestamps (created_at, updated_at)
+User can create a project and subsequently retrieve it through the API, with all data persisted correctly.
 
-**Test Specification**:
-1. **Test**: `test_after_create_project_get_by_id_returns_the_project`
-   - **Verifies**: Created project can be retrieved by ID
-   - **Steps**:
-     - POST /projects with valid data
-     - Capture project ID from response
-     - GET /projects/{id}
-     - Assert returned project matches created data
+**Acceptance Criteria**:
+- After creating project via POST, user receives response with created project
+- Response includes unique ID (non-empty string)
+- Response includes all submitted data (name, description)
+- Response includes system timestamps (created_at, updated_at)
+- Subsequent GET /projects/{id} returns the same project with matching data
+- Created project appears in GET /projects list
+- Multiple GET requests return consistent data
+- Description field is optional (can be omitted or null)
 
-2. **Test**: `test_after_create_project_appears_in_list`
-   - **Verifies**: Created project appears in full project list
-   - **Steps**:
-     - POST /projects with unique name
-     - GET /projects
-     - Assert project with that name is in the list
-
-3. **Test**: `test_create_project_returns_project_with_id_and_timestamps`
-   - **Verifies**: Creation response includes all expected fields
-   - **Steps**:
-     - POST /projects
-     - Assert response includes: id, name, description, created_at, updated_at
-     - Assert id is non-empty
-     - Assert timestamps are valid datetime values
-
-**Edge Cases to Test**:
-- Creating project with minimal data (only required fields)
-- Creating project with maximum length name
-- Creating multiple projects with same name (should all succeed)
-- Creating project with special characters in name
+**Edge Cases**:
+- Creating project with minimal data (name only)
+- Creating project with maximum length name (255 chars)
+- Creating multiple projects with same name (all should succeed)
+- Creating project with special characters in name (!@#$%^&*())
+- Creating project with unicode characters (日本語, Español)
 ```
 
 ### Example: Bad Requirement (Too Technical)

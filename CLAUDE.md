@@ -34,17 +34,15 @@ The technical specification is in the `docs/tech_spec/` directory, where the cen
 **What**: Implement tasks to completion
 **Who**: User tells you to implement tasks, you execute autonomously until done
 
-**Rules for implementing tasks:**
-- Get detailed behavior requirements from SPEC files, not task list
-- Implement tasks that cover related requirements together if it makes sense
-- Each task MUST cover ALL its requirements completely (no partial implementations)
-- Write tests covering ALL scenarios from spec (see spec's "Test Specification" section)
-- Run validations until zero errors/warnings
-- Update task status: ⏳ → 🔄 → ✅
-- Update requirement status in spec: 🔴 → ✅
-- After each task completion, ask user for approval to commit
+**See `docs/how_to_implement_tasks.md` for detailed implementation process.**
 
-**After completing each task (validations passing), STOP and ask for user approval before committing.**
+**Key rules:**
+- Get behavior requirements from SPEC files, not task list
+- Implement tasks that cover related requirements together if makes sense
+- Each task MUST cover ALL its requirements completely (no partial implementations)
+- Write comprehensive tests: API, repository, utilities, domain logic
+- Use standardized progress messages (see task implementation guide)
+- After each task completion, ask user for approval to commit
 
 #### Phase 3: Completion & Archival
 When ALL tasks are done:

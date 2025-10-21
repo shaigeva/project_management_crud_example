@@ -35,30 +35,46 @@ GOOD: test_basic_put_and_get.py
 BAD: test_task_03_basic_put_and_get.py
 BAD: test_cache.py
 
-## Testing Priority Hierarchy
+## Test Coverage Requirements
 
-### **Priority 1: API Endpoint Tests (Critical) ⭐⭐⭐**
+**Every feature implementation MUST include ALL applicable test layers:**
 
-**Why Critical**: Test actual user-facing functionality and complete request-response cycles
+### **1. API Tests - ALWAYS REQUIRED ⭐⭐⭐**
+
+**Why Critical**: Test externally observable behavior through HTTP endpoints
 
 **Location**: `tests/api/test_*_api.py`
 
 **Required Coverage**:
 - ✅ **Happy path scenarios**: Valid requests, correct responses, proper HTTP status codes
 - ✅ **Error handling**: 422 validation, 404 not found, 400 business logic violations
-- ✅ **Complete workflows**: Multi-step user scenarios, data persistence
+- ✅ **Complete workflows**: Multi-step user scenarios, data persistence verification
 
-### **Priority 2: Repository/DAL Tests (Important) ⭐⭐**
+### **2. Repository Tests - ALWAYS REQUIRED ⭐⭐**
+
+**Why Required**: Repository layer is a cohesive architectural layer that must work independently
 
 **Location**: `tests/dal/test_*_repository.py`
 
-**Coverage**: CRUD operations, database interactions, data persistence
+**Required Coverage**:
+- ✅ **CRUD operations**: create, read, update, delete methods
+- ✅ **Data persistence**: Verify data survives round-trips
+- ✅ **Error handling**: Not found, edge cases
+- ✅ **Independent testing**: Test without HTTP layer
 
-### **Priority 3: Domain Logic Tests (Supporting) ⭐**
+**Important**: Repository tests verify the data access layer works correctly on its own.
 
-**Location**: `tests/data_models/` (if needed)
+### **3. Utility/Logic Tests - IF APPLICABLE**
 
-**Coverage**: Pydantic model validation, business rules, data transformations
+**Location**: `tests/utils/` or appropriate location
+
+**Coverage**: Helper functions, converters, business logic utilities
+
+### **4. Domain Validation Tests - IF APPLICABLE**
+
+**Location**: `tests/domain/` or appropriate location
+
+**Coverage**: Pydantic model validation, command objects, business rules
 
 ## Testing Implementation Rules
 

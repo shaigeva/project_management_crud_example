@@ -93,6 +93,8 @@ Abstracts data access logic from business logic:
 - Each entity type has a dedicated repository (e.g., `StubEntityRepository`)
 - Repositories provide CRUD operations
 - Repositories work with domain models, not ORM models
+- **Repository layer is a cohesive whole** - should be thoroughly tested independently
+- Repository tests verify data persistence without requiring HTTP layer
 
 ### Dependency Injection
 FastAPI's built-in DI system used throughout:
@@ -233,11 +235,29 @@ db_path -> test_db -> test_session -> test_stub_entity_repo (Repository tests)
                     -> client (API tests)
 ```
 
-### Test Coverage
-- **API Tests** (`tests/api/`) - Test HTTP endpoints and complete workflows
-- **Repository Tests** (`tests/dal/`) - Test database operations and CRUD behavior
+### Test Coverage Layers
 
-See `tests/CLAUDE.md` for comprehensive testing guidelines and fixture documentation.
+**Every feature implementation must include ALL these test layers:**
+
+1. **API Tests** (`tests/api/`) - Priority 1
+   - Test HTTP endpoints and complete workflows
+   - Verify externally observable behavior
+   - Test through actual HTTP requests
+
+2. **Repository Tests** (`tests/dal/`) - Required
+   - Test repository layer independently (without HTTP)
+   - Verify CRUD operations and data persistence
+   - **Repository is cohesive architectural layer - test thoroughly**
+
+3. **Utility/Logic Tests** - If applicable
+   - Test helper functions, converters, utilities
+   - Test business logic in domain models
+
+4. **Domain Validation Tests** - If applicable
+   - Test Pydantic validation rules
+   - Test command objects
+
+See `tests/CLAUDE.md` and `docs/how_to_implement_tasks.md` for detailed testing guidelines.
 
 ## Stub Entity Template
 
