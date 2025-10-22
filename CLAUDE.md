@@ -27,8 +27,13 @@ The technical specification is in the `docs/tech_spec/` directory, where the cen
 **Who**: You work WITH the user to define requirements and plan tasks
 
 1. **Update specifications** in `docs/spec/` (see how_to_write_specs.md for format)
-2. **Create task list** in `docs/tasks/current_task_list.md` referencing spec requirements
-3. **Discuss and agree** on what to implement next
+2. **Show specs to user for review** - DO NOT commit specs without user approval
+3. **Get user approval** before committing spec changes
+4. **Create task list** in `docs/tasks/current_task_list.md` referencing spec requirements
+5. **Show task list to user for review** - DO NOT commit task lists without user approval
+6. **Discuss and agree** on what to implement next
+
+**CRITICAL**: All specification and task list changes require user review and approval BEFORE committing.
 
 #### Phase 2: Implementation (AUTONOMOUS after user approval)
 **What**: Implement tasks to completion
