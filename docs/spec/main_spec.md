@@ -98,27 +98,30 @@ The system supports multiple organizations (tenants) with complete data isolatio
 ---
 
 ## Feature: Role-Based Access Control
-**Status**: 🔴 0/8 requirements implemented (0%)
+**Status**: 🔴 0/10 requirements implemented (0%)
 **Detail Spec**: [detailed/rbac_detailed_spec.md](detailed/rbac_detailed_spec.md)
 **Purpose**: Control access to resources based on user roles
 **Version**: V1
 
 ### Rationale
-Different users need different levels of access. The system supports four roles:
-- **Admin**: Full system access, user management
-- **Project Manager**: Manage projects, tickets, assign users
-- **Write Access**: Create/update tickets and comments
-- **Read Access**: View tickets and comments only
+Different users need different levels of access. The system supports five roles:
+- **Super Admin**: Manage organizations, cross-organization access, create organization admins
+- **Admin**: Full organization access, user management within organization
+- **Project Manager**: Manage projects, tickets, assign users within organization
+- **Write Access**: Create/update tickets and comments within organization
+- **Read Access**: View tickets and comments only within organization
 
 ### High-Level Requirements
-- 🔴 REQ-RBAC-001: Admin role has full access
-- 🔴 REQ-RBAC-002: Project Manager can manage projects and tickets
-- 🔴 REQ-RBAC-003: Write Access users can create/update tickets
-- 🔴 REQ-RBAC-004: Read Access users can only view
-- 🔴 REQ-RBAC-005: Enforce permissions on all endpoints
-- 🔴 REQ-RBAC-006: Return 403 for unauthorized actions
-- 🔴 REQ-RBAC-007: Users see only data they have permission for
-- 🔴 REQ-RBAC-008: Activity logs reflect user permissions
+- 🔴 REQ-RBAC-001: Super Admin can manage organizations and create organization admins
+- 🔴 REQ-RBAC-002: Super Admin can access all organizations
+- 🔴 REQ-RBAC-003: Admin role has full access within their organization
+- 🔴 REQ-RBAC-004: Project Manager can manage projects and tickets
+- 🔴 REQ-RBAC-005: Write Access users can create/update tickets
+- 🔴 REQ-RBAC-006: Read Access users can only view
+- 🔴 REQ-RBAC-007: Enforce permissions on all endpoints
+- 🔴 REQ-RBAC-008: Return 403 for unauthorized actions
+- 🔴 REQ-RBAC-009: Users see only data they have permission for
+- 🔴 REQ-RBAC-010: Activity logs reflect user permissions
 
 ---
 
