@@ -26,14 +26,21 @@ The technical specification is in the `docs/tech_spec/` directory, where the cen
 **What**: Update specs, create task lists, decide what to implement
 **Who**: You work WITH the user to define requirements and plan tasks
 
-1. **Update specifications** in `docs/spec/` (see how_to_write_specs.md for format)
-2. **Show specs to user for review** - DO NOT commit specs without user approval
-3. **Get user approval** before committing spec changes
-4. **Create task list** in `docs/tasks/current_task_list.md` referencing spec requirements
-5. **Show task list to user for review** - DO NOT commit task lists without user approval
-6. **Discuss and agree** on what to implement next
+**Process:**
+1. **Create/update specifications** in `docs/spec/` (see how_to_write_specs.md for format)
+2. **Show specs to user** - Display the changes/new content
+3. **Wait for user approval** - User reviews and may request changes
+4. **After user approves**: Commit the spec changes
+5. **Create task list** in `docs/tasks/current_task_list.md` referencing spec requirements
+6. **Show task list to user** - Display the task list
+7. **Wait for user approval** - User reviews and may request changes
+8. **After user approves**: Commit the task list
+9. **Discuss and agree** on what to implement next
 
-**CRITICAL**: All specification and task list changes require user review and approval BEFORE committing.
+**🚨 CRITICAL RULE 🚨**
+- **NEVER commit specs or task lists without explicit user approval**
+- **ALWAYS show changes first, wait for approval, THEN commit**
+- This applies to ALL files in Phase 1 (specs, task lists, documentation)
 
 #### Phase 2: Implementation (AUTONOMOUS after user approval)
 **What**: Implement tasks to completion
@@ -41,13 +48,24 @@ The technical specification is in the `docs/tech_spec/` directory, where the cen
 
 **See `docs/how_to_implement_tasks.md` for detailed implementation process.**
 
+**Process for each task:**
+1. Implement code and tests
+2. Run validations until all pass (zero errors/warnings)
+3. Update task and requirement statuses
+4. **Show summary** of what was implemented
+5. **Ask user for approval to commit**
+6. **After user approves**: Commit the changes
+
 **Key rules:**
 - Get behavior requirements from SPEC files, not task list
 - Implement tasks that cover related requirements together if makes sense
 - Each task MUST cover ALL its requirements completely (no partial implementations)
 - Write comprehensive tests: API, repository, utilities, domain logic
 - Use standardized progress messages (see task implementation guide)
-- After each task completion, ask user for approval to commit
+
+**🚨 COMMIT RULE 🚨**
+- **NEVER commit implementation without asking user first**
+- **ALWAYS: complete task → show summary → ask approval → THEN commit**
 
 #### Phase 3: Completion & Archival
 When ALL tasks are done:
@@ -64,6 +82,7 @@ When ALL tasks are done:
 1. **Plan** - Read spec requirements. Design tests. Check if existing tests need updates.
 2. **Implement** - Write code and tests together covering ALL spec scenarios.
 3. **Validate** - Run `./devtools/run_all_agent_validations.sh` until zero errors/warnings.
+
 🚨 **ZERO TOLERANCE** 🚨
 - ZERO test failures, linting errors, type errors, warnings
 
@@ -78,7 +97,8 @@ When ALL tasks are done:
 - You've tried to fix the errors and failed (then tell the user)
 
 4. **Update status** - Mark task ✅ and requirements ✅ in specs.
-5. **Commit** - Ask user for approval to commit.
+5. **Request commit approval** - Show what was done, ask user "Ready to commit?"
+6. **After approval** - Commit with appropriate message.
 
 
 
