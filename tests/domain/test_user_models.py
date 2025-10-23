@@ -148,6 +148,7 @@ class TestUserCreateCommand:
         )
         command = UserCreateCommand(
             user_data=user_data,
+            password="TestPassword123",
             organization_id="org-123",
             role=UserRole.ADMIN,
         )
@@ -165,6 +166,7 @@ class TestUserCreateCommand:
         )
         command = UserCreateCommand(
             user_data=user_data,
+            password="TestPassword123",
             organization_id=None,
             role=UserRole.SUPER_ADMIN,
         )

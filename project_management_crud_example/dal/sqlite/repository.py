@@ -24,7 +24,7 @@ from project_management_crud_example.domain_models import (
     UserAuthData,
     UserCreateCommand,
 )
-from project_management_crud_example.utils.password import generate_password, hash_password
+from project_management_crud_example.utils.password import hash_password
 
 from .converters import (
     orm_stub_entities_to_business_stub_entities,
@@ -60,17 +60,21 @@ class Repository:
             self.session = session
 
         def create(self, user_create_command: UserCreateCommand) -> User:
-            """Create a new user with a generated password.
+            """Create a new user with provided password.
 
-            Returns the created User domain model (without password_hash).
-            The generated password is not returned - it should be captured by the caller
-            if needed for display to the user.
+            Args:
+                user_create_command: Command containing user data and plain text password
+
+            Returns:
+                Created User domain model (without password_hash)
+
+            Note: Password is hashed before storage. Plain text password is never stored.
             """
             user_data = user_create_command.user_data
             logger.debug(f"Creating new user: {user_data.username}")
 
-            # Generate and hash password
-            password_hash = hash_password(generate_password())
+            # Hash the provided password
+            password_hash = hash_password(user_create_command.password)
 
             orm_user = UserORM(
                 username=user_data.username,
@@ -162,6 +166,59 @@ class Repository:
             self.session.commit()
             logger.debug(f"User deleted: {user_id}")
             return True
+
+        def create_super_admin_if_needed(
+            self, username: str, email: str, full_name: str, password: str
+        ) -> tuple[bool, Optional[User]]:
+            """Create Super Admin user if none exists.
+
+            Args:
+                username: Super Admin username
+                email: Super Admin email
+                full_name: Super Admin full name
+                password: Plain text password (will be hashed)
+
+            Returns:
+                Tuple of (created: bool, user: User | None)
+                - created: True if Super Admin was created, False if already exists
+                - user: Created User if created, None if already exists
+
+            Note: This function is idempotent - it will not create duplicate Super Admins.
+            """
+            from project_management_crud_example.domain_models import UserRole
+
+            logger.debug("Checking if Super Admin exists")
+
+            # Check if any Super Admin users exist
+            all_users = self.get_all()
+            existing_super_admins = [u for u in all_users if u.role == UserRole.SUPER_ADMIN]
+
+            if existing_super_admins:
+                logger.debug("Super Admin already exists, skipping creation")
+                return False, None
+
+            logger.info(f"Creating Super Admin: {username}")
+
+            # Create Super Admin
+            from project_management_crud_example.domain_models import UserData
+
+            user_data = UserData(
+                username=username,
+                email=email,
+                full_name=full_name,
+            )
+
+            command = UserCreateCommand(
+                user_data=user_data,
+                password=password,
+                organization_id=None,  # Super Admin has no organization
+                role=UserRole.SUPER_ADMIN,
+            )
+
+            user = self.create(command)
+            logger.info(f"Super Admin created successfully: {user.id}")
+
+            return True, user
 
     class StubEntities:
         """Stub entity operations - template/scaffolding for reference."""

@@ -17,6 +17,7 @@ class TestUserOperations:
         )
         command = UserCreateCommand(
             user_data=user_data,
+            password="TestPassword123",
             organization_id="org-123",
             role=UserRole.ADMIN,
         )
@@ -44,6 +45,7 @@ class TestUserOperations:
         )
         command = UserCreateCommand(
             user_data=user_data,
+            password="TestPassword123",
             organization_id=None,
             role=UserRole.SUPER_ADMIN,
         )
@@ -65,6 +67,7 @@ class TestUserOperations:
         )
         command = UserCreateCommand(
             user_data=user_data,
+            password="TestPassword123",
             organization_id="org-123",
             role=UserRole.ADMIN,
         )
@@ -94,6 +97,7 @@ class TestUserOperations:
         )
         command = UserCreateCommand(
             user_data=user_data,
+            password="TestPassword123",
             organization_id="org-123",
             role=UserRole.WRITE_ACCESS,
         )
@@ -118,9 +122,15 @@ class TestUserOperations:
         user1_data = UserData(username="user1", email="user1@example.com", full_name="User 1")
         user2_data = UserData(username="user2", email="user2@example.com", full_name="User 2")
 
-        test_repo.users.create(UserCreateCommand(user_data=user1_data, organization_id="org-123", role=UserRole.ADMIN))
         test_repo.users.create(
-            UserCreateCommand(user_data=user2_data, organization_id="org-456", role=UserRole.READ_ACCESS)
+            UserCreateCommand(
+                user_data=user1_data, password="TestPassword123", organization_id="org-123", role=UserRole.ADMIN
+            )
+        )
+        test_repo.users.create(
+            UserCreateCommand(
+                user_data=user2_data, password="TestPassword123", organization_id="org-456", role=UserRole.READ_ACCESS
+            )
         )
 
         # Get all users
@@ -146,6 +156,7 @@ class TestUserOperations:
         )
         command = UserCreateCommand(
             user_data=user_data,
+            password="TestPassword123",
             organization_id="org-123",
             role=UserRole.WRITE_ACCESS,
         )

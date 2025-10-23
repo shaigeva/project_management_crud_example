@@ -14,7 +14,6 @@ from project_management_crud_example.app import app
 from project_management_crud_example.config import settings
 from project_management_crud_example.dal.sqlite.repository import Repository
 from project_management_crud_example.domain_models import UserCreateCommand, UserData, UserRole
-from project_management_crud_example.utils.password import hash_password
 from tests.conftest import client, test_repo  # noqa: F401
 
 
@@ -26,22 +25,16 @@ def test_user(test_repo: Repository) -> tuple[str, str]:
         email="testuser@example.com",
         full_name="Test User",
     )
-    command = UserCreateCommand(
-        user_data=user_data,
-        organization_id="org-123",
-        role=UserRole.ADMIN,
-    )
 
     # Create user with known password
     password = "TestPassword123"
+    command = UserCreateCommand(
+        user_data=user_data,
+        password=password,
+        organization_id="org-123",
+        role=UserRole.ADMIN,
+    )
     user = test_repo.users.create(command)
-
-    # Update password to known value
-    from project_management_crud_example.dal.sqlite.orm_data_models import UserORM
-
-    orm_user = test_repo.session.query(UserORM).filter(UserORM.id == user.id).first()
-    orm_user.password_hash = hash_password(password)
-    test_repo.session.commit()
 
     return user.id, password
 
@@ -54,21 +47,15 @@ def test_super_admin(test_repo: Repository) -> tuple[str, str]:
         email="superadmin@example.com",
         full_name="Super Admin",
     )
+
+    password = "SuperAdminPassword123"
     command = UserCreateCommand(
         user_data=user_data,
+        password=password,
         organization_id=None,  # Super admin has no organization
         role=UserRole.SUPER_ADMIN,
     )
-
-    password = "SuperAdminPassword123"
     user = test_repo.users.create(command)
-
-    # Update password to known value
-    from project_management_crud_example.dal.sqlite.orm_data_models import UserORM
-
-    orm_user = test_repo.session.query(UserORM).filter(UserORM.id == user.id).first()
-    orm_user.password_hash = hash_password(password)
-    test_repo.session.commit()
 
     return user.id, password
 

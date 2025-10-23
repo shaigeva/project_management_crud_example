@@ -107,6 +107,7 @@ class UserCreateCommand(BaseModel):
     """Command model for creating a new user."""
 
     user_data: UserData
+    password: str = Field(..., min_length=1, description="Plain text password (will be hashed)")
     organization_id: Optional[str] = Field(None, description="Organization ID (None for Super Admin)")
     role: UserRole = Field(..., description="User role")
 

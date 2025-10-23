@@ -29,6 +29,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("Initializing database")
     db = get_database()
     db.create_tables()
+
+    # Auto-bootstrap Super Admin for development/testing convenience
+    # NOTE: This is for EXAMPLE APPLICATIONS only. In production:
+    # - Never auto-bootstrap with constant passwords
+    # - Use proper initialization and secrets management
+    from project_management_crud_example.bootstrap_data import ensure_super_admin
+
+    created, user_id = ensure_super_admin(db)
+    if created:
+        logger.info(f"Super Admin auto-bootstrapped (user_id={user_id})")
+        logger.warning(
+            "Using constant password for development. (This is for example apps only - never use in production!)"
+        )
+    else:
+        logger.info("Super Admin already exists")
+
     yield
     # Cleanup resources on shutdown if needed
     pass
