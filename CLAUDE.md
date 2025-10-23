@@ -31,7 +31,11 @@ The technical specification is in the `docs/tech_spec/` directory, where the cen
 2. **Show specs to user** - Display the changes/new content
 3. **Wait for user approval** - User reviews and may request changes
 4. **After user approves**: Commit the spec changes
-5. **Create task list** in `docs/tasks/current_task_list.md` referencing spec requirements
+5. **Create SHORT task list** in `docs/tasks/current_task_list.md`
+   - Task list should be BRIEF (see example in current_task_list.md.EXAMPLE)
+   - Each task: brief description + which requirements it implements
+   - NO detailed implementation plans (those come during task implementation)
+   - NO test specifications (those come during task planning phase)
 6. **Show task list to user** - Display the task list
 7. **Wait for user approval** - User reviews and may request changes
 8. **After user approves**: Commit the task list
@@ -41,6 +45,12 @@ The technical specification is in the `docs/tech_spec/` directory, where the cen
 - **NEVER commit specs or task lists without explicit user approval**
 - **ALWAYS show changes first, wait for approval, THEN commit**
 - This applies to ALL files in Phase 1 (specs, task lists, documentation)
+
+**Task List Guidelines:**
+- Keep tasks SHORT and HIGH-LEVEL
+- Reference spec requirements (REQ-XXX-YYY)
+- Describe WHAT to implement, not HOW
+- Detailed planning happens during implementation (in task_implementation_plan.md)
 
 #### Phase 2: Implementation (AUTONOMOUS after user approval)
 **What**: Implement tasks to completion

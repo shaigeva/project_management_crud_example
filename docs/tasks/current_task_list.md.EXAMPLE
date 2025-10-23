@@ -1,67 +1,38 @@
-# Current Task List
+# Current Task List - Minimal Auth Foundation
 
-**Created**: 2024-01-20
-**Spec Reference**: [Projects Detailed Spec](../spec/detailed/projects_detailed_spec.md)
+**Created**: 2025-01-20
+**Spec Reference**: [User Authentication](../spec/detailed/auth_detailed_spec.md), [User Management](../spec/detailed/users_detailed_spec.md)
 
 ---
 
-## Task 1: Implement Project CRUD operations
+## Task 1: User data structures and password handling
 **Status**: ⏳ Pending
-**Implements**: REQ-PROJ-001, REQ-PROJ-002, REQ-PROJ-003, REQ-PROJ-007
-
-### Behaviors from Spec
-- Create project and verify persistence (REQ-PROJ-001)
-- Retrieve project by ID (REQ-PROJ-002)
-- List all projects (REQ-PROJ-003)
-- Handle validation errors (REQ-PROJ-007)
-
-### Implementation Scope
-- Domain models: ProjectData, Project, ProjectCreateCommand
-- ORM model: ProjectORM with converters
-- Repository: ProjectRepository with CRUD methods
-- API: POST, GET (by ID), GET (all) endpoints
-- Error handling and validation
-
-**Test planning will be done during implementation** (see `docs/how_to_implement_tasks.md`)
+**Implements**: Foundation for REQ-AUTH-001, REQ-USER-001
 
 ---
 
-## Task 2: Implement Project update operation
+## Task 2: Token generation and validation
 **Status**: ⏳ Pending
-**Implements**: REQ-PROJ-004
-**Dependencies**: Task 1
-
-### Behaviors from Spec
-- Update project fields (REQ-PROJ-004)
-- Partial updates supported
-
-### Implementation Scope
-- ProjectUpdateCommand
-- Repository update method
-- PUT /projects/{id} endpoint
+**Implements**: REQ-AUTH-002, REQ-AUTH-005
 
 ---
 
-## Task 3: Implement Project deletion
+## Task 3: Login and authentication
 **Status**: ⏳ Pending
-**Implements**: REQ-PROJ-005, REQ-PROJ-006
-**Dependencies**: Task 1
-
-### Behaviors from Spec
-- Delete project (REQ-PROJ-005)
-- Handle not-found on delete (REQ-PROJ-006)
-
-### Implementation Scope
-- Repository delete method
-- DELETE /projects/{id} endpoint
-- 404 error handling
+**Implements**: REQ-AUTH-001, REQ-AUTH-002, REQ-AUTH-003, REQ-AUTH-006
+**Dependencies**: Task 1, Task 2
 
 ---
 
-## Completion Checklist
+## Task 4: Bootstrap Super Admin user
+**Status**: ⏳ Pending
+**Implements**: System bootstrap
+**Dependencies**: Task 3
 
-When ALL tasks are done:
+---
+
+## Completion
+
 - [ ] All tasks marked ✅
-- [ ] All spec requirements marked ✅
-- [ ] Feature status updated in main_spec.md
-- [ ] Archive to `archive/2024-01-20_projects_crud.md`
+- [ ] REQ-AUTH-001, REQ-AUTH-002, REQ-AUTH-003, REQ-AUTH-006 marked ✅ in specs
+- [ ] Archive to `archive/2025-01-20_minimal_auth_foundation.md`
