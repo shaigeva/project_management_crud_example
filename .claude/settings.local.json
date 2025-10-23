@@ -21,7 +21,8 @@
       "Bash(uv add:*)",
       "Bash(cat:*)",
       "Bash(git checkout:*)",
-      "Bash(xattr:*)"
+      "Bash(xattr:*)",
+      "Bash(python -m project_management_crud_example.bootstrap:*)"
     ],
     "deny": [],
     "ask": [],

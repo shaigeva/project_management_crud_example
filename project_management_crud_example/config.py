@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     - JWT_ALGORITHM: Algorithm for JWT signing (default: HS256)
     - JWT_EXPIRATION_SECONDS: Token lifetime in seconds (default: 3600 = 1 hour)
     - JWT_CLOCK_SKEW_SECONDS: Clock skew tolerance in seconds (default: 300 = 5 minutes)
+
+    Bootstrap Configuration:
+    - BOOTSTRAP_ADMIN_USERNAME: Initial Super Admin username (default: admin)
+    - BOOTSTRAP_ADMIN_EMAIL: Initial Super Admin email (default: admin@example.com)
+    - BOOTSTRAP_ADMIN_FULL_NAME: Initial Super Admin full name (default: System Administrator)
     """
 
     model_config = SettingsConfigDict(
@@ -20,10 +25,16 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
     )
 
+    # JWT Configuration
     JWT_SECRET_KEY: str  # Must be set via environment variable
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION_SECONDS: int = 3600  # 1 hour
     JWT_CLOCK_SKEW_SECONDS: int = 300  # 5 minutes
+
+    # Bootstrap Configuration (optional)
+    BOOTSTRAP_ADMIN_USERNAME: str = "admin"
+    BOOTSTRAP_ADMIN_EMAIL: str = "admin@example.com"
+    BOOTSTRAP_ADMIN_FULL_NAME: str = "System Administrator"
 
 
 @lru_cache
