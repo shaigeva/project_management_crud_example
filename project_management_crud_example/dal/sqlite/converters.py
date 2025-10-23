@@ -44,3 +44,24 @@ def orm_stub_entities_to_business_stub_entities(
     Template for creating real entity list converters.
     """
     return [orm_stub_entity_to_business_stub_entity(orm_stub_entity) for orm_stub_entity in orm_stub_entities]
+
+
+def orm_user_to_domain_user(
+    orm_user: orm_data_models.UserORM,
+) -> domain_models.User:
+    """Convert an ORM User model to a domain User model.
+
+    Note: password_hash is NOT included in the domain User model for security.
+    Passwords should only be handled by authentication utilities.
+    """
+    return domain_models.User(
+        id=str(orm_user.id),
+        username=orm_user.username,  # type: ignore[arg-type]
+        email=orm_user.email,  # type: ignore[arg-type]
+        full_name=orm_user.full_name,  # type: ignore[arg-type]
+        organization_id=orm_user.organization_id,  # type: ignore[arg-type]
+        role=domain_models.UserRole(orm_user.role),  # type: ignore[arg-type]
+        is_active=orm_user.is_active,  # type: ignore[arg-type]
+        created_at=orm_user.created_at,  # type: ignore[arg-type]
+        updated_at=orm_user.updated_at,  # type: ignore[arg-type]
+    )

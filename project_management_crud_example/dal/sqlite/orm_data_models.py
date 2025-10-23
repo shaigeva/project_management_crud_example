@@ -10,7 +10,7 @@ The StubEntityORM model serves as a template/scaffolding for creating real ORM m
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, String
+from sqlalchemy import Boolean, Column, DateTime, String
 from sqlalchemy.orm import declarative_base
 
 # SQLAlchemy Base for all ORM models
@@ -44,3 +44,29 @@ class StubEntityORM(Base):
 
     def __repr__(self) -> str:
         return f"<StubEntity(id='{self.id}', name='{self.name}')>"
+
+
+class UserORM(Base):
+    """SQLAlchemy ORM model for users."""
+
+    __tablename__ = "users"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    username = Column(String(50), unique=True, nullable=False, index=True)
+    email = Column(String(255), nullable=False)
+    full_name = Column(String(255), nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    organization_id = Column(String(36), nullable=True)  # None for Super Admin
+    role = Column(String(50), nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    def __repr__(self) -> str:
+        return f"<User(id='{self.id}', username='{self.username}', role='{self.role}')>"

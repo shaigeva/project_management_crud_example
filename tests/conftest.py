@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from project_management_crud_example.app import app
 from project_management_crud_example.dal.sqlite.database import Database
-from project_management_crud_example.dal.sqlite.repository import StubEntityRepository
+from project_management_crud_example.dal.sqlite.repository import Repository, StubEntityRepository, UserRepository
 from project_management_crud_example.dependencies import get_db_session
 
 
@@ -73,13 +73,33 @@ def test_session(test_db: Database) -> Generator[Session, None, None]:
 
 
 @pytest.fixture
+def test_repo(test_session: Session) -> Repository:
+    """Get the main repository for testing.
+
+    This fixture provides a Repository instance connected to the test database session.
+    Access nested operations via repo.users, repo.organizations, etc.
+    """
+    return Repository(test_session)
+
+
+@pytest.fixture
 def test_stub_entity_repo(test_session: Session) -> StubEntityRepository:
     """Get a stub entity repository for testing.
 
-    This fixture provides a StubEntityRepository instance connected to the
-    test database session. Template for creating real repository fixtures.
+    LEGACY: For backward compatibility with existing tests.
+    New tests should use test_repo fixture instead.
     """
     return StubEntityRepository(test_session)
+
+
+@pytest.fixture
+def test_user_repo(test_session: Session) -> UserRepository:
+    """Get a user repository for testing.
+
+    LEGACY: For backward compatibility with existing tests.
+    New tests should use test_repo fixture instead.
+    """
+    return UserRepository(test_session)
 
 
 @pytest.fixture

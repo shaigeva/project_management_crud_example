@@ -64,11 +64,77 @@ BAD: test_cache.py
 
 **Important**: Repository tests verify the data access layer works correctly on its own.
 
+#### **Repository Testing Pattern - CRITICAL**
+
+**❌ DO NOT test ORM models directly**
+- Direct ORM tests are brittle and low-value
+- They only verify that ORM declarations exist
+- They expose implementation details
+
+**✅ ALWAYS test through Repository methods**
+- Use repository methods to create, retrieve, update, delete
+- Use domain models and commands (not ORM models)
+- Verify behavior through repository interface
+- This provides strong correctness guarantees without brittleness
+
+**Repository Architecture**:
+- **Single `Repository` class** for all data access operations
+- Use nested classes for organization: `repo.users.create()`, `repo.organizations.get_by_id()`
+- Queries can span multiple entities naturally (e.g., get user with organization)
+- The `StubEntityRepository` is scaffolding/example code only
+
+**Pattern to Follow**:
+```python
+class TestUserOperations:
+    """Test user operations through Repository interface."""
+
+    def test_create_user(self, test_repo: Repository) -> None:
+        """Test creating a user through repository."""
+        # Create using repository command
+        user_data = UserData(username="testuser", email="test@example.com", full_name="Test")
+        command = UserCreateCommand(user_data=user_data, organization_id="org-123", role=UserRole.ADMIN)
+
+        # Create through repository
+        user = test_repo.users.create(command)
+
+        # Verify domain model properties
+        assert user.username == "testuser"
+        assert user.id is not None
+
+    def test_get_user_by_id(self, test_repo: Repository) -> None:
+        """Test retrieving user through repository."""
+        # Create through repository
+        user_data = UserData(username="testuser", email="test@example.com", full_name="Test")
+        command = UserCreateCommand(user_data=user_data, organization_id="org-123", role=UserRole.ADMIN)
+        created_user = test_repo.users.create(command)
+
+        # Retrieve through repository
+        retrieved_user = test_repo.users.get_by_id(created_user.id)
+
+        # Verify through domain model
+        assert retrieved_user is not None
+        assert retrieved_user.id == created_user.id
+```
+
+**Key Principles**:
+1. ✅ Use repository methods exclusively (no `session.query()`, no ORM access)
+2. ✅ Use domain models and commands (UserData, UserCreateCommand, User)
+3. ✅ Verify domain model properties (username, id, email)
+4. ❌ Never access ORM models (UserORM) in tests
+5. ❌ Never use test_session directly for entity creation/verification
+6. ✅ Test complete workflows (create → retrieve → verify)
+7. ✅ Single Repository handles all entities - queries can span multiple tables naturally
+
 ### **3. Utility/Logic Tests - IF APPLICABLE**
 
 **Location**: `tests/utils/` or appropriate location
 
 **Coverage**: Helper functions, converters, business logic utilities
+
+**Converter Tests**:
+- ORM-to-domain converters should be tested in `tests/dal/test_converters.py`
+- Test that converters properly transform ORM models to domain models
+- Test edge cases like null values, special fields exclusions (e.g., password_hash)
 
 ### **4. Domain Validation Tests - IF APPLICABLE**
 
