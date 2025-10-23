@@ -9,6 +9,8 @@ dependencies = [
     "email-validator>=2.3.0",
     "fastapi>=0.119.1",
     "pydantic>=2.11.5",
+    "pydantic-settings>=2.11.0",
+    "pyjwt>=2.10.1",
     "sqlalchemy>=2.0.44",
     "uvicorn>=0.38.0",
 ]

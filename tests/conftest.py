@@ -1,5 +1,6 @@
 """Pytest configuration and shared fixtures."""
 
+import os
 import tempfile
 from pathlib import Path
 from typing import Generator
@@ -12,6 +13,9 @@ from project_management_crud_example.app import app
 from project_management_crud_example.dal.sqlite.database import Database
 from project_management_crud_example.dal.sqlite.repository import Repository, StubEntityRepository, UserRepository
 from project_management_crud_example.dependencies import get_db_session
+
+# Set test environment variables before importing config
+os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-for-testing-only-not-for-production")
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
