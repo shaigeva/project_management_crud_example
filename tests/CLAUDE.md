@@ -125,6 +125,12 @@ class TestUserOperations:
 6. ✅ Test complete workflows (create → retrieve → verify)
 7. ✅ Single Repository handles all entities - queries can span multiple tables naturally
 
+**CRITICAL ARCHITECTURAL RULE**:
+- ❌ Repository methods MUST NEVER return ORM models (UserORM, etc.) to callers
+- ✅ Repository methods MUST ALWAYS return domain models only
+- ✅ If additional data is needed (e.g., password_hash for auth), create a specific domain model
+- **Why**: Exposing ORM models breaks layering and can cause serious issues (lazy loading, session lifecycle, tight coupling)
+
 ### **3. Utility/Logic Tests - IF APPLICABLE**
 
 **Location**: `tests/utils/` or appropriate location

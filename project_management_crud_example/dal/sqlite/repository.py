@@ -13,6 +13,7 @@ The StubEntities nested class serves as a template/scaffolding for reference.
 import logging
 from typing import List, Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from project_management_crud_example.domain_models import (
@@ -20,6 +21,7 @@ from project_management_crud_example.domain_models import (
     StubEntityCreateCommand,
     StubEntityUpdateCommand,
     User,
+    UserAuthData,
     UserCreateCommand,
 )
 from project_management_crud_example.utils.password import generate_password, hash_password
@@ -28,6 +30,7 @@ from .converters import (
     orm_stub_entities_to_business_stub_entities,
     orm_stub_entity_to_business_stub_entity,
     orm_user_to_domain_user,
+    orm_user_to_user_auth_data,
 )
 from .orm_data_models import StubEntityORM, UserORM
 
@@ -94,14 +97,53 @@ class Repository:
             return orm_user_to_domain_user(orm_user)
 
         def get_by_username(self, username: str) -> Optional[User]:
-            """Get a specific user by username."""
+            """Get a specific user by username (case-insensitive).
+
+            Args:
+                username: Username to search for (case-insensitive)
+
+            Returns:
+                User if found, None otherwise
+
+            Note: Username lookup is case-insensitive to support login requirements.
+            """
             logger.debug(f"Retrieving user by username: {username}")
-            orm_user = self.session.query(UserORM).filter(UserORM.username == username).first()  # type: ignore[operator]
+            orm_user = (
+                self.session.query(UserORM)
+                .filter(func.lower(UserORM.username) == username.lower())  # type: ignore[operator]
+                .first()
+            )
             if orm_user is None:
                 logger.debug(f"User not found: {username}")
                 return None
             logger.debug(f"User found: {username}")
             return orm_user_to_domain_user(orm_user)
+
+        def get_by_username_with_password(self, username: str) -> Optional[UserAuthData]:
+            """Get user authentication data by username (case-insensitive).
+
+            This method is for authentication purposes only. It returns a domain model
+            which includes password_hash for verification.
+
+            Args:
+                username: Username to search for (case-insensitive)
+
+            Returns:
+                UserAuthData if found (includes password_hash), None otherwise
+
+            Note: Returns a domain model (UserAuthData), never an ORM object.
+            This maintains proper layering and prevents ORM leakage.
+            """
+            logger.debug(f"Retrieving user with password for authentication: {username}")
+            orm_user = (
+                self.session.query(UserORM)
+                .filter(func.lower(UserORM.username) == username.lower())  # type: ignore[operator]
+                .first()
+            )
+            if orm_user is None:
+                return None
+
+            return orm_user_to_user_auth_data(orm_user)
 
         def get_all(self) -> List[User]:
             """Get all users from the database, ordered by creation date."""

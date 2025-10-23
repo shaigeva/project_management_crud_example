@@ -65,3 +65,23 @@ def orm_user_to_domain_user(
         created_at=orm_user.created_at,  # type: ignore[arg-type]
         updated_at=orm_user.updated_at,  # type: ignore[arg-type]
     )
+
+
+def orm_user_to_user_auth_data(
+    orm_user: orm_data_models.UserORM,
+) -> domain_models.UserAuthData:
+    """Convert an ORM User model to UserAuthData for authentication.
+
+    This converter includes password_hash for authentication purposes only.
+    UserAuthData should NEVER be exposed outside the authentication layer.
+
+    Note: This maintains proper layering by returning a domain model, not an ORM object.
+    """
+    return domain_models.UserAuthData(
+        id=str(orm_user.id),
+        username=orm_user.username,  # type: ignore[arg-type]
+        password_hash=orm_user.password_hash,  # type: ignore[arg-type]
+        organization_id=orm_user.organization_id,  # type: ignore[arg-type]
+        role=domain_models.UserRole(orm_user.role),  # type: ignore[arg-type]
+        is_active=orm_user.is_active,  # type: ignore[arg-type]
+    )

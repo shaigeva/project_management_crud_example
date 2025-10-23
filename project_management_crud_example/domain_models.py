@@ -82,9 +82,51 @@ class User(UserData):
     updated_at: datetime = Field(..., description="Last update timestamp")
 
 
+class UserAuthData(BaseModel):
+    """User authentication data including password hash.
+
+    This model is used exclusively for authentication purposes where password
+    verification is required. It should NEVER be exposed outside the authentication
+    layer.
+
+    Note: This is a domain model, not an ORM model. Repository methods must return
+    this domain model, never ORM objects.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str = Field(..., description="User ID")
+    username: str = Field(..., description="Username")
+    password_hash: str = Field(..., description="Hashed password for verification")
+    organization_id: Optional[str] = Field(None, description="Organization ID")
+    role: UserRole = Field(..., description="User role")
+    is_active: bool = Field(..., description="Whether user is active")
+
+
 class UserCreateCommand(BaseModel):
     """Command model for creating a new user."""
 
     user_data: UserData
     organization_id: Optional[str] = Field(None, description="Organization ID (None for Super Admin)")
     role: UserRole = Field(..., description="User role")
+
+
+# Authentication models
+
+
+class LoginRequest(BaseModel):
+    """Login request with username and password."""
+
+    username: str = Field(..., min_length=1, description="Username (case-insensitive)")
+    password: str = Field(..., min_length=1, description="Password (case-sensitive)")
+
+
+class LoginResponse(BaseModel):
+    """Successful login response with token and user info."""
+
+    access_token: str = Field(..., description="JWT bearer token")
+    token_type: str = Field("bearer", description="Token type (always 'bearer')")
+    expires_in: int = Field(..., description="Token lifetime in seconds")
+    user_id: str = Field(..., description="ID of authenticated user")
+    organization_id: Optional[str] = Field(None, description="User's organization ID")
+    role: UserRole = Field(..., description="User's current role")

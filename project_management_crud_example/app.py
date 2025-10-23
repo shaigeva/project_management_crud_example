@@ -14,7 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from project_management_crud_example.dependencies import get_database
-from project_management_crud_example.routers import health, stub_entity_api
+from project_management_crud_example.exceptions import AuthHTTPException
+from project_management_crud_example.routers import auth_api, health, stub_entity_api
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -53,6 +54,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(auth_api.router)
 app.include_router(stub_entity_api.router)
 app.include_router(health.router)
 
@@ -77,18 +79,28 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         errors.append(json_error)
 
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=422,
         content={"detail": errors},
     )
 
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
-    """Handle HTTP exceptions with consistent error format."""
+    """Handle HTTP exceptions with consistent error format.
+
+    For AuthHTTPException instances, includes error_code in the response.
+    """
     logger.warning(f"HTTP error on {request.method} {request.url}: {exc.status_code} - {exc.detail}")
+
+    content = {"detail": exc.detail}
+    # Include error_code if present (for AuthHTTPException)
+    if isinstance(exc, AuthHTTPException):
+        content["error_code"] = exc.error_code
+
     return JSONResponse(
         status_code=exc.status_code,
-        content={"detail": exc.detail},
+        content=content,
+        headers=exc.headers,
     )
 
 
