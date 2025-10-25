@@ -132,6 +132,7 @@ async def get_project(
 async def list_projects(
     name: Optional[str] = None,
     is_active: Optional[bool] = None,
+    include_archived: bool = False,
     repo: Repository = Depends(get_repository),  # noqa: B008
     current_user: User = Depends(get_current_user),  # noqa: B008
 ) -> List[Project]:
@@ -144,10 +145,12 @@ async def list_projects(
     Query parameters:
     - name: Filter by name substring (case-insensitive)
     - is_active: Filter by active status (true/false)
+    - include_archived: Include archived projects (default: false)
 
     Args:
         name: Optional name filter (substring search, case-insensitive)
         is_active: Optional filter for active/inactive projects
+        include_archived: Include archived projects in results (default: False)
         repo: Repository instance for database access
         current_user: Current authenticated user
 
@@ -155,7 +158,8 @@ async def list_projects(
         List of projects the user has permission to access, filtered by query parameters
     """
     logger.debug(
-        f"Listing projects (by user {current_user.id}, role {current_user.role}, name={name}, is_active={is_active})"
+        f"Listing projects (by user {current_user.id}, role {current_user.role}, name={name}, "
+        f"is_active={is_active}, include_archived={include_archived})"
     )
 
     # Determine organization filter based on user role
@@ -171,6 +175,7 @@ async def list_projects(
         organization_id=organization_filter,
         name=name,
         is_active=is_active,
+        include_archived=include_archived,
     )
 
     logger.debug(f"Retrieved {len(projects)} projects matching filters")
@@ -306,3 +311,137 @@ async def delete_project(
         )
 
     logger.info(f"Project deleted: {project_id}")
+
+
+@router.patch("/{project_id}/archive", response_model=Project)
+async def archive_project(
+    project_id: str,
+    repo: Repository = Depends(get_repository),  # noqa: B008
+    current_user: User = Depends(get_current_user),  # noqa: B008
+) -> Project:
+    """Archive a project (soft delete).
+
+    Permission rules:
+    - Super Admin: Can archive any project
+    - Admin/Project Manager: Can archive projects in their organization
+    - Other roles: Cannot archive projects
+
+    Args:
+        project_id: ID of project to archive
+        repo: Repository instance for database access
+        current_user: Current authenticated user
+
+    Returns:
+        Archived project
+
+    Raises:
+        HTTP 403: User does not have permission to archive this project
+        HTTP 404: Project not found
+    """
+    logger.debug(f"Archiving project: {project_id} (by user {current_user.id})")
+
+    # Permission check: Admin, PM, and Super Admin can archive
+    allowed_roles = {UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.PROJECT_MANAGER}
+    if current_user.role not in allowed_roles:
+        logger.warning(f"User {current_user.id} ({current_user.role}) attempted to archive project without permission")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions to archive projects",
+        )
+
+    # Verify project exists
+    project = repo.projects.get_by_id(project_id)
+    if not project:
+        logger.debug(f"Project not found: {project_id}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found",
+        )
+
+    # Permission check: Non-Super-Admin can only archive their own org's projects
+    if current_user.role != UserRole.SUPER_ADMIN:
+        if project.organization_id != current_user.organization_id:
+            logger.warning(f"User {current_user.id} attempted to archive project {project_id} from different org")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: project belongs to different organization",
+            )
+
+    archived_project = repo.projects.archive(project_id)
+    if not archived_project:
+        # Should not happen since we verified existence, but defensive check
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found",
+        )
+
+    logger.info(f"Project archived: {project_id}")
+    return archived_project
+
+
+@router.patch("/{project_id}/unarchive", response_model=Project)
+async def unarchive_project(
+    project_id: str,
+    repo: Repository = Depends(get_repository),  # noqa: B008
+    current_user: User = Depends(get_current_user),  # noqa: B008
+) -> Project:
+    """Unarchive a project (restore from archive).
+
+    Permission rules:
+    - Super Admin: Can unarchive any project
+    - Admin: Can unarchive projects in their organization
+    - Other roles: Cannot unarchive projects
+
+    Args:
+        project_id: ID of project to unarchive
+        repo: Repository instance for database access
+        current_user: Current authenticated user
+
+    Returns:
+        Unarchived project
+
+    Raises:
+        HTTP 403: User does not have permission to unarchive this project
+        HTTP 404: Project not found
+    """
+    logger.debug(f"Unarchiving project: {project_id} (by user {current_user.id})")
+
+    # Permission check: Only Admin and Super Admin can unarchive
+    allowed_roles = {UserRole.SUPER_ADMIN, UserRole.ADMIN}
+    if current_user.role not in allowed_roles:
+        logger.warning(
+            f"User {current_user.id} ({current_user.role}) attempted to unarchive project without permission"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions to unarchive projects",
+        )
+
+    # Verify project exists
+    project = repo.projects.get_by_id(project_id)
+    if not project:
+        logger.debug(f"Project not found: {project_id}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found",
+        )
+
+    # Permission check: Non-Super-Admin can only unarchive their own org's projects
+    if current_user.role != UserRole.SUPER_ADMIN:
+        if project.organization_id != current_user.organization_id:
+            logger.warning(f"User {current_user.id} attempted to unarchive project {project_id} from different org")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: project belongs to different organization",
+            )
+
+    unarchived_project = repo.projects.unarchive(project_id)
+    if not unarchived_project:
+        # Should not happen since we verified existence, but defensive check
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found",
+        )
+
+    logger.info(f"Project unarchived: {project_id}")
+    return unarchived_project

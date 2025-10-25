@@ -548,20 +548,24 @@ class Repository:
             return orm_project_to_domain_project(orm_project)
 
         def get_by_organization_id(self, organization_id: str) -> List[Project]:
-            """Get all projects for a specific organization."""
+            """Get all non-archived projects for a specific organization."""
             logger.debug(f"Retrieving projects for organization: {organization_id}")
             orm_projects = (
                 self.session.query(ProjectORM)
                 .filter(ProjectORM.organization_id == organization_id)  # type: ignore[operator]
+                .filter(ProjectORM.is_archived == False)  # type: ignore[operator]  # noqa: E712
                 .order_by(ProjectORM.created_at)  # type: ignore[union-attr]
                 .all()
             )
             return [orm_project_to_domain_project(proj) for proj in orm_projects]
 
         def get_all(self) -> List[Project]:
-            """Get all projects from the database, ordered by creation date."""
+            """Get all non-archived projects from the database, ordered by creation date."""
             orm_projects = (
-                self.session.query(ProjectORM).order_by(ProjectORM.created_at).all()  # type: ignore[union-attr]
+                self.session.query(ProjectORM)
+                .filter(ProjectORM.is_archived == False)  # type: ignore[operator]  # noqa: E712
+                .order_by(ProjectORM.created_at)  # type: ignore[union-attr]
+                .all()
             )
             return [orm_project_to_domain_project(proj) for proj in orm_projects]
 
@@ -570,6 +574,7 @@ class Repository:
             organization_id: Optional[str] = None,
             name: Optional[str] = None,
             is_active: Optional[bool] = None,
+            include_archived: bool = False,
         ) -> List[Project]:
             """Get projects filtered by various criteria.
 
@@ -577,12 +582,14 @@ class Repository:
                 organization_id: Filter by organization ID (required for non-Super Admin users)
                 name: Filter by name substring (case-insensitive)
                 is_active: Filter by active status
+                include_archived: Include archived projects in results (default: False)
 
             Returns:
                 List of projects matching all provided filters, ordered by creation date
             """
             logger.debug(
-                f"Retrieving projects with filters: organization_id={organization_id}, name={name}, is_active={is_active}"
+                f"Retrieving projects with filters: organization_id={organization_id}, name={name}, "
+                f"is_active={is_active}, include_archived={include_archived}"
             )
             query = self.session.query(ProjectORM)
 
@@ -593,6 +600,10 @@ class Repository:
                 query = query.filter(ProjectORM.name.ilike(f"%{name}%"))  # type: ignore[attr-defined]
             if is_active is not None:
                 query = query.filter(ProjectORM.is_active == is_active)  # type: ignore[operator]
+
+            # Exclude archived projects by default
+            if not include_archived:
+                query = query.filter(ProjectORM.is_archived == False)  # type: ignore[operator]  # noqa: E712
 
             orm_projects = query.order_by(ProjectORM.created_at).all()  # type: ignore[union-attr]
             return [orm_project_to_domain_project(proj) for proj in orm_projects]
@@ -646,6 +657,62 @@ class Repository:
             self.session.commit()
             logger.debug(f"Project deleted: {project_id}")
             return True
+
+        def archive(self, project_id: str) -> Optional[Project]:
+            """Archive a project (soft delete).
+
+            Args:
+                project_id: ID of project to archive
+
+            Returns:
+                Archived Project if found, None otherwise
+            """
+            from datetime import datetime, timezone
+
+            logger.debug(f"Archiving project: {project_id}")
+            orm_project = (
+                self.session.query(ProjectORM).filter(ProjectORM.id == project_id).first()  # type: ignore[operator]
+            )
+
+            if orm_project is None:
+                logger.debug(f"Project not found for archiving: {project_id}")
+                return None
+
+            # Set archive fields
+            orm_project.is_archived = True  # type: ignore[assignment]
+            orm_project.archived_at = datetime.now(timezone.utc)  # type: ignore[assignment]
+
+            self.session.commit()
+            self.session.refresh(orm_project)
+            logger.debug(f"Project archived: {project_id}")
+            return orm_project_to_domain_project(orm_project)
+
+        def unarchive(self, project_id: str) -> Optional[Project]:
+            """Unarchive a project (restore from archive).
+
+            Args:
+                project_id: ID of project to unarchive
+
+            Returns:
+                Unarchived Project if found, None otherwise
+            """
+            logger.debug(f"Unarchiving project: {project_id}")
+            orm_project = (
+                self.session.query(ProjectORM).filter(ProjectORM.id == project_id).first()  # type: ignore[operator]
+            )
+
+            if orm_project is None:
+                logger.debug(f"Project not found for unarchiving: {project_id}")
+                return None
+
+            # Clear archive fields
+            orm_project.is_archived = False  # type: ignore[assignment]
+            orm_project.archived_at = None  # type: ignore[assignment]
+
+            self.session.commit()
+            self.session.refresh(orm_project)
+            logger.debug(f"Project unarchived: {project_id}")
+            return orm_project_to_domain_project(orm_project)
 
     class Tickets:
         """Ticket-related data access operations."""

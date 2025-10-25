@@ -105,6 +105,8 @@ class Project(ProjectData):
     id: str = Field(..., description="Project ID")
     organization_id: str = Field(..., description="Organization ID this project belongs to")
     is_active: bool = Field(True, description="Whether project is active")
+    is_archived: bool = Field(False, description="Whether project is archived")
+    archived_at: Optional[datetime] = Field(None, description="Timestamp when project was archived")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 

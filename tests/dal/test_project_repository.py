@@ -394,6 +394,147 @@ class TestProjectRepositoryFilters:
         assert org2_results[0].organization_id == org2.id
 
 
+class TestProjectRepositoryArchive:
+    """Test project archive operations."""
+
+    def test_archive_project_sets_fields(self, test_repo: Repository) -> None:
+        """Test archiving project sets is_archived and archived_at."""
+        # Create organization and project
+        org = create_test_org_via_repo(test_repo)
+        project = create_test_project_via_repo(test_repo, org.id, "To Archive")
+
+        # Archive project
+        archived = test_repo.projects.archive(project.id)
+
+        assert archived is not None
+        assert archived.is_archived is True
+        assert archived.archived_at is not None
+        assert archived.id == project.id
+
+    def test_archive_project_not_found_returns_none(self, test_repo: Repository) -> None:
+        """Test archiving non-existent project returns None."""
+        result = test_repo.projects.archive("non-existent-id")
+
+        assert result is None
+
+    def test_archive_project_persists(self, test_repo: Repository) -> None:
+        """Test archived state persists in database."""
+        # Create and archive project
+        org = create_test_org_via_repo(test_repo)
+        project = create_test_project_via_repo(test_repo, org.id, "Persist Archive")
+        archived = test_repo.projects.archive(project.id)
+        assert archived is not None
+
+        # Retrieve and verify
+        retrieved = test_repo.projects.get_by_id(project.id)
+        assert retrieved is not None
+        assert retrieved.is_archived is True
+        assert retrieved.archived_at is not None
+
+    def test_unarchive_project_clears_fields(self, test_repo: Repository) -> None:
+        """Test unarchiving project clears is_archived and archived_at."""
+        # Create and archive project
+        org = create_test_org_via_repo(test_repo)
+        project = create_test_project_via_repo(test_repo, org.id, "To Unarchive")
+        archived = test_repo.projects.archive(project.id)
+        assert archived is not None
+
+        # Unarchive project
+        unarchived = test_repo.projects.unarchive(project.id)
+
+        assert unarchived is not None
+        assert unarchived.is_archived is False
+        assert unarchived.archived_at is None
+        assert unarchived.id == project.id
+
+    def test_unarchive_project_not_found_returns_none(self, test_repo: Repository) -> None:
+        """Test unarchiving non-existent project returns None."""
+        result = test_repo.projects.unarchive("non-existent-id")
+
+        assert result is None
+
+    def test_get_by_filters_excludes_archived_by_default(self, test_repo: Repository) -> None:
+        """Test get_by_filters excludes archived projects by default."""
+        org = create_test_org_via_repo(test_repo)
+
+        # Create two projects, archive one
+        active_project = create_test_project_via_repo(test_repo, org.id, "Active")
+        archived_project = create_test_project_via_repo(test_repo, org.id, "Archived")
+        test_repo.projects.archive(archived_project.id)
+
+        # Filter without include_archived
+        results = test_repo.projects.get_by_filters(organization_id=org.id)
+
+        assert len(results) == 1
+        assert results[0].id == active_project.id
+
+    def test_get_by_filters_includes_archived_when_requested(self, test_repo: Repository) -> None:
+        """Test get_by_filters includes archived when include_archived=True."""
+        org = create_test_org_via_repo(test_repo)
+
+        # Create two projects, archive one
+        active_project = create_test_project_via_repo(test_repo, org.id, "Active")
+        archived_project = create_test_project_via_repo(test_repo, org.id, "Archived")
+        test_repo.projects.archive(archived_project.id)
+
+        # Filter with include_archived=True
+        results = test_repo.projects.get_by_filters(organization_id=org.id, include_archived=True)
+
+        assert len(results) == 2
+        project_ids = {p.id for p in results}
+        assert active_project.id in project_ids
+        assert archived_project.id in project_ids
+
+    def test_get_by_filters_name_filter_with_archived(self, test_repo: Repository) -> None:
+        """Test combining name filter with include_archived."""
+        org = create_test_org_via_repo(test_repo)
+
+        # Create projects
+        create_test_project_via_repo(test_repo, org.id, "Backend API")
+        archived_backend = create_test_project_via_repo(test_repo, org.id, "Backend Service")
+        test_repo.projects.archive(archived_backend.id)
+
+        # Filter by name without archived - should find 1
+        results_no_archived = test_repo.projects.get_by_filters(organization_id=org.id, name="backend")
+        assert len(results_no_archived) == 1
+
+        # Filter by name with archived - should find 2
+        results_with_archived = test_repo.projects.get_by_filters(
+            organization_id=org.id, name="backend", include_archived=True
+        )
+        assert len(results_with_archived) == 2
+
+    def test_get_all_excludes_archived_by_default(self, test_repo: Repository) -> None:
+        """Test get_all excludes archived projects."""
+        org = create_test_org_via_repo(test_repo)
+
+        # Create two projects, archive one
+        create_test_project_via_repo(test_repo, org.id, "Active")
+        archived_project = create_test_project_via_repo(test_repo, org.id, "Archived")
+        test_repo.projects.archive(archived_project.id)
+
+        # Get all projects
+        all_projects = test_repo.projects.get_all()
+
+        assert len(all_projects) == 1
+        assert all_projects[0].name == "Active"
+
+    def test_get_by_organization_id_excludes_archived(self, test_repo: Repository) -> None:
+        """Test get_by_organization_id excludes archived projects."""
+        org = create_test_org_via_repo(test_repo)
+
+        # Create two projects, archive one
+        create_test_project_via_repo(test_repo, org.id, "Active")
+        archived_project = create_test_project_via_repo(test_repo, org.id, "Archived")
+        test_repo.projects.archive(archived_project.id)
+
+        # Get by organization
+        org_projects = test_repo.projects.get_by_organization_id(org.id)
+
+        assert len(org_projects) == 1
+        assert org_projects[0].name == "Active"
+
+
 class TestProjectRepositoryWorkflows:
     """Test complete project workflows."""
 

@@ -1,10 +1,10 @@
 # Projects: Detailed Specification
 
-**Status**: 🟢 5/5 requirements implemented (100%)
+**Status**: ✅ 6/6 requirements implemented (100%) - V1 Complete
 **Parent**: [Main Spec](../main_spec.md#feature-projects)
 **Last Updated**: 2025-01-26
 
-**Note**: This detailed spec covers requirements REQ-PROJ-001, REQ-PROJ-002, REQ-PROJ-003, REQ-PROJ-007, and REQ-PROJ-009 (the core CRUD behaviors, validation, and filtering). Requirements REQ-PROJ-004 (update), REQ-PROJ-005 (delete), and REQ-PROJ-006 (organization scoping) are implemented but documented through tests rather than separate spec sections. REQ-PROJ-010 (archive) is pending future implementation.
+**Note**: This detailed spec covers requirements REQ-PROJ-001, REQ-PROJ-002, REQ-PROJ-003, REQ-PROJ-007, REQ-PROJ-009, and REQ-PROJ-010 (the core CRUD behaviors, validation, filtering, and archival). Requirements REQ-PROJ-004 (update), REQ-PROJ-005 (delete), and REQ-PROJ-006 (organization scoping) are implemented but documented through tests rather than separate spec sections.
 
 ## Rationale
 
@@ -156,3 +156,51 @@ Users can filter project lists using query parameters for name substring search 
 - Name with special characters
 - Multiple projects matching filter
 - Filter combining multiple criteria
+
+---
+
+## REQ-PROJ-010: Archive and unarchive projects (soft delete)
+**Status**: ✅ Implemented
+**Type**: Product Behavior
+
+### Scenario
+When users want to remove projects without permanently deleting data, they can archive projects for soft deletion and later unarchive to restore them
+
+### Observable Behavior
+Projects can be archived (soft deleted) and unarchived (restored). Archived projects are hidden from default listings but can be included explicitly.
+
+### Acceptance Criteria
+**Archive Operation**:
+- PATCH /api/projects/{id}/archive sets is_archived=true and archived_at=timestamp
+- Archived projects do not appear in GET /api/projects by default
+- GET /api/projects?include_archived=true includes archived projects in results
+- Admin and Project Manager can archive projects in their organization
+- Super Admin can archive projects in any organization
+- Returns 403 if user lacks archive permission
+- Returns 404 if project doesn't exist
+
+**Unarchive Operation**:
+- PATCH /api/projects/{id}/unarchive sets is_archived=false and archived_at=null
+- Unarchived projects appear in default GET /api/projects listings
+- Only Admin and Super Admin can unarchive projects
+- Project Managers cannot unarchive (stricter permission than archive)
+- Returns 403 if user lacks unarchive permission
+- Returns 404 if project doesn't exist
+
+**List Filtering**:
+- GET /api/projects excludes archived by default
+- GET /api/projects?include_archived=true shows both active and archived
+- include_archived parameter works with name and is_active filters
+- Organization scoping applies to archived projects
+
+**Data Integrity**:
+- Archive operation is idempotent (archiving archived project succeeds)
+- Unarchive operation is idempotent (unarchiving active project succeeds)
+- Hard delete (DELETE /api/projects/{id}) remains available for permanent removal
+
+### Edge Cases
+- Archive already archived project (succeeds, updates timestamp)
+- Unarchive already active project (succeeds, no change)
+- Filter combinations: include_archived with name/is_active filters
+- Cross-organization archive attempts (403 forbidden)
+- Future: Prevent ticket creation in archived projects (not yet implemented)
