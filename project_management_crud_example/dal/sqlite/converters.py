@@ -60,6 +60,20 @@ def orm_organization_to_domain_organization(
     )
 
 
+def orm_project_to_domain_project(
+    orm_project: orm_data_models.ProjectORM,
+) -> domain_models.Project:
+    """Convert an ORM Project model to a domain Project model."""
+    return domain_models.Project(
+        id=str(orm_project.id),
+        name=orm_project.name,  # type: ignore[arg-type]
+        description=orm_project.description,  # type: ignore[arg-type]
+        organization_id=str(orm_project.organization_id),
+        created_at=orm_project.created_at,  # type: ignore[arg-type]
+        updated_at=orm_project.updated_at,  # type: ignore[arg-type]
+    )
+
+
 def orm_user_to_domain_user(
     orm_user: orm_data_models.UserORM,
 ) -> domain_models.User:

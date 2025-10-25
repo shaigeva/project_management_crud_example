@@ -82,6 +82,46 @@ class OrganizationUpdateCommand(BaseModel):
     is_active: Optional[bool] = Field(None, description="Whether organization is active")
 
 
+# Project Models
+
+
+class ProjectData(BaseModel):
+    """Base project data structure."""
+
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=255,
+        description="Project name",
+    )
+    description: Optional[str] = Field(None, max_length=1000, description="Project description")
+
+
+class Project(ProjectData):
+    """Complete project model with metadata."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str = Field(..., description="Project ID")
+    organization_id: str = Field(..., description="Organization ID this project belongs to")
+    created_at: datetime = Field(..., description="Creation timestamp")
+    updated_at: datetime = Field(..., description="Last update timestamp")
+
+
+class ProjectCreateCommand(BaseModel):
+    """Command model for creating a new project."""
+
+    project_data: ProjectData
+    organization_id: str = Field(..., description="Organization ID this project belongs to")
+
+
+class ProjectUpdateCommand(BaseModel):
+    """Command model for updating an existing project."""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=255, description="Project name")
+    description: Optional[str] = Field(None, max_length=1000, description="Project description")
+
+
 # User Management Models
 
 

@@ -21,6 +21,9 @@ from project_management_crud_example.domain_models import (
     Organization,
     OrganizationCreateCommand,
     OrganizationUpdateCommand,
+    Project,
+    ProjectCreateCommand,
+    ProjectUpdateCommand,
     StubEntity,
     StubEntityCreateCommand,
     StubEntityUpdateCommand,
@@ -32,12 +35,13 @@ from project_management_crud_example.utils.password import hash_password
 
 from .converters import (
     orm_organization_to_domain_organization,
+    orm_project_to_domain_project,
     orm_stub_entities_to_business_stub_entities,
     orm_stub_entity_to_business_stub_entity,
     orm_user_to_domain_user,
     orm_user_to_user_auth_data,
 )
-from .orm_data_models import OrganizationORM, StubEntityORM, UserORM
+from .orm_data_models import OrganizationORM, ProjectORM, StubEntityORM, UserORM
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +61,7 @@ class Repository:
         """Initialize the repository with a database session."""
         self.session = session
         self.organizations = self.Organizations(session)
+        self.projects = self.Projects(session)
         self.users = self.Users(session)
         self.stub_entities = self.StubEntities(session)
 
@@ -345,6 +350,116 @@ class Repository:
             self.session.delete(orm_organization)
             self.session.commit()
             logger.debug(f"Organization deleted: {organization_id}")
+            return True
+
+    class Projects:
+        """Project-related data access operations."""
+
+        def __init__(self, session: Session) -> None:
+            self.session = session
+
+        def create(self, project_create_command: ProjectCreateCommand) -> Project:
+            """Create a new project.
+
+            Args:
+                project_create_command: Command containing project data and organization_id
+
+            Returns:
+                Created Project domain model
+            """
+            project_data = project_create_command.project_data
+            logger.debug(
+                f"Creating new project: {project_data.name} for organization: {project_create_command.organization_id}"
+            )
+
+            orm_project = ProjectORM(
+                name=project_data.name,
+                description=project_data.description,
+                organization_id=project_create_command.organization_id,
+            )
+
+            self.session.add(orm_project)
+            self.session.commit()
+            self.session.refresh(orm_project)
+            logger.debug(f"Project created with ID: {orm_project.id}")
+            return orm_project_to_domain_project(orm_project)
+
+        def get_by_id(self, project_id: str) -> Optional[Project]:
+            """Get a specific project by ID."""
+            logger.debug(f"Retrieving project by ID: {project_id}")
+            orm_project = (
+                self.session.query(ProjectORM).filter(ProjectORM.id == project_id).first()  # type: ignore[operator]
+            )
+            if orm_project is None:
+                logger.debug(f"Project not found: {project_id}")
+                return None
+            logger.debug(f"Project found: {project_id}")
+            return orm_project_to_domain_project(orm_project)
+
+        def get_by_organization_id(self, organization_id: str) -> List[Project]:
+            """Get all projects for a specific organization."""
+            logger.debug(f"Retrieving projects for organization: {organization_id}")
+            orm_projects = (
+                self.session.query(ProjectORM)
+                .filter(ProjectORM.organization_id == organization_id)  # type: ignore[operator]
+                .order_by(ProjectORM.created_at)  # type: ignore[union-attr]
+                .all()
+            )
+            return [orm_project_to_domain_project(proj) for proj in orm_projects]
+
+        def get_all(self) -> List[Project]:
+            """Get all projects from the database, ordered by creation date."""
+            orm_projects = (
+                self.session.query(ProjectORM).order_by(ProjectORM.created_at).all()  # type: ignore[union-attr]
+            )
+            return [orm_project_to_domain_project(proj) for proj in orm_projects]
+
+        def update(self, project_id: str, update_command: ProjectUpdateCommand) -> Optional[Project]:
+            """Update an existing project.
+
+            Args:
+                project_id: ID of project to update
+                update_command: Command containing fields to update
+
+            Returns:
+                Updated Project if found, None otherwise
+            """
+            logger.debug(f"Updating project: {project_id}")
+            orm_project = (
+                self.session.query(ProjectORM).filter(ProjectORM.id == project_id).first()  # type: ignore[operator]
+            )
+
+            if orm_project is None:
+                logger.debug(f"Project not found for update: {project_id}")
+                return None
+
+            # Update only provided fields
+            if update_command.name is not None:
+                orm_project.name = update_command.name  # type: ignore[assignment]
+            if update_command.description is not None:
+                orm_project.description = update_command.description  # type: ignore[assignment]
+
+            self.session.commit()
+            self.session.refresh(orm_project)
+            logger.debug(f"Project updated: {project_id}")
+            return orm_project_to_domain_project(orm_project)
+
+        def delete(self, project_id: str) -> bool:
+            """Delete a project by ID.
+
+            Note: This is for testing/cleanup purposes. In production, use archival instead.
+            """
+            logger.debug(f"Deleting project: {project_id}")
+            orm_project = (
+                self.session.query(ProjectORM).filter(ProjectORM.id == project_id).first()  # type: ignore[operator]
+            )
+            if not orm_project:
+                logger.debug(f"Project not found for deletion: {project_id}")
+                return False
+
+            self.session.delete(orm_project)
+            self.session.commit()
+            logger.debug(f"Project deleted: {project_id}")
             return True
 
     class StubEntities:
