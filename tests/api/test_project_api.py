@@ -13,6 +13,7 @@ from tests.fixtures.auth_fixtures import (  # noqa: F401
     write_user_token,
 )
 from tests.fixtures.data_fixtures import organization, second_organization  # noqa: F401
+from tests.helpers import auth_headers, create_test_project_via_repo
 
 
 class TestCreateProject:
@@ -26,7 +27,7 @@ class TestCreateProject:
         response = client.post(
             "/api/projects",
             json=project_data,
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 201
@@ -48,7 +49,7 @@ class TestCreateProject:
         response = client.post(
             "/api/projects",
             json=project_data,
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 201
@@ -65,7 +66,7 @@ class TestCreateProject:
         response = client.post(
             "/api/projects",
             json=project_data,
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 201
@@ -81,7 +82,7 @@ class TestCreateProject:
         response = client.post(
             "/api/projects",
             json=project_data,
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 403
@@ -95,7 +96,7 @@ class TestCreateProject:
         response = client.post(
             "/api/projects",
             json=project_data,
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 403
@@ -117,7 +118,7 @@ class TestCreateProject:
         response = client.post(
             "/api/projects",
             json=project_data,
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 201
@@ -131,7 +132,7 @@ class TestCreateProject:
         response = client.post(
             "/api/projects",
             json=project_data,
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 201
@@ -145,7 +146,7 @@ class TestCreateProject:
         response = client.post(
             "/api/projects",
             json=project_data,
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 422
@@ -159,7 +160,7 @@ class TestCreateProject:
         response = client.post(
             "/api/projects",
             json=project_data,
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 201
@@ -176,7 +177,7 @@ class TestCreateProject:
         response = client.post(
             "/api/projects",
             json=project_data,
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 422
@@ -192,18 +193,16 @@ class TestGetProject:
         token, org_id = org_admin_token
 
         # Create a project
-        project_data = ProjectData(name="Test Project", description="Test description")
-        command = ProjectCreateCommand(project_data=project_data, organization_id=org_id)
-        project = test_repo.projects.create(command)
+        project_id = create_test_project_via_repo(test_repo, org_id, "Test Project", "Test description")
 
         response = client.get(
-            f"/api/projects/{project.id}",
-            headers={"Authorization": f"Bearer {token}"},
+            f"/api/projects/{project_id}",
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 200
         data = response.json()
-        assert data["id"] == project.id
+        assert data["id"] == project_id
         assert data["name"] == "Test Project"
         assert data["description"] == "Test description"
         assert data["organization_id"] == org_id
@@ -219,13 +218,11 @@ class TestGetProject:
         token, _ = org_admin_token
 
         # Create project in different organization
-        project_data = ProjectData(name="Other Org Project")
-        command = ProjectCreateCommand(project_data=project_data, organization_id=second_organization)
-        project = test_repo.projects.create(command)
+        project_id = create_test_project_via_repo(test_repo, second_organization, "Other Org Project")
 
         response = client.get(
-            f"/api/projects/{project.id}",
-            headers={"Authorization": f"Bearer {token}"},
+            f"/api/projects/{project_id}",
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 403
@@ -240,17 +237,15 @@ class TestGetProject:
     ) -> None:
         """Test that Super Admin can get project from any organization."""
         # Create project in organization
-        project_data = ProjectData(name="Any Org Project")
-        command = ProjectCreateCommand(project_data=project_data, organization_id=organization)
-        project = test_repo.projects.create(command)
+        project_id = create_test_project_via_repo(test_repo, organization, "Any Org Project")
 
         response = client.get(
-            f"/api/projects/{project.id}",
-            headers={"Authorization": f"Bearer {super_admin_token}"},
+            f"/api/projects/{project_id}",
+            headers=auth_headers(super_admin_token),
         )
 
         assert response.status_code == 200
-        assert response.json()["id"] == project.id
+        assert response.json()["id"] == project_id
 
     def test_get_nonexistent_project_returns_404(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test getting non-existent project returns 404."""
@@ -258,7 +253,7 @@ class TestGetProject:
 
         response = client.get(
             "/api/projects/nonexistent-id",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 404
@@ -267,11 +262,9 @@ class TestGetProject:
     def test_get_project_without_auth_fails(self, client: TestClient, test_repo: Repository, organization: str) -> None:
         """Test getting project without auth fails."""
         # Create a project
-        project_data = ProjectData(name="Test Project")
-        command = ProjectCreateCommand(project_data=project_data, organization_id=organization)
-        project = test_repo.projects.create(command)
+        project_id = create_test_project_via_repo(test_repo, organization)
 
-        response = client.get(f"/api/projects/{project.id}")
+        response = client.get(f"/api/projects/{project_id}")
 
         assert response.status_code == 401
 
@@ -287,13 +280,11 @@ class TestListProjects:
 
         # Create projects in user's organization
         for i in range(3):
-            project_data = ProjectData(name=f"Project {i}")
-            command = ProjectCreateCommand(project_data=project_data, organization_id=org_id)
-            test_repo.projects.create(command)
+            create_test_project_via_repo(test_repo, org_id, f"Project {i}")
 
         response = client.get(
             "/api/projects",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 200
@@ -323,7 +314,7 @@ class TestListProjects:
 
         response = client.get(
             "/api/projects",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 200
@@ -352,7 +343,7 @@ class TestListProjects:
 
         response = client.get(
             "/api/projects",
-            headers={"Authorization": f"Bearer {super_admin_token}"},
+            headers=auth_headers(super_admin_token),
         )
 
         assert response.status_code == 200
@@ -367,7 +358,7 @@ class TestListProjects:
 
         response = client.get(
             "/api/projects",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 200
@@ -390,23 +381,21 @@ class TestUpdateProject:
         token, org_id = org_admin_token
 
         # Create project
-        project_data = ProjectData(name="Original Name", description="Original description")
-        command = ProjectCreateCommand(project_data=project_data, organization_id=org_id)
-        project = test_repo.projects.create(command)
+        project_id = create_test_project_via_repo(test_repo, org_id, "Original Name", "Original description")
 
         # Update project
         update_data = {"name": "Updated Name", "description": "Updated description"}
         response = client.put(
-            f"/api/projects/{project.id}",
+            f"/api/projects/{project_id}",
             json=update_data,
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 200
         data = response.json()
         assert data["name"] == "Updated Name"
         assert data["description"] == "Updated description"
-        assert data["id"] == project.id
+        assert data["id"] == project_id
 
     def test_update_project_as_project_manager(
         self, client: TestClient, project_manager_token: tuple[str, str], test_repo: Repository
@@ -415,16 +404,14 @@ class TestUpdateProject:
         token, org_id = project_manager_token
 
         # Create project
-        project_data = ProjectData(name="Original Name")
-        command = ProjectCreateCommand(project_data=project_data, organization_id=org_id)
-        project = test_repo.projects.create(command)
+        project_id = create_test_project_via_repo(test_repo, org_id, "Original Name")
 
         # Update project
         update_data = {"name": "PM Updated Name"}
         response = client.put(
-            f"/api/projects/{project.id}",
+            f"/api/projects/{project_id}",
             json=update_data,
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 200
@@ -437,16 +424,14 @@ class TestUpdateProject:
         token, org_id = org_admin_token
 
         # Create project
-        project_data = ProjectData(name="Original", description="Original description")
-        command = ProjectCreateCommand(project_data=project_data, organization_id=org_id)
-        project = test_repo.projects.create(command)
+        project_id = create_test_project_via_repo(test_repo, org_id, "Original", "Original description")
 
         # Update only name
         update_data = {"name": "New Name"}
         response = client.put(
-            f"/api/projects/{project.id}",
+            f"/api/projects/{project_id}",
             json=update_data,
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 200
@@ -465,16 +450,14 @@ class TestUpdateProject:
         token, _ = org_admin_token
 
         # Create project in different org
-        project_data = ProjectData(name="Other Org Project")
-        command = ProjectCreateCommand(project_data=project_data, organization_id=second_organization)
-        project = test_repo.projects.create(command)
+        project_id = create_test_project_via_repo(test_repo, second_organization, "Other Org Project")
 
         # Attempt to update
         update_data = {"name": "Hacked Name"}
         response = client.put(
-            f"/api/projects/{project.id}",
+            f"/api/projects/{project_id}",
             json=update_data,
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 403
@@ -487,16 +470,14 @@ class TestUpdateProject:
         token, org_id = write_user_token
 
         # Create project
-        project_data = ProjectData(name="Project")
-        command = ProjectCreateCommand(project_data=project_data, organization_id=org_id)
-        project = test_repo.projects.create(command)
+        project_id = create_test_project_via_repo(test_repo, org_id, "Project")
 
         # Attempt to update
         update_data = {"name": "Unauthorized Update"}
         response = client.put(
-            f"/api/projects/{project.id}",
+            f"/api/projects/{project_id}",
             json=update_data,
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 403
@@ -510,7 +491,7 @@ class TestUpdateProject:
         response = client.put(
             "/api/projects/nonexistent-id",
             json=update_data,
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 404
@@ -526,22 +507,20 @@ class TestDeleteProject:
         token, org_id = org_admin_token
 
         # Create project
-        project_data = ProjectData(name="To Delete")
-        command = ProjectCreateCommand(project_data=project_data, organization_id=org_id)
-        project = test_repo.projects.create(command)
+        project_id = create_test_project_via_repo(test_repo, org_id, "To Delete")
 
         # Delete project
         response = client.delete(
-            f"/api/projects/{project.id}",
-            headers={"Authorization": f"Bearer {token}"},
+            f"/api/projects/{project_id}",
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 204
 
         # Verify project is deleted
         get_response = client.get(
-            f"/api/projects/{project.id}",
-            headers={"Authorization": f"Bearer {token}"},
+            f"/api/projects/{project_id}",
+            headers=auth_headers(token),
         )
         assert get_response.status_code == 404
 
@@ -552,14 +531,12 @@ class TestDeleteProject:
         token, org_id = project_manager_token
 
         # Create project
-        project_data = ProjectData(name="Protected Project")
-        command = ProjectCreateCommand(project_data=project_data, organization_id=org_id)
-        project = test_repo.projects.create(command)
+        project_id = create_test_project_via_repo(test_repo, org_id, "Protected Project")
 
         # Attempt to delete
         response = client.delete(
-            f"/api/projects/{project.id}",
-            headers={"Authorization": f"Bearer {token}"},
+            f"/api/projects/{project_id}",
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 403
@@ -576,14 +553,12 @@ class TestDeleteProject:
         token, _ = org_admin_token
 
         # Create project in different org
-        project_data = ProjectData(name="Other Org Project")
-        command = ProjectCreateCommand(project_data=project_data, organization_id=second_organization)
-        project = test_repo.projects.create(command)
+        project_id = create_test_project_via_repo(test_repo, second_organization, "Other Org Project")
 
         # Attempt to delete
         response = client.delete(
-            f"/api/projects/{project.id}",
-            headers={"Authorization": f"Bearer {token}"},
+            f"/api/projects/{project_id}",
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 403
@@ -598,14 +573,12 @@ class TestDeleteProject:
     ) -> None:
         """Test that Super Admin can delete project from any organization."""
         # Create project
-        project_data = ProjectData(name="To Delete")
-        command = ProjectCreateCommand(project_data=project_data, organization_id=organization)
-        project = test_repo.projects.create(command)
+        project_id = create_test_project_via_repo(test_repo, organization, "To Delete")
 
         # Delete as Super Admin
         response = client.delete(
-            f"/api/projects/{project.id}",
-            headers={"Authorization": f"Bearer {super_admin_token}"},
+            f"/api/projects/{project_id}",
+            headers=auth_headers(super_admin_token),
         )
 
         assert response.status_code == 204
@@ -616,7 +589,7 @@ class TestDeleteProject:
 
         response = client.delete(
             "/api/projects/nonexistent-id",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 404
@@ -636,7 +609,7 @@ class TestProjectWorkflows:
         create_response = client.post(
             "/api/projects",
             json=create_data,
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
         assert create_response.status_code == 201
         project_id = create_response.json()["id"]
@@ -644,7 +617,7 @@ class TestProjectWorkflows:
         # 2. Get project
         get_response = client.get(
             f"/api/projects/{project_id}",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
         assert get_response.status_code == 200
         assert get_response.json()["name"] == "Workflow Project"
@@ -653,7 +626,7 @@ class TestProjectWorkflows:
         update_response = client.put(
             f"/api/projects/{project_id}",
             json={"name": "Updated Workflow", "description": "Updated"},
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
         assert update_response.status_code == 200
         assert update_response.json()["name"] == "Updated Workflow"
@@ -661,7 +634,7 @@ class TestProjectWorkflows:
         # 4. List projects includes updated project
         list_response = client.get(
             "/api/projects",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
         assert list_response.status_code == 200
         assert any(p["id"] == project_id for p in list_response.json())
@@ -669,13 +642,13 @@ class TestProjectWorkflows:
         # 5. Delete project
         delete_response = client.delete(
             f"/api/projects/{project_id}",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
         assert delete_response.status_code == 204
 
         # 6. Verify deletion
         final_get = client.get(
             f"/api/projects/{project_id}",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
         assert final_get.status_code == 404

@@ -6,6 +6,7 @@ from project_management_crud_example.dal.sqlite.repository import Repository
 from project_management_crud_example.domain_models import OrganizationCreateCommand, OrganizationData
 from tests.conftest import client, test_repo  # noqa: F401
 from tests.fixtures.auth_fixtures import org_admin_token, super_admin_token  # noqa: F401
+from tests.helpers import auth_headers, create_test_org
 
 
 class TestCreateOrganization:
@@ -18,7 +19,7 @@ class TestCreateOrganization:
         response = client.post(
             "/api/organizations",
             json=org_data,
-            headers={"Authorization": f"Bearer {super_admin_token}"},
+            headers=auth_headers(super_admin_token),
         )
 
         assert response.status_code == 201
@@ -37,7 +38,7 @@ class TestCreateOrganization:
         response = client.post(
             "/api/organizations",
             json=org_data,
-            headers={"Authorization": f"Bearer {super_admin_token}"},
+            headers=auth_headers(super_admin_token),
         )
 
         assert response.status_code == 201
@@ -55,7 +56,7 @@ class TestCreateOrganization:
         response = client.post(
             "/api/organizations",
             json=org_data,
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 403
@@ -77,7 +78,7 @@ class TestCreateOrganization:
         response1 = client.post(
             "/api/organizations",
             json=org_data,
-            headers={"Authorization": f"Bearer {super_admin_token}"},
+            headers=auth_headers(super_admin_token),
         )
         assert response1.status_code == 201
 
@@ -85,7 +86,7 @@ class TestCreateOrganization:
         response2 = client.post(
             "/api/organizations",
             json=org_data,
-            headers={"Authorization": f"Bearer {super_admin_token}"},
+            headers=auth_headers(super_admin_token),
         )
         assert response2.status_code == 400
         assert "already exists" in response2.json()["detail"]
@@ -97,7 +98,7 @@ class TestCreateOrganization:
         response = client.post(
             "/api/organizations",
             json=org_data,
-            headers={"Authorization": f"Bearer {super_admin_token}"},
+            headers=auth_headers(super_admin_token),
         )
 
         assert response.status_code == 201
@@ -110,7 +111,7 @@ class TestCreateOrganization:
         response = client.post(
             "/api/organizations",
             json=org_data,
-            headers={"Authorization": f"Bearer {super_admin_token}"},
+            headers=auth_headers(super_admin_token),
         )
 
         assert response.status_code == 201
@@ -123,7 +124,7 @@ class TestCreateOrganization:
         response = client.post(
             "/api/organizations",
             json=org_data,
-            headers={"Authorization": f"Bearer {super_admin_token}"},
+            headers=auth_headers(super_admin_token),
         )
 
         assert response.status_code == 422
@@ -137,18 +138,16 @@ class TestGetOrganization:
     ) -> None:
         """Test Super Admin can get any organization."""
         # Create organization
-        org = test_repo.organizations.create(
-            OrganizationCreateCommand(organization_data=OrganizationData(name="Test Org"))
-        )
+        org_id = create_test_org(test_repo)
 
         response = client.get(
-            f"/api/organizations/{org.id}",
-            headers={"Authorization": f"Bearer {super_admin_token}"},
+            f"/api/organizations/{org_id}",
+            headers=auth_headers(super_admin_token),
         )
 
         assert response.status_code == 200
         data = response.json()
-        assert data["id"] == org.id
+        assert data["id"] == org_id
         assert data["name"] == "Test Org"
 
     def test_get_own_organization_as_regular_user(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
@@ -157,7 +156,7 @@ class TestGetOrganization:
 
         response = client.get(
             f"/api/organizations/{org_id}",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 200
@@ -171,13 +170,11 @@ class TestGetOrganization:
         token, _ = org_admin_token
 
         # Create another organization
-        other_org = test_repo.organizations.create(
-            OrganizationCreateCommand(organization_data=OrganizationData(name="Other Org"))
-        )
+        other_org_id = create_test_org(test_repo, "Other Org")
 
         response = client.get(
-            f"/api/organizations/{other_org.id}",
-            headers={"Authorization": f"Bearer {token}"},
+            f"/api/organizations/{other_org_id}",
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 403
@@ -187,7 +184,7 @@ class TestGetOrganization:
         """Test getting non-existent organization returns 404."""
         response = client.get(
             "/api/organizations/non-existent-id",
-            headers={"Authorization": f"Bearer {super_admin_token}"},
+            headers=auth_headers(super_admin_token),
         )
 
         assert response.status_code == 404
@@ -208,12 +205,12 @@ class TestListOrganizations:
     ) -> None:
         """Test Super Admin sees all organizations."""
         # Create multiple organizations
-        test_repo.organizations.create(OrganizationCreateCommand(organization_data=OrganizationData(name="Org 1")))
-        test_repo.organizations.create(OrganizationCreateCommand(organization_data=OrganizationData(name="Org 2")))
+        create_test_org(test_repo, "Org 1")
+        create_test_org(test_repo, "Org 2")
 
         response = client.get(
             "/api/organizations",
-            headers={"Authorization": f"Bearer {super_admin_token}"},
+            headers=auth_headers(super_admin_token),
         )
 
         assert response.status_code == 200
@@ -229,11 +226,11 @@ class TestListOrganizations:
         token, org_id = org_admin_token
 
         # Create another organization that user shouldn't see
-        test_repo.organizations.create(OrganizationCreateCommand(organization_data=OrganizationData(name="Other Org")))
+        create_test_org(test_repo, "Other Org")
 
         response = client.get(
             "/api/organizations",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 200
@@ -256,23 +253,19 @@ class TestUpdateOrganization:
     ) -> None:
         """Test Super Admin can update organization."""
         # Create organization
-        org = test_repo.organizations.create(
-            OrganizationCreateCommand(
-                organization_data=OrganizationData(name="Original Name", description="Original description")
-            )
-        )
+        org_id = create_test_org(test_repo, "Original Name", "Original description")
 
         update_data = {"name": "Updated Name", "description": "Updated description"}
 
         response = client.put(
-            f"/api/organizations/{org.id}",
+            f"/api/organizations/{org_id}",
             json=update_data,
-            headers={"Authorization": f"Bearer {super_admin_token}"},
+            headers=auth_headers(super_admin_token),
         )
 
         assert response.status_code == 200
         data = response.json()
-        assert data["id"] == org.id
+        assert data["id"] == org_id
         assert data["name"] == "Updated Name"
         assert data["description"] == "Updated description"
 
@@ -281,18 +274,14 @@ class TestUpdateOrganization:
     ) -> None:
         """Test updating only some fields."""
         # Create organization
-        org = test_repo.organizations.create(
-            OrganizationCreateCommand(
-                organization_data=OrganizationData(name="Original Name", description="Original description")
-            )
-        )
+        org_id = create_test_org(test_repo, "Original Name", "Original description")
 
         update_data = {"description": "New description only"}
 
         response = client.put(
-            f"/api/organizations/{org.id}",
+            f"/api/organizations/{org_id}",
             json=update_data,
-            headers={"Authorization": f"Bearer {super_admin_token}"},
+            headers=auth_headers(super_admin_token),
         )
 
         assert response.status_code == 200
@@ -303,16 +292,14 @@ class TestUpdateOrganization:
     def test_deactivate_organization(self, client: TestClient, super_admin_token: str, test_repo: Repository) -> None:
         """Test deactivating an organization."""
         # Create organization
-        org = test_repo.organizations.create(
-            OrganizationCreateCommand(organization_data=OrganizationData(name="Active Org"))
-        )
+        org_id = create_test_org(test_repo, "Active Org")
 
         update_data = {"is_active": False}
 
         response = client.put(
-            f"/api/organizations/{org.id}",
+            f"/api/organizations/{org_id}",
             json=update_data,
-            headers={"Authorization": f"Bearer {super_admin_token}"},
+            headers=auth_headers(super_admin_token),
         )
 
         assert response.status_code == 200
@@ -329,7 +316,7 @@ class TestUpdateOrganization:
         response = client.put(
             f"/api/organizations/{org_id}",
             json=update_data,
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
 
         assert response.status_code == 403
@@ -342,7 +329,7 @@ class TestUpdateOrganization:
         response = client.put(
             "/api/organizations/non-existent-id",
             json=update_data,
-            headers={"Authorization": f"Bearer {super_admin_token}"},
+            headers=auth_headers(super_admin_token),
         )
 
         assert response.status_code == 404
@@ -356,17 +343,15 @@ class TestUpdateOrganization:
         test_repo.organizations.create(
             OrganizationCreateCommand(organization_data=OrganizationData(name="Organization 1"))
         )
-        org2 = test_repo.organizations.create(
-            OrganizationCreateCommand(organization_data=OrganizationData(name="Organization 2"))
-        )
+        org2_id = create_test_org(test_repo, "Organization 2")
 
         # Attempt to update org2 to have same name as org1
         update_data = {"name": "Organization 1"}
 
         response = client.put(
-            f"/api/organizations/{org2.id}",
+            f"/api/organizations/{org2_id}",
             json=update_data,
-            headers={"Authorization": f"Bearer {super_admin_token}"},
+            headers=auth_headers(super_admin_token),
         )
 
         assert response.status_code == 400
@@ -384,7 +369,7 @@ class TestOrganizationWorkflows:
         create_response = client.post(
             "/api/organizations",
             json={"name": "Workflow Org", "description": "Testing workflow"},
-            headers={"Authorization": f"Bearer {super_admin_token}"},
+            headers=auth_headers(super_admin_token),
         )
         assert create_response.status_code == 201
         org_id = create_response.json()["id"]
@@ -392,7 +377,7 @@ class TestOrganizationWorkflows:
         # 2. Read
         get_response = client.get(
             f"/api/organizations/{org_id}",
-            headers={"Authorization": f"Bearer {super_admin_token}"},
+            headers=auth_headers(super_admin_token),
         )
         assert get_response.status_code == 200
         assert get_response.json()["name"] == "Workflow Org"
@@ -400,7 +385,7 @@ class TestOrganizationWorkflows:
         # 3. List
         list_response = client.get(
             "/api/organizations",
-            headers={"Authorization": f"Bearer {super_admin_token}"},
+            headers=auth_headers(super_admin_token),
         )
         assert list_response.status_code == 200
         org_ids = [org["id"] for org in list_response.json()]
@@ -410,7 +395,7 @@ class TestOrganizationWorkflows:
         update_response = client.put(
             f"/api/organizations/{org_id}",
             json={"description": "Updated workflow description"},
-            headers={"Authorization": f"Bearer {super_admin_token}"},
+            headers=auth_headers(super_admin_token),
         )
         assert update_response.status_code == 200
         assert update_response.json()["description"] == "Updated workflow description"
@@ -418,7 +403,7 @@ class TestOrganizationWorkflows:
         # 5. Verify update persisted
         final_get = client.get(
             f"/api/organizations/{org_id}",
-            headers={"Authorization": f"Bearer {super_admin_token}"},
+            headers=auth_headers(super_admin_token),
         )
         assert final_get.status_code == 200
         assert final_get.json()["description"] == "Updated workflow description"
@@ -433,7 +418,7 @@ class TestOrganizationWorkflows:
         other_org_response = client.post(
             "/api/organizations",
             json={"name": "Other Organization"},
-            headers={"Authorization": f"Bearer {super_admin_token}"},
+            headers=auth_headers(super_admin_token),
         )
         assert other_org_response.status_code == 201
         other_org_id = other_org_response.json()["id"]
@@ -441,7 +426,7 @@ class TestOrganizationWorkflows:
         # Regular user lists organizations - should only see their own
         list_response = client.get(
             "/api/organizations",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
         assert list_response.status_code == 200
         orgs = list_response.json()
@@ -451,6 +436,6 @@ class TestOrganizationWorkflows:
         # Regular user tries to access other organization - should fail
         get_other_response = client.get(
             f"/api/organizations/{other_org_id}",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=auth_headers(token),
         )
         assert get_other_response.status_code == 403

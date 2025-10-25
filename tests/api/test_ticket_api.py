@@ -15,6 +15,7 @@ from project_management_crud_example.domain_models import (
 )
 from tests.conftest import client, test_repo  # noqa: F401
 from tests.fixtures.data_fixtures import organization, second_organization  # noqa: F401
+from tests.helpers import auth_headers, create_test_user
 
 # Local fixtures for ticket tests - create multiple users in the SAME organization
 
@@ -79,7 +80,7 @@ class TestCreateTicket:
     def test_create_ticket_as_admin(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test that Admin can create tickets."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         # Create project
         project_response = client.post("/api/projects", json={"name": "Test Project"}, headers=headers)
@@ -110,8 +111,8 @@ class TestCreateTicket:
         """Test that Project Manager can create tickets."""
         admin_tok, org_id = org_admin_token
         pm_token, _ = project_manager_token
-        admin_headers = {"Authorization": f"Bearer {admin_tok}"}
-        pm_headers = {"Authorization": f"Bearer {pm_token}"}
+        admin_headers = auth_headers(admin_tok)
+        pm_headers = auth_headers(pm_token)
 
         # Create project
         project_response = client.post("/api/projects", json={"name": "Project"}, headers=admin_headers)
@@ -129,8 +130,8 @@ class TestCreateTicket:
         """Test that Write user can create tickets."""
         admin_tok, org_id = org_admin_token
         write_token, _ = write_user_token
-        admin_headers = {"Authorization": f"Bearer {admin_tok}"}
-        write_headers = {"Authorization": f"Bearer {write_token}"}
+        admin_headers = auth_headers(admin_tok)
+        write_headers = auth_headers(write_token)
 
         # Create project
         project_response = client.post("/api/projects", json={"name": "Project"}, headers=admin_headers)
@@ -149,8 +150,8 @@ class TestCreateTicket:
         """Test that Read user cannot create tickets."""
         admin_tok, org_id = org_admin_token
         read_token, _ = read_user_token
-        admin_headers = {"Authorization": f"Bearer {admin_tok}"}
-        read_headers = {"Authorization": f"Bearer {read_token}"}
+        admin_headers = auth_headers(admin_tok)
+        read_headers = auth_headers(read_token)
 
         # Create project
         project_response = client.post("/api/projects", json={"name": "Project"}, headers=admin_headers)
@@ -169,22 +170,14 @@ class TestCreateTicket:
     ) -> None:
         """Test creating ticket with initial assignee."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         # Create project
         project_response = client.post("/api/projects", json={"name": "Project"}, headers=headers)
         project_id = project_response.json()["id"]
 
-        # Create assignee user via repository
-        assignee_user_data = UserData(username="assignee", email="assignee@test.com", full_name="Assignee User")
-        assignee_command = UserCreateCommand(
-            user_data=assignee_user_data,
-            password="AssigneePass123",
-            organization_id=org_id,
-            role=UserRole.WRITE_ACCESS,
-        )
-        assignee = test_repo.users.create(assignee_command)
-        assignee_id = assignee.id
+        # Create assignee via helper
+        assignee_id = create_test_user(test_repo, org_id, username="assignee")
 
         # Create ticket with assignee
         response = client.post(
@@ -201,7 +194,7 @@ class TestCreateTicket:
     ) -> None:
         """Test creating ticket in non-existent project fails."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         response = client.post("/api/tickets?project_id=nonexistent", json={"title": "Should Fail"}, headers=headers)
 
@@ -213,7 +206,7 @@ class TestCreateTicket:
     ) -> None:
         """Test creating ticket with non-existent assignee fails."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         # Create project
         project_response = client.post("/api/projects", json={"name": "Project"}, headers=headers)
@@ -231,7 +224,7 @@ class TestCreateTicket:
     def test_create_ticket_validates_title_required(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test that title is required when creating ticket."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         # Create project
         project_response = client.post("/api/projects", json={"name": "Project"}, headers=headers)
@@ -250,7 +243,7 @@ class TestGetTicket:
     def test_get_ticket_by_id_in_same_org(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test retrieving ticket from same organization."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         # Create project and ticket
         project_response = client.post("/api/projects", json={"name": "Project"}, headers=headers)
@@ -276,7 +269,7 @@ class TestGetTicket:
     ) -> None:
         """Test that users cannot access tickets from different organizations."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         # Create project and ticket in org1
         project1_response = client.post("/api/projects", json={"name": "Project 1"}, headers=headers)
@@ -301,7 +294,7 @@ class TestGetTicket:
         org2_token = client.post("/auth/login", json={"username": "org2admin", "password": org2_password}).json()[
             "access_token"
         ]
-        org2_headers = {"Authorization": f"Bearer {org2_token}"}
+        org2_headers = auth_headers(org2_token)
 
         # Attempt to get org1 ticket
         response = client.get(f"/api/tickets/{ticket_id}", headers=org2_headers)
@@ -312,7 +305,7 @@ class TestGetTicket:
     def test_get_nonexistent_ticket_fails(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test getting non-existent ticket returns 404."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         response = client.get("/api/tickets/nonexistent", headers=headers)
 
@@ -326,7 +319,7 @@ class TestListTickets:
     def test_list_tickets_in_organization(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test listing all tickets in user's organization."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         # Create project
         project_response = client.post("/api/projects", json={"name": "Project"}, headers=headers)
@@ -347,7 +340,7 @@ class TestListTickets:
     def test_list_tickets_filtered_by_project(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test filtering tickets by project ID."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         # Create projects
         project1_response = client.post("/api/projects", json={"name": "Project 1"}, headers=headers)
@@ -372,7 +365,7 @@ class TestListTickets:
     def test_list_tickets_filtered_by_status(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test filtering tickets by status."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         # Create project
         project_response = client.post("/api/projects", json={"name": "Project"}, headers=headers)
@@ -406,22 +399,14 @@ class TestListTickets:
     ) -> None:
         """Test filtering tickets by assignee."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         # Create project
         project_response = client.post("/api/projects", json={"name": "Project"}, headers=headers)
         project_id = project_response.json()["id"]
 
-        # Create assignee via repository
-        assignee_user_data = UserData(username="assignee", email="assignee@test.com", full_name="Assignee User")
-        assignee_command = UserCreateCommand(
-            user_data=assignee_user_data,
-            password="AssigneePass123",
-            organization_id=org_id,
-            role=UserRole.WRITE_ACCESS,
-        )
-        assignee = test_repo.users.create(assignee_command)
-        assignee_id = assignee.id
+        # Create assignee via helper
+        assignee_id = create_test_user(test_repo, org_id, username="assignee")
 
         # Create tickets
         client.post(
@@ -445,22 +430,14 @@ class TestListTickets:
     ) -> None:
         """Test filtering tickets with multiple criteria."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         # Create project
         project_response = client.post("/api/projects", json={"name": "Project"}, headers=headers)
         project_id = project_response.json()["id"]
 
-        # Create assignee via repository
-        assignee_user_data = UserData(username="assignee", email="assignee@test.com", full_name="Assignee User")
-        assignee_command = UserCreateCommand(
-            user_data=assignee_user_data,
-            password="AssigneePass123",
-            organization_id=org_id,
-            role=UserRole.WRITE_ACCESS,
-        )
-        assignee = test_repo.users.create(assignee_command)
-        assignee_id = assignee.id
+        # Create assignee via helper
+        assignee_id = create_test_user(test_repo, org_id, username="assignee")
 
         # Create matching ticket
         match_response = client.post(
@@ -494,7 +471,7 @@ class TestListTickets:
     ) -> None:
         """Test that users only see tickets from their organization."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         # Create project and ticket in org1
         project1_response = client.post("/api/projects", json={"name": "Project 1"}, headers=headers)
@@ -515,7 +492,7 @@ class TestListTickets:
         org2_token = client.post("/auth/login", json={"username": "org2admin", "password": org2_password}).json()[
             "access_token"
         ]
-        org2_headers = {"Authorization": f"Bearer {org2_token}"}
+        org2_headers = auth_headers(org2_token)
 
         # Create project and ticket in org2
         project2_response = client.post("/api/projects", json={"name": "Project 2"}, headers=org2_headers)
@@ -537,7 +514,7 @@ class TestUpdateTicket:
     def test_update_ticket_fields(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test updating ticket title, description, and priority."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         # Create project
         project_response = client.post("/api/projects", json={"name": "Project"}, headers=headers)
@@ -570,8 +547,8 @@ class TestUpdateTicket:
         """Test that Write user can update tickets."""
         admin_tok, org_id = org_admin_token
         write_token, _ = write_user_token
-        admin_headers = {"Authorization": f"Bearer {admin_tok}"}
-        write_headers = {"Authorization": f"Bearer {write_token}"}
+        admin_headers = auth_headers(admin_tok)
+        write_headers = auth_headers(write_token)
 
         # Create project and ticket
         project_response = client.post("/api/projects", json={"name": "Project"}, headers=admin_headers)
@@ -594,8 +571,8 @@ class TestUpdateTicket:
         """Test that Read user cannot update tickets."""
         admin_tok, org_id = org_admin_token
         read_token, _ = read_user_token
-        admin_headers = {"Authorization": f"Bearer {admin_tok}"}
-        read_headers = {"Authorization": f"Bearer {read_token}"}
+        admin_headers = auth_headers(admin_tok)
+        read_headers = auth_headers(read_token)
 
         # Create project and ticket
         project_response = client.post("/api/projects", json={"name": "Project"}, headers=admin_headers)
@@ -614,7 +591,7 @@ class TestUpdateTicket:
     def test_update_nonexistent_ticket_fails(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test updating non-existent ticket returns 404."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         response = client.put("/api/tickets/nonexistent", json={"title": "Should Fail"}, headers=headers)
 
@@ -627,7 +604,7 @@ class TestUpdateTicketStatus:
     def test_update_ticket_status(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test changing ticket status."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         # Create project and ticket
         project_response = client.post("/api/projects", json={"name": "Project"}, headers=headers)
@@ -647,7 +624,7 @@ class TestUpdateTicketStatus:
     def test_update_status_all_transitions(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test all valid status transitions."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         # Create project and ticket
         project_response = client.post("/api/projects", json={"name": "Project"}, headers=headers)
@@ -671,7 +648,7 @@ class TestUpdateTicketStatus:
     def test_update_status_invalid_value_fails(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test that invalid status value returns validation error."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         # Create project and ticket
         project_response = client.post("/api/projects", json={"name": "Project"}, headers=headers)
@@ -692,7 +669,7 @@ class TestMoveTicketToProject:
     def test_move_ticket_to_different_project(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test moving ticket between projects in same organization."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         # Create projects
         project1_response = client.post("/api/projects", json={"name": "Project 1"}, headers=headers)
@@ -719,8 +696,8 @@ class TestMoveTicketToProject:
         """Test that Write user cannot move tickets."""
         admin_tok, org_id = org_admin_token
         write_token, _ = write_user_token
-        admin_headers = {"Authorization": f"Bearer {admin_tok}"}
-        write_headers = {"Authorization": f"Bearer {write_token}"}
+        admin_headers = auth_headers(admin_tok)
+        write_headers = auth_headers(write_token)
 
         # Create projects
         project1_response = client.post("/api/projects", json={"name": "Project 1"}, headers=admin_headers)
@@ -747,7 +724,7 @@ class TestMoveTicketToProject:
     ) -> None:
         """Test moving ticket to non-existent project fails."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         # Create project and ticket
         project_response = client.post("/api/projects", json={"name": "Project"}, headers=headers)
@@ -770,7 +747,7 @@ class TestAssignTicket:
     ) -> None:
         """Test assigning ticket to a user."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         # Create project and ticket
         project_response = client.post("/api/projects", json={"name": "Project"}, headers=headers)
@@ -779,16 +756,8 @@ class TestAssignTicket:
         create_response = client.post(f"/api/tickets?project_id={project_id}", json={"title": "Test"}, headers=headers)
         ticket_id = create_response.json()["id"]
 
-        # Create assignee via repository
-        assignee_user_data = UserData(username="assignee", email="assignee@test.com", full_name="Assignee User")
-        assignee_command = UserCreateCommand(
-            user_data=assignee_user_data,
-            password="AssigneePass123",
-            organization_id=org_id,
-            role=UserRole.WRITE_ACCESS,
-        )
-        assignee = test_repo.users.create(assignee_command)
-        assignee_id = assignee.id
+        # Create assignee via helper
+        assignee_id = create_test_user(test_repo, org_id, username="assignee")
 
         # Assign ticket
         response = client.put(f"/api/tickets/{ticket_id}/assignee", json={"assignee_id": assignee_id}, headers=headers)
@@ -799,22 +768,14 @@ class TestAssignTicket:
     def test_unassign_ticket(self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository) -> None:
         """Test unassigning ticket (set to null)."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         # Create project
         project_response = client.post("/api/projects", json={"name": "Project"}, headers=headers)
         project_id = project_response.json()["id"]
 
-        # Create assignee via repository
-        assignee_user_data = UserData(username="assignee", email="assignee@test.com", full_name="Assignee User")
-        assignee_command = UserCreateCommand(
-            user_data=assignee_user_data,
-            password="AssigneePass123",
-            organization_id=org_id,
-            role=UserRole.WRITE_ACCESS,
-        )
-        assignee = test_repo.users.create(assignee_command)
-        assignee_id = assignee.id
+        # Create assignee via helper
+        assignee_id = create_test_user(test_repo, org_id, username="assignee")
 
         # Create ticket with assignee
         create_response = client.post(
@@ -840,8 +801,8 @@ class TestAssignTicket:
         """Test that Write user cannot assign tickets."""
         admin_tok, org_id = org_admin_token
         write_token, _ = write_user_token
-        admin_headers = {"Authorization": f"Bearer {admin_tok}"}
-        write_headers = {"Authorization": f"Bearer {write_token}"}
+        admin_headers = auth_headers(admin_tok)
+        write_headers = auth_headers(write_token)
 
         # Create project and ticket
         project_response = client.post("/api/projects", json={"name": "Project"}, headers=admin_headers)
@@ -852,16 +813,8 @@ class TestAssignTicket:
         )
         ticket_id = create_response.json()["id"]
 
-        # Create assignee via repository
-        assignee_user_data = UserData(username="assignee", email="assignee@test.com", full_name="Assignee User")
-        assignee_command = UserCreateCommand(
-            user_data=assignee_user_data,
-            password="AssigneePass123",
-            organization_id=org_id,
-            role=UserRole.WRITE_ACCESS,
-        )
-        assignee = test_repo.users.create(assignee_command)
-        assignee_id = assignee.id
+        # Create assignee via helper
+        assignee_id = create_test_user(test_repo, org_id, username="assignee")
 
         # Attempt to assign
         response = client.put(
@@ -873,7 +826,7 @@ class TestAssignTicket:
     def test_assign_to_nonexistent_user_fails(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test assigning to non-existent user fails."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         # Create project and ticket
         project_response = client.post("/api/projects", json={"name": "Project"}, headers=headers)
@@ -896,7 +849,7 @@ class TestDeleteTicket:
     def test_delete_ticket_as_admin(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test that Admin can delete tickets."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         # Create project and ticket
         project_response = client.post("/api/projects", json={"name": "Project"}, headers=headers)
@@ -922,8 +875,8 @@ class TestDeleteTicket:
         """Test that Project Manager cannot delete tickets."""
         admin_tok, org_id = org_admin_token
         pm_token, _ = project_manager_token
-        admin_headers = {"Authorization": f"Bearer {admin_tok}"}
-        pm_headers = {"Authorization": f"Bearer {pm_token}"}
+        admin_headers = auth_headers(admin_tok)
+        pm_headers = auth_headers(pm_token)
 
         # Create project and ticket
         project_response = client.post("/api/projects", json={"name": "Project"}, headers=admin_headers)
@@ -942,7 +895,7 @@ class TestDeleteTicket:
     def test_delete_nonexistent_ticket_fails(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test deleting non-existent ticket returns 404."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         response = client.delete("/api/tickets/nonexistent", headers=headers)
 
@@ -957,7 +910,7 @@ class TestTicketWorkflows:
     ) -> None:
         """Test complete workflow: create → assign → update status → move → delete."""
         token, org_id = org_admin_token
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers(token)
 
         # Create projects
         project1_response = client.post("/api/projects", json={"name": "Backend"}, headers=headers)
@@ -966,16 +919,8 @@ class TestTicketWorkflows:
         project2_response = client.post("/api/projects", json={"name": "Frontend"}, headers=headers)
         project2_id = project2_response.json()["id"]
 
-        # Create assignee via repository
-        assignee_user_data = UserData(username="assignee", email="assignee@test.com", full_name="Assignee User")
-        assignee_command = UserCreateCommand(
-            user_data=assignee_user_data,
-            password="AssigneePass123",
-            organization_id=org_id,
-            role=UserRole.WRITE_ACCESS,
-        )
-        assignee = test_repo.users.create(assignee_command)
-        assignee_id = assignee.id
+        # Create assignee via helper
+        assignee_id = create_test_user(test_repo, org_id, username="assignee")
 
         # 1. Create ticket
         create_response = client.post(
