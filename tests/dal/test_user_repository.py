@@ -421,3 +421,161 @@ class TestUserOperations:
         # Verify user is deleted
         retrieved_user = test_repo.users.get_by_id(user.id)
         assert retrieved_user is None
+
+    def test_get_by_username_with_password(self, test_repo: Repository) -> None:
+        """Test retrieving user with password hash for authentication."""
+        # Create user
+        user_data = UserData(username="authuser", email="authuser@example.com", full_name="Auth User")
+        command = UserCreateCommand(
+            user_data=user_data, password="SecurePassword123", organization_id="org-123", role=UserRole.ADMIN
+        )
+        created_user = test_repo.users.create(command)
+
+        # Retrieve user with password for authentication
+        auth_data = test_repo.users.get_by_username_with_password("authuser")
+
+        assert auth_data is not None
+        assert auth_data.id == created_user.id
+        assert auth_data.username == "authuser"
+        assert auth_data.role == UserRole.ADMIN
+        assert auth_data.organization_id == "org-123"
+        assert auth_data.is_active is True
+        # Verify password_hash is included in UserAuthData
+        assert auth_data.password_hash is not None
+        assert len(auth_data.password_hash) > 0
+        # Verify it contains a salt (format: salt$hash for test hasher)
+        assert "$" in auth_data.password_hash
+
+    def test_get_by_username_with_password_case_insensitive(self, test_repo: Repository) -> None:
+        """Test retrieving user with password is case-insensitive."""
+        # Create user with lowercase username
+        user_data = UserData(username="authuser", email="authuser@example.com", full_name="Auth User")
+        command = UserCreateCommand(
+            user_data=user_data, password="SecurePassword123", organization_id="org-123", role=UserRole.ADMIN
+        )
+        test_repo.users.create(command)
+
+        # Retrieve with different case variations
+        for username_variant in ["authuser", "AUTHUSER", "AuthUser", "aUtHuSeR"]:
+            auth_data = test_repo.users.get_by_username_with_password(username_variant)
+            assert auth_data is not None
+            assert auth_data.username == "authuser"
+
+    def test_get_by_username_with_password_not_found(self, test_repo: Repository) -> None:
+        """Test retrieving non-existent user for authentication returns None."""
+        auth_data = test_repo.users.get_by_username_with_password("nonexistent")
+
+        assert auth_data is None
+
+    def test_update_password(self, test_repo: Repository) -> None:
+        """Test updating user password."""
+        # Create user
+        user_data = UserData(username="changepass", email="changepass@example.com", full_name="Change Pass User")
+        command = UserCreateCommand(
+            user_data=user_data, password="OldPassword123", organization_id="org-123", role=UserRole.ADMIN
+        )
+        created_user = test_repo.users.create(command)
+
+        # Get original password hash
+        original_auth_data = test_repo.users.get_by_username_with_password("changepass")
+        assert original_auth_data is not None
+        original_hash = original_auth_data.password_hash
+
+        # Update password
+        success = test_repo.users.update_password(created_user.id, "NewPassword456")
+
+        assert success is True
+
+        # Verify password hash has changed
+        updated_auth_data = test_repo.users.get_by_username_with_password("changepass")
+        assert updated_auth_data is not None
+        assert updated_auth_data.password_hash != original_hash
+        # Verify new hash is still valid (contains salt$hash format)
+        assert "$" in updated_auth_data.password_hash
+
+    def test_update_password_user_not_found(self, test_repo: Repository) -> None:
+        """Test updating password for non-existent user returns False."""
+        success = test_repo.users.update_password("non-existent-id", "NewPassword123")
+
+        assert success is False
+
+    def test_create_super_admin_if_needed_creates_when_none_exists(self, test_repo: Repository) -> None:
+        """Test creating Super Admin when none exists."""
+        # Verify no Super Admin exists initially
+        all_users = test_repo.users.get_all()
+        assert len(all_users) == 0
+
+        # Create Super Admin if needed
+        created, user = test_repo.users.create_super_admin_if_needed(
+            username="superadmin",
+            email="admin@example.com",
+            full_name="Super Administrator",
+            password="SuperSecure123!",
+        )
+
+        assert created is True
+        assert user is not None
+        assert user.username == "superadmin"
+        assert user.role == UserRole.SUPER_ADMIN
+        assert user.organization_id is None
+        assert user.is_active is True
+
+        # Verify user can authenticate
+        auth_data = test_repo.users.get_by_username_with_password("superadmin")
+        assert auth_data is not None
+        assert auth_data.password_hash is not None
+
+    def test_create_super_admin_if_needed_idempotent(self, test_repo: Repository) -> None:
+        """Test creating Super Admin is idempotent - doesn't create duplicates."""
+        # Create Super Admin first time
+        created1, user1 = test_repo.users.create_super_admin_if_needed(
+            username="superadmin",
+            email="admin@example.com",
+            full_name="Super Administrator",
+            password="SuperSecure123!",
+        )
+        assert created1 is True
+        assert user1 is not None
+        first_user_id = user1.id
+
+        # Try to create again - should return False and None
+        created2, user2 = test_repo.users.create_super_admin_if_needed(
+            username="superadmin",
+            email="admin@example.com",
+            full_name="Super Administrator",
+            password="SuperSecure123!",
+        )
+        assert created2 is False
+        assert user2 is None
+
+        # Verify only one Super Admin exists
+        all_users = test_repo.users.get_all()
+        super_admins = [u for u in all_users if u.role == UserRole.SUPER_ADMIN]
+        assert len(super_admins) == 1
+        assert super_admins[0].id == first_user_id
+
+    def test_create_super_admin_if_needed_does_not_create_when_one_exists(self, test_repo: Repository) -> None:
+        """Test that Super Admin is not created if one already exists with different username."""
+        # Manually create a Super Admin with custom username
+        user_data = UserData(username="customadmin", email="custom@example.com", full_name="Custom Admin")
+        test_repo.users.create(
+            UserCreateCommand(
+                user_data=user_data, password="CustomPassword123", organization_id=None, role=UserRole.SUPER_ADMIN
+            )
+        )
+
+        # Try to create default Super Admin - should not create
+        created, user = test_repo.users.create_super_admin_if_needed(
+            username="superadmin",
+            email="admin@example.com",
+            full_name="Super Administrator",
+            password="SuperSecure123!",
+        )
+
+        assert created is False
+        assert user is None
+
+        # Verify only the custom Super Admin exists (no "superadmin" user)
+        all_users = test_repo.users.get_all()
+        assert len(all_users) == 1
+        assert all_users[0].username == "customadmin"

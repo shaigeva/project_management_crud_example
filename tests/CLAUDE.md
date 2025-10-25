@@ -61,8 +61,109 @@ BAD: test_cache.py
 - ✅ **Data persistence**: Verify data survives round-trips
 - ✅ **Error handling**: Not found, edge cases
 - ✅ **Independent testing**: Test without HTTP layer
+- ✅ **ALL repository methods**: Every method in the repository MUST have tests (see "100% Coverage Rule" below)
 
 **Important**: Repository tests verify the data access layer works correctly on its own.
+
+#### **100% Repository Method Coverage Rule - CRITICAL**
+
+**Every repository method MUST have dedicated repository tests, regardless of API test coverage.**
+
+**Why This Matters**:
+- Repository layer is a cohesive architectural boundary that must work independently
+- Methods returning different domain models (e.g., `UserAuthData` vs `User`) need specific testing
+- Security-critical operations (password management, authentication) require isolated verification
+- Bootstrap/utility methods need testing even if not directly called via API
+
+**Common Gaps to Avoid**:
+
+❌ **DON'T skip these types of repository methods:**
+1. **Authentication methods** that return special models (e.g., `get_by_username_with_password()` returning `UserAuthData`)
+2. **Password management** methods (e.g., `update_password()`)
+3. **Bootstrap/setup methods** (e.g., `create_super_admin_if_needed()`)
+4. **Filtering methods** with complex logic (e.g., `get_by_filters()`)
+5. **Specialized update methods** (e.g., `update_status()`, `update_assignee()`)
+
+✅ **DO test every method** with repository-level tests showing:
+- Method works correctly in isolation
+- Returns correct domain model type
+- Handles edge cases (not found, validation failures)
+- Security properties (password hashing, idempotency)
+
+**Example Coverage Requirements**:
+
+```python
+# If repository has these methods, ALL need tests:
+class Users:
+    def create(...)                          # ✅ Must test
+    def get_by_id(...)                       # ✅ Must test
+    def get_by_username(...)                 # ✅ Must test
+    def get_by_username_with_password(...)   # ✅ Must test (returns UserAuthData!)
+    def update(...)                          # ✅ Must test
+    def update_password(...)                 # ✅ Must test (security-critical!)
+    def delete(...)                          # ✅ Must test
+    def get_by_filters(...)                  # ✅ Must test (all filter combinations)
+    def create_super_admin_if_needed(...)    # ✅ Must test (idempotency!)
+```
+
+**Authentication Method Testing - Special Attention Required**:
+
+Methods that return authentication data (e.g., `get_by_username_with_password()`) need careful testing:
+
+```python
+def test_get_by_username_with_password(self, test_repo: Repository) -> None:
+    """Test retrieving user with password hash for authentication."""
+    user = test_repo.users.create(...)
+
+    # Retrieve with password
+    auth_data = test_repo.users.get_by_username_with_password("username")
+
+    # Verify correct domain model (UserAuthData, not User)
+    assert auth_data is not None
+    assert auth_data.password_hash is not None  # Key difference from User model
+    assert auth_data.username == "username"
+    assert auth_data.role == UserRole.ADMIN
+```
+
+**Password Management Testing - Security Critical**:
+
+```python
+def test_update_password(self, test_repo: Repository) -> None:
+    """Test updating user password."""
+    user = test_repo.users.create(...)
+
+    # Get original hash
+    original_auth = test_repo.users.get_by_username_with_password("username")
+    original_hash = original_auth.password_hash
+
+    # Update password
+    success = test_repo.users.update_password(user.id, "NewPassword123")
+    assert success is True
+
+    # Verify hash changed
+    updated_auth = test_repo.users.get_by_username_with_password("username")
+    assert updated_auth.password_hash != original_hash
+```
+
+**Bootstrap Method Testing - Idempotency Critical**:
+
+```python
+def test_create_super_admin_if_needed_idempotent(self, test_repo: Repository) -> None:
+    """Test bootstrap function doesn't create duplicates."""
+    # First call creates
+    created1, user1 = test_repo.users.create_super_admin_if_needed(...)
+    assert created1 is True
+
+    # Second call doesn't create
+    created2, user2 = test_repo.users.create_super_admin_if_needed(...)
+    assert created2 is False
+    assert user2 is None
+
+    # Verify only one exists
+    all_users = test_repo.users.get_all()
+    super_admins = [u for u in all_users if u.role == UserRole.SUPER_ADMIN]
+    assert len(super_admins) == 1
+```
 
 #### **Repository Testing Pattern - CRITICAL**
 
