@@ -8,13 +8,12 @@ from datetime import datetime
 
 from project_management_crud_example.dal.sqlite.repository import Repository
 from project_management_crud_example.domain_models import (
-    OrganizationCreateCommand,
-    OrganizationData,
     ProjectCreateCommand,
     ProjectData,
     ProjectUpdateCommand,
 )
 from tests.conftest import test_repo  # noqa: F401
+from tests.dal.helpers import create_test_org_via_repo, create_test_project_via_repo
 
 
 class TestProjectRepositoryCreate:
@@ -23,9 +22,7 @@ class TestProjectRepositoryCreate:
     def test_create_project_with_all_fields(self, test_repo: Repository) -> None:
         """Test creating a project with all fields through repository."""
         # Create organization first
-        org_data = OrganizationData(name="Test Org", description="Test org description")
-        org_command = OrganizationCreateCommand(organization_data=org_data)
-        org = test_repo.organizations.create(org_command)
+        org = create_test_org_via_repo(test_repo)
 
         # Create project
         project_data = ProjectData(name="Backend API", description="REST API for the application")
@@ -43,9 +40,7 @@ class TestProjectRepositoryCreate:
     def test_create_project_without_description(self, test_repo: Repository) -> None:
         """Test creating a project without optional description."""
         # Create organization
-        org_data = OrganizationData(name="Test Org")
-        org_command = OrganizationCreateCommand(organization_data=org_data)
-        org = test_repo.organizations.create(org_command)
+        org = create_test_org_via_repo(test_repo)
 
         # Create project without description
         project_data = ProjectData(name="Frontend")
@@ -60,9 +55,7 @@ class TestProjectRepositoryCreate:
     def test_create_project_persists_to_database(self, test_repo: Repository) -> None:
         """Test that created project can be retrieved from database."""
         # Create organization
-        org_data = OrganizationData(name="Test Org")
-        org_command = OrganizationCreateCommand(organization_data=org_data)
-        org = test_repo.organizations.create(org_command)
+        org = create_test_org_via_repo(test_repo)
 
         # Create project
         project_data = ProjectData(name="Mobile App")
@@ -84,11 +77,8 @@ class TestProjectRepositoryGet:
     def test_get_project_by_id_found(self, test_repo: Repository) -> None:
         """Test retrieving an existing project by ID."""
         # Create organization and project
-        org_data = OrganizationData(name="Test Org")
-        org = test_repo.organizations.create(OrganizationCreateCommand(organization_data=org_data))
-
-        project_data = ProjectData(name="Test Project")
-        project = test_repo.projects.create(ProjectCreateCommand(project_data=project_data, organization_id=org.id))
+        org = create_test_org_via_repo(test_repo)
+        project = create_test_project_via_repo(test_repo, org.id)
 
         # Retrieve project
         retrieved = test_repo.projects.get_by_id(project.id)
@@ -106,25 +96,15 @@ class TestProjectRepositoryGet:
     def test_get_projects_by_organization_id(self, test_repo: Repository) -> None:
         """Test retrieving all projects for a specific organization."""
         # Create two organizations
-        org1 = test_repo.organizations.create(
-            OrganizationCreateCommand(organization_data=OrganizationData(name="Org 1"))
-        )
-        org2 = test_repo.organizations.create(
-            OrganizationCreateCommand(organization_data=OrganizationData(name="Org 2"))
-        )
+        org1 = create_test_org_via_repo(test_repo, "Org 1")
+        org2 = create_test_org_via_repo(test_repo, "Org 2")
 
         # Create projects for org1
-        test_repo.projects.create(
-            ProjectCreateCommand(project_data=ProjectData(name="Org1 Project 1"), organization_id=org1.id)
-        )
-        test_repo.projects.create(
-            ProjectCreateCommand(project_data=ProjectData(name="Org1 Project 2"), organization_id=org1.id)
-        )
+        create_test_project_via_repo(test_repo, org1.id, "Org1 Project 1")
+        create_test_project_via_repo(test_repo, org1.id, "Org1 Project 2")
 
         # Create project for org2
-        test_repo.projects.create(
-            ProjectCreateCommand(project_data=ProjectData(name="Org2 Project 1"), organization_id=org2.id)
-        )
+        create_test_project_via_repo(test_repo, org2.id, "Org2 Project 1")
 
         # Get projects for org1
         org1_projects = test_repo.projects.get_by_organization_id(org1.id)
@@ -136,20 +116,12 @@ class TestProjectRepositoryGet:
     def test_get_all_projects(self, test_repo: Repository) -> None:
         """Test retrieving all projects across all organizations."""
         # Create two organizations
-        org1 = test_repo.organizations.create(
-            OrganizationCreateCommand(organization_data=OrganizationData(name="Org 1"))
-        )
-        org2 = test_repo.organizations.create(
-            OrganizationCreateCommand(organization_data=OrganizationData(name="Org 2"))
-        )
+        org1 = create_test_org_via_repo(test_repo, "Org 1")
+        org2 = create_test_org_via_repo(test_repo, "Org 2")
 
         # Create projects
-        test_repo.projects.create(
-            ProjectCreateCommand(project_data=ProjectData(name="Project 1"), organization_id=org1.id)
-        )
-        test_repo.projects.create(
-            ProjectCreateCommand(project_data=ProjectData(name="Project 2"), organization_id=org2.id)
-        )
+        create_test_project_via_repo(test_repo, org1.id, "Project 1")
+        create_test_project_via_repo(test_repo, org2.id, "Project 2")
 
         # Get all projects
         all_projects = test_repo.projects.get_all()
@@ -164,12 +136,8 @@ class TestProjectRepositoryUpdate:
     def test_update_project_name(self, test_repo: Repository) -> None:
         """Test updating project name."""
         # Create organization and project
-        org = test_repo.organizations.create(
-            OrganizationCreateCommand(organization_data=OrganizationData(name="Test Org"))
-        )
-        project = test_repo.projects.create(
-            ProjectCreateCommand(project_data=ProjectData(name="Old Name"), organization_id=org.id)
-        )
+        org = create_test_org_via_repo(test_repo)
+        project = create_test_project_via_repo(test_repo, org.id, "Old Name")
 
         # Update name
         update_command = ProjectUpdateCommand(name="New Name")
@@ -182,14 +150,8 @@ class TestProjectRepositoryUpdate:
     def test_update_project_description(self, test_repo: Repository) -> None:
         """Test updating project description."""
         # Create organization and project
-        org = test_repo.organizations.create(
-            OrganizationCreateCommand(organization_data=OrganizationData(name="Test Org"))
-        )
-        project = test_repo.projects.create(
-            ProjectCreateCommand(
-                project_data=ProjectData(name="Project", description="Old description"), organization_id=org.id
-            )
-        )
+        org = create_test_org_via_repo(test_repo)
+        project = create_test_project_via_repo(test_repo, org.id, "Project", "Old description")
 
         # Update description
         update_command = ProjectUpdateCommand(description="New description")
@@ -202,14 +164,8 @@ class TestProjectRepositoryUpdate:
     def test_update_project_all_fields(self, test_repo: Repository) -> None:
         """Test updating all project fields."""
         # Create organization and project
-        org = test_repo.organizations.create(
-            OrganizationCreateCommand(organization_data=OrganizationData(name="Test Org"))
-        )
-        project = test_repo.projects.create(
-            ProjectCreateCommand(
-                project_data=ProjectData(name="Old Name", description="Old description"), organization_id=org.id
-            )
-        )
+        org = create_test_org_via_repo(test_repo)
+        project = create_test_project_via_repo(test_repo, org.id, "Old Name", "Old description")
 
         # Update all fields
         update_command = ProjectUpdateCommand(name="New Name", description="New description")
@@ -229,12 +185,8 @@ class TestProjectRepositoryUpdate:
     def test_update_project_with_empty_command(self, test_repo: Repository) -> None:
         """Test updating project with no fields succeeds (no-op)."""
         # Create organization and project
-        org = test_repo.organizations.create(
-            OrganizationCreateCommand(organization_data=OrganizationData(name="Test Org"))
-        )
-        project = test_repo.projects.create(
-            ProjectCreateCommand(project_data=ProjectData(name="Project"), organization_id=org.id)
-        )
+        org = create_test_org_via_repo(test_repo)
+        project = create_test_project_via_repo(test_repo, org.id, "Project")
 
         # Update with empty command
         update_command = ProjectUpdateCommand()
@@ -251,12 +203,8 @@ class TestProjectRepositoryDelete:
     def test_delete_project_succeeds(self, test_repo: Repository) -> None:
         """Test deleting an existing project."""
         # Create organization and project
-        org = test_repo.organizations.create(
-            OrganizationCreateCommand(organization_data=OrganizationData(name="Test Org"))
-        )
-        project = test_repo.projects.create(
-            ProjectCreateCommand(project_data=ProjectData(name="To Delete"), organization_id=org.id)
-        )
+        org = create_test_org_via_repo(test_repo)
+        project = create_test_project_via_repo(test_repo, org.id, "To Delete")
 
         # Delete project
         result = test_repo.projects.delete(project.id)
@@ -280,13 +228,8 @@ class TestProjectRepositoryTimestamps:
     def test_created_at_and_updated_at_are_set_on_create(self, test_repo: Repository) -> None:
         """Test that both timestamps are set when creating a project."""
         # Create organization and project
-        org = test_repo.organizations.create(
-            OrganizationCreateCommand(organization_data=OrganizationData(name="Test Org"))
-        )
-
-        project = test_repo.projects.create(
-            ProjectCreateCommand(project_data=ProjectData(name="Test Project"), organization_id=org.id)
-        )
+        org = create_test_org_via_repo(test_repo)
+        project = create_test_project_via_repo(test_repo, org.id)
 
         assert isinstance(project.created_at, datetime)
         assert isinstance(project.updated_at, datetime)
@@ -302,9 +245,7 @@ class TestProjectRepositoryWorkflows:
     def test_complete_project_workflow(self, test_repo: Repository) -> None:
         """Test complete workflow: create, read, update, list, delete."""
         # 1. Create organization
-        org = test_repo.organizations.create(
-            OrganizationCreateCommand(organization_data=OrganizationData(name="Workflow Org"))
-        )
+        org = create_test_org_via_repo(test_repo, "Workflow Org")
 
         # 2. Create project
         project_data = ProjectData(name="Workflow Project", description="Initial description")
@@ -341,18 +282,12 @@ class TestProjectRepositoryWorkflows:
     def test_multiple_projects_in_same_organization(self, test_repo: Repository) -> None:
         """Test creating multiple projects within the same organization."""
         # Create organization
-        org = test_repo.organizations.create(
-            OrganizationCreateCommand(organization_data=OrganizationData(name="Multi-Project Org"))
-        )
+        org = create_test_org_via_repo(test_repo, "Multi-Project Org")
 
         # Create multiple projects
-        test_repo.projects.create(
-            ProjectCreateCommand(project_data=ProjectData(name="Backend"), organization_id=org.id)
-        )
-        test_repo.projects.create(
-            ProjectCreateCommand(project_data=ProjectData(name="Frontend"), organization_id=org.id)
-        )
-        test_repo.projects.create(ProjectCreateCommand(project_data=ProjectData(name="Mobile"), organization_id=org.id))
+        create_test_project_via_repo(test_repo, org.id, "Backend")
+        create_test_project_via_repo(test_repo, org.id, "Frontend")
+        create_test_project_via_repo(test_repo, org.id, "Mobile")
 
         # List all projects for organization
         org_projects = test_repo.projects.get_by_organization_id(org.id)
@@ -364,23 +299,13 @@ class TestProjectRepositoryWorkflows:
     def test_projects_isolated_by_organization(self, test_repo: Repository) -> None:
         """Test that projects are properly isolated by organization."""
         # Create two organizations
-        org1 = test_repo.organizations.create(
-            OrganizationCreateCommand(organization_data=OrganizationData(name="Org 1"))
-        )
-        org2 = test_repo.organizations.create(
-            OrganizationCreateCommand(organization_data=OrganizationData(name="Org 2"))
-        )
+        org1 = create_test_org_via_repo(test_repo, "Org 1")
+        org2 = create_test_org_via_repo(test_repo, "Org 2")
 
         # Create projects for each organization
-        test_repo.projects.create(
-            ProjectCreateCommand(project_data=ProjectData(name="Org1 Backend"), organization_id=org1.id)
-        )
-        test_repo.projects.create(
-            ProjectCreateCommand(project_data=ProjectData(name="Org1 Frontend"), organization_id=org1.id)
-        )
-        test_repo.projects.create(
-            ProjectCreateCommand(project_data=ProjectData(name="Org2 Mobile"), organization_id=org2.id)
-        )
+        create_test_project_via_repo(test_repo, org1.id, "Org1 Backend")
+        create_test_project_via_repo(test_repo, org1.id, "Org1 Frontend")
+        create_test_project_via_repo(test_repo, org2.id, "Org2 Mobile")
 
         # Get projects for each organization
         org1_projects = test_repo.projects.get_by_organization_id(org1.id)

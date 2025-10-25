@@ -131,6 +131,92 @@ class TestUserOperations:
 - ✅ If additional data is needed (e.g., password_hash for auth), create a specific domain model
 - **Why**: Exposing ORM models breaks layering and can cause serious issues (lazy loading, session lifecycle, tight coupling)
 
+#### **Repository Test Helper Functions - CRITICAL**
+
+**ALWAYS use helper functions** from `tests/dal/helpers.py` for test setup code in repository tests.
+
+**✅ CORRECT: Use Repository Helpers**
+
+```python
+from tests.dal.helpers import create_test_org_via_repo, create_test_project_via_repo, create_test_user_via_repo
+
+def test_get_ticket_by_id(self, test_repo: Repository) -> None:
+    """Test retrieving ticket by ID."""
+    # Setup using helpers - clean and concise
+    org = create_test_org_via_repo(test_repo)
+    project = create_test_project_via_repo(test_repo, org.id, "Test Project")
+    reporter = create_test_user_via_repo(test_repo, org.id, username="reporter", role=UserRole.ADMIN)
+
+    # Test the actual behavior
+    ticket = test_repo.tickets.create(...)
+    retrieved = test_repo.tickets.get_by_id(ticket.id)
+    assert retrieved is not None
+```
+
+**❌ WRONG: Verbose Setup Code**
+
+```python
+def test_get_ticket_by_id(self, test_repo: Repository) -> None:
+    """Test retrieving ticket by ID."""
+    # DON'T DO THIS - repetitive and verbose
+    org_data = OrganizationData(name="Test Org")
+    org = test_repo.organizations.create(OrganizationCreateCommand(organization_data=org_data))
+
+    project_data = ProjectData(name="Test Project")
+    project = test_repo.projects.create(
+        ProjectCreateCommand(project_data=project_data, organization_id=org.id)
+    )
+
+    user_data = UserData(username="reporter", email="reporter@test.com", full_name="Reporter")
+    reporter = test_repo.users.create(
+        UserCreateCommand(
+            user_data=user_data,
+            password="password",
+            organization_id=org.id,
+            role=UserRole.ADMIN,
+        )
+    )
+```
+
+**Available Repository Helpers**
+
+Located in `tests/dal/helpers.py`:
+
+- `create_test_org_via_repo(test_repo, name="Test Org")` - Create organization
+- `create_test_project_via_repo(test_repo, org_id, name="Test Project", description=None)` - Create project
+- `create_test_user_via_repo(test_repo, org_id, username="testuser", email=None, full_name=None, role=UserRole.ADMIN, password="password")` - Create user
+
+**Why Use Repository Helpers?**
+
+1. **Reduces duplication**: Setup code in 1 line instead of 5-10
+2. **Improves readability**: Focus on what's being tested, not setup
+3. **Consistent defaults**: All tests use same test data patterns
+4. **Easier maintenance**: Changes to setup logic in one place
+
+**When to Use Helpers vs Direct Creation**
+
+- ✅ **Use helpers** for test setup/scaffolding (creating org, project, users needed for test)
+- ❌ **DON'T use helpers** when testing the CREATE operation itself
+- ✅ **Use helpers** for related entities (e.g., testing tickets needs project/user setup)
+
+**Example: Testing CREATE Operation**
+
+```python
+def test_create_project_with_all_fields(self, test_repo: Repository) -> None:
+    """Test creating a project through repository."""
+    # Use helper for org (we're not testing org creation)
+    org = create_test_org_via_repo(test_repo)
+
+    # DON'T use helper for project - we're testing project creation!
+    project_data = ProjectData(name="Backend API", description="REST API")
+    command = ProjectCreateCommand(project_data=project_data, organization_id=org.id)
+    project = test_repo.projects.create(command)
+
+    # Verify the creation worked
+    assert project.name == "Backend API"
+    assert project.description == "REST API"
+```
+
 ### **3. Utility/Logic Tests - IF APPLICABLE**
 
 **Location**: `tests/utils/` or appropriate location

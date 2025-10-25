@@ -4,10 +4,6 @@ from sqlalchemy.exc import IntegrityError
 
 from project_management_crud_example.dal.sqlite.repository import Repository
 from project_management_crud_example.domain_models import (
-    OrganizationCreateCommand,
-    OrganizationData,
-    ProjectCreateCommand,
-    ProjectData,
     TicketCreateCommand,
     TicketData,
     TicketPriority,
@@ -17,6 +13,7 @@ from project_management_crud_example.domain_models import (
     UserUpdateCommand,
 )
 from tests.conftest import test_repo  # noqa: F401
+from tests.dal.helpers import create_test_org_via_repo, create_test_project_via_repo
 
 
 class TestUserOperations:
@@ -379,8 +376,7 @@ class TestUserOperations:
     def test_delete_user_with_created_tickets_fails(self, test_repo: Repository) -> None:
         """Test that deleting user who created tickets raises IntegrityError."""
         # Create organization
-        org_data = OrganizationData(name="Test Org", description="Test")
-        org = test_repo.organizations.create(OrganizationCreateCommand(organization_data=org_data))
+        org = create_test_org_via_repo(test_repo)
 
         # Create user
         user_data = UserData(username="creator", email="creator@example.com", full_name="Creator User")
@@ -391,8 +387,7 @@ class TestUserOperations:
         )
 
         # Create project
-        project_data = ProjectData(name="Test Project", description="Test")
-        project = test_repo.projects.create(ProjectCreateCommand(project_data=project_data, organization_id=org.id))
+        project = create_test_project_via_repo(test_repo, org.id)
 
         # Create ticket with user as reporter
         ticket_data = TicketData(title="Test Ticket", description="Test", priority=TicketPriority.MEDIUM)
