@@ -2,7 +2,6 @@
 
 import re
 
-import pytest
 from fastapi.testclient import TestClient
 
 from project_management_crud_example.dal.sqlite.repository import Repository
@@ -19,66 +18,11 @@ from project_management_crud_example.domain_models import (
     UserRole,
 )
 from tests.conftest import client, test_repo  # noqa: F401
-
-
-@pytest.fixture
-def super_admin_token(test_repo: Repository, client: TestClient) -> str:
-    """Create Super Admin and return auth token."""
-    user_data = UserData(
-        username="superadmin",
-        email="superadmin@example.com",
-        full_name="Super Admin",
-    )
-    password = "SuperAdminPass123"
-    command = UserCreateCommand(
-        user_data=user_data,
-        password=password,
-        organization_id=None,
-        role=UserRole.SUPER_ADMIN,
-    )
-    test_repo.users.create(command)
-
-    # Login to get token
-    response = client.post("/auth/login", json={"username": "superadmin", "password": password})
-    return response.json()["access_token"]
-
-
-@pytest.fixture
-def org_admin_with_org(test_repo: Repository, client: TestClient) -> tuple[str, str]:
-    """Create organization and admin user, return token and org_id."""
-    # Create organization
-    org_data = OrganizationData(name="Test Organization", description="Test org")
-    org = test_repo.organizations.create(OrganizationCreateCommand(organization_data=org_data))
-
-    # Create admin user
-    user_data = UserData(username="orgadmin", email="orgadmin@example.com", full_name="Org Admin")
-    password = "OrgAdminPass123"
-    test_repo.users.create(
-        UserCreateCommand(user_data=user_data, password=password, organization_id=org.id, role=UserRole.ADMIN)
-    )
-
-    # Login to get token
-    response = client.post("/auth/login", json={"username": "orgadmin", "password": password})
-    return response.json()["access_token"], org.id
-
-
-@pytest.fixture
-def regular_user_with_org(test_repo: Repository, client: TestClient) -> tuple[str, str]:
-    """Create organization and regular user, return token and org_id."""
-    # Create organization
-    org_data = OrganizationData(name="Regular User Org", description="Test org")
-    org = test_repo.organizations.create(OrganizationCreateCommand(organization_data=org_data))
-
-    # Create regular user
-    user_data = UserData(username="regularuser", email="regular@example.com", full_name="Regular User")
-    password = "RegularPass123"
-    test_repo.users.create(
-        UserCreateCommand(user_data=user_data, password=password, organization_id=org.id, role=UserRole.WRITE_ACCESS)
-    )
-
-    # Login to get token
-    response = client.post("/auth/login", json={"username": "regularuser", "password": password})
-    return response.json()["access_token"], org.id
+from tests.fixtures.auth_fixtures import (  # noqa: F401
+    org_admin_token,
+    super_admin_token,
+    write_user_token,
+)
 
 
 class TestCreateUser:
@@ -126,9 +70,9 @@ class TestCreateUser:
         login_response = client.post("/auth/login", json={"username": "newuser", "password": password})
         assert login_response.status_code == 200
 
-    def test_create_user_as_org_admin_in_own_org(self, client: TestClient, org_admin_with_org: tuple[str, str]) -> None:
+    def test_create_user_as_org_admin_in_own_org(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test Org Admin creating user in their own organization."""
-        token, org_id = org_admin_with_org
+        token, org_id = org_admin_token
 
         response = client.post(
             "/api/users",
@@ -145,10 +89,10 @@ class TestCreateUser:
         assert "generated_password" in data
 
     def test_create_user_as_org_admin_in_different_org_fails(
-        self, client: TestClient, org_admin_with_org: tuple[str, str], test_repo: Repository
+        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
     ) -> None:
         """Test Org Admin cannot create user in different organization."""
-        token, org_id = org_admin_with_org
+        token, org_id = org_admin_token
 
         # Create another org
         other_org = test_repo.organizations.create(
@@ -253,11 +197,9 @@ class TestCreateUser:
 
         assert response.status_code == 401
 
-    def test_create_user_as_regular_user_fails(
-        self, client: TestClient, regular_user_with_org: tuple[str, str]
-    ) -> None:
+    def test_create_user_as_regular_user_fails(self, client: TestClient, write_user_token: tuple[str, str]) -> None:
         """Test regular user cannot create users."""
-        token, org_id = regular_user_with_org
+        token, org_id = write_user_token
 
         response = client.post(
             "/api/users",
@@ -301,9 +243,9 @@ class TestGetUser:
         assert "password" not in data
         assert "password_hash" not in data
 
-    def test_get_user_in_same_org(self, client: TestClient, org_admin_with_org: tuple[str, str]) -> None:
+    def test_get_user_in_same_org(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test user can get another user in same organization."""
-        token, org_id = org_admin_with_org
+        token, org_id = org_admin_token
 
         # Create another user in same org using API
         create_response = client.post(
@@ -323,10 +265,10 @@ class TestGetUser:
         assert data["username"] == "teammate"
 
     def test_get_user_in_different_org_returns_404(
-        self, client: TestClient, org_admin_with_org: tuple[str, str], test_repo: Repository
+        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
     ) -> None:
         """Test user cannot access user from different organization (returns 404)."""
-        token, org_id = org_admin_with_org
+        token, org_id = org_admin_token
 
         # Create another org and user
         other_org = test_repo.organizations.create(
@@ -418,10 +360,10 @@ class TestListUsers:
         assert "superadmin" in usernames
 
     def test_list_users_as_org_admin_sees_only_own_org(
-        self, client: TestClient, org_admin_with_org: tuple[str, str], test_repo: Repository
+        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
     ) -> None:
         """Test Org Admin sees only users in their organization."""
-        token, org_id = org_admin_with_org
+        token, org_id = org_admin_token
 
         # Create user in same org
         test_repo.users.create(
@@ -665,9 +607,9 @@ class TestUpdateUser:
         login_response = client.post("/auth/login", json={"username": "reactivateme", "password": "pass123"})
         assert login_response.status_code == 200
 
-    def test_update_user_as_org_admin_in_own_org(self, client: TestClient, org_admin_with_org: tuple[str, str]) -> None:
+    def test_update_user_as_org_admin_in_own_org(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test Org Admin can update users in their organization."""
-        token, org_id = org_admin_with_org
+        token, org_id = org_admin_token
 
         # Create user in same org via API
         create_response = client.post(
@@ -689,10 +631,10 @@ class TestUpdateUser:
         assert response.json()["full_name"] == "Updated Name"
 
     def test_update_user_as_org_admin_in_different_org_fails(
-        self, client: TestClient, org_admin_with_org: tuple[str, str], test_repo: Repository
+        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
     ) -> None:
         """Test Org Admin cannot update users in different organization."""
-        token, org_id = org_admin_with_org
+        token, org_id = org_admin_token
 
         # Create user in different org
         other_org = test_repo.organizations.create(
@@ -752,10 +694,10 @@ class TestUpdateUser:
         assert response.status_code == 404
 
     def test_update_user_as_regular_user_fails(
-        self, client: TestClient, regular_user_with_org: tuple[str, str], test_repo: Repository
+        self, client: TestClient, write_user_token: tuple[str, str], test_repo: Repository
     ) -> None:
         """Test regular user cannot update users."""
-        token, org_id = regular_user_with_org
+        token, org_id = write_user_token
 
         # Create another user
         user = test_repo.users.create(
@@ -837,10 +779,10 @@ class TestDeleteUser:
         assert "ticket" in response.json()["detail"].lower()
 
     def test_delete_user_as_org_admin_fails(
-        self, client: TestClient, org_admin_with_org: tuple[str, str], test_repo: Repository
+        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
     ) -> None:
         """Test Org Admin cannot delete users (Super Admin only)."""
-        token, org_id = org_admin_with_org
+        token, org_id = org_admin_token
 
         # Create user via API
         create_response = client.post(

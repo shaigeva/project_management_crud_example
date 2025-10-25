@@ -1,67 +1,11 @@
 """Tests for organization API endpoints."""
 
-import pytest
 from fastapi.testclient import TestClient
 
 from project_management_crud_example.dal.sqlite.repository import Repository
-from project_management_crud_example.domain_models import (
-    OrganizationCreateCommand,
-    OrganizationData,
-    UserCreateCommand,
-    UserData,
-    UserRole,
-)
+from project_management_crud_example.domain_models import OrganizationCreateCommand, OrganizationData
 from tests.conftest import client, test_repo  # noqa: F401
-
-
-@pytest.fixture
-def super_admin_token(test_repo: Repository, client: TestClient) -> str:
-    """Create Super Admin and return auth token."""
-    user_data = UserData(
-        username="superadmin",
-        email="superadmin@example.com",
-        full_name="Super Admin",
-    )
-    password = "SuperAdminPass123"
-    command = UserCreateCommand(
-        user_data=user_data,
-        password=password,
-        organization_id=None,
-        role=UserRole.SUPER_ADMIN,
-    )
-    test_repo.users.create(command)
-
-    # Login to get token
-    response = client.post("/auth/login", json={"username": "superadmin", "password": password})
-    return response.json()["access_token"]
-
-
-@pytest.fixture
-def org_admin_token(test_repo: Repository, client: TestClient) -> tuple[str, str]:
-    """Create organization and admin user, return token and org_id."""
-    # Create organization
-    org_data = OrganizationData(name="Test Organization", description="Test org for admin")
-    org_command = OrganizationCreateCommand(organization_data=org_data)
-    org = test_repo.organizations.create(org_command)
-
-    # Create admin user
-    user_data = UserData(
-        username="orgadmin",
-        email="orgadmin@example.com",
-        full_name="Org Admin",
-    )
-    password = "OrgAdminPass123"
-    user_command = UserCreateCommand(
-        user_data=user_data,
-        password=password,
-        organization_id=org.id,
-        role=UserRole.ADMIN,
-    )
-    test_repo.users.create(user_command)
-
-    # Login to get token
-    response = client.post("/auth/login", json={"username": "orgadmin", "password": password})
-    return response.json()["access_token"], org.id
+from tests.fixtures.auth_fixtures import org_admin_token, super_admin_token  # noqa: F401
 
 
 class TestCreateOrganization:

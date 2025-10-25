@@ -9,115 +9,66 @@ from fastapi.testclient import TestClient
 
 from project_management_crud_example.dal.sqlite.repository import Repository
 from project_management_crud_example.domain_models import (
-    OrganizationCreateCommand,
-    OrganizationData,
     UserCreateCommand,
     UserData,
     UserRole,
 )
 from tests.conftest import client, test_repo  # noqa: F401
+from tests.fixtures.data_fixtures import organization, second_organization  # noqa: F401
 
-# Test fixtures are explicitly imported above and used as function parameters
-
-
-@pytest.fixture
-def organization(test_repo: Repository) -> str:
-    """Create a test organization and return its ID."""
-    org_data = OrganizationData(name="Test Organization", description="Test org for tickets")
-    org_command = OrganizationCreateCommand(organization_data=org_data)
-    org = test_repo.organizations.create(org_command)
-    return org.id
+# Local fixtures for ticket tests - create multiple users in the SAME organization
 
 
 @pytest.fixture
-def second_organization(test_repo: Repository) -> str:
-    """Create a second organization for cross-org tests."""
-    org_data = OrganizationData(name="Second Organization", description="Another org")
-    org_command = OrganizationCreateCommand(organization_data=org_data)
-    org = test_repo.organizations.create(org_command)
-    return org.id
-
-
-@pytest.fixture
-def admin_token(test_repo: Repository, client: TestClient, organization: str) -> tuple[str, str]:
-    """Create Admin user and return token and org_id."""
-    user_data = UserData(
-        username="admin",
-        email="admin@example.com",
-        full_name="Admin User",
-    )
+def org_admin_token(test_repo: Repository, client: TestClient, organization: str) -> tuple[str, str]:
+    """Create Admin user in shared organization and return token and org_id."""
+    user_data = UserData(username="admin", email="admin@example.com", full_name="Admin User")
     password = "AdminPass123"
-    command = UserCreateCommand(
-        user_data=user_data,
-        password=password,
-        organization_id=organization,
-        role=UserRole.ADMIN,
+    test_repo.users.create(
+        UserCreateCommand(user_data=user_data, password=password, organization_id=organization, role=UserRole.ADMIN)
     )
-    test_repo.users.create(command)
-
     response = client.post("/auth/login", json={"username": "admin", "password": password})
     return response.json()["access_token"], organization
 
 
 @pytest.fixture
 def project_manager_token(test_repo: Repository, client: TestClient, organization: str) -> tuple[str, str]:
-    """Create Project Manager user and return token and org_id."""
-    user_data = UserData(
-        username="projectmanager",
-        email="pm@example.com",
-        full_name="Project Manager",
-    )
+    """Create Project Manager user in shared organization."""
+    user_data = UserData(username="projectmanager", email="pm@example.com", full_name="Project Manager")
     password = "PMPass123"
-    command = UserCreateCommand(
-        user_data=user_data,
-        password=password,
-        organization_id=organization,
-        role=UserRole.PROJECT_MANAGER,
+    test_repo.users.create(
+        UserCreateCommand(
+            user_data=user_data, password=password, organization_id=organization, role=UserRole.PROJECT_MANAGER
+        )
     )
-    test_repo.users.create(command)
-
     response = client.post("/auth/login", json={"username": "projectmanager", "password": password})
     return response.json()["access_token"], organization
 
 
 @pytest.fixture
 def write_user_token(test_repo: Repository, client: TestClient, organization: str) -> tuple[str, str]:
-    """Create Write Access user and return token and org_id."""
-    user_data = UserData(
-        username="writer",
-        email="writer@example.com",
-        full_name="Write User",
-    )
+    """Create Write Access user in shared organization."""
+    user_data = UserData(username="writer", email="writer@example.com", full_name="Write User")
     password = "WriterPass123"
-    command = UserCreateCommand(
-        user_data=user_data,
-        password=password,
-        organization_id=organization,
-        role=UserRole.WRITE_ACCESS,
+    test_repo.users.create(
+        UserCreateCommand(
+            user_data=user_data, password=password, organization_id=organization, role=UserRole.WRITE_ACCESS
+        )
     )
-    test_repo.users.create(command)
-
     response = client.post("/auth/login", json={"username": "writer", "password": password})
     return response.json()["access_token"], organization
 
 
 @pytest.fixture
 def read_user_token(test_repo: Repository, client: TestClient, organization: str) -> tuple[str, str]:
-    """Create Read Access user and return token and org_id."""
-    user_data = UserData(
-        username="reader",
-        email="reader@example.com",
-        full_name="Read User",
-    )
+    """Create Read Access user in shared organization."""
+    user_data = UserData(username="reader", email="reader@example.com", full_name="Read User")
     password = "ReaderPass123"
-    command = UserCreateCommand(
-        user_data=user_data,
-        password=password,
-        organization_id=organization,
-        role=UserRole.READ_ACCESS,
+    test_repo.users.create(
+        UserCreateCommand(
+            user_data=user_data, password=password, organization_id=organization, role=UserRole.READ_ACCESS
+        )
     )
-    test_repo.users.create(command)
-
     response = client.post("/auth/login", json={"username": "reader", "password": password})
     return response.json()["access_token"], organization
 
@@ -125,9 +76,9 @@ def read_user_token(test_repo: Repository, client: TestClient, organization: str
 class TestCreateTicket:
     """Test POST /api/tickets endpoint."""
 
-    def test_create_ticket_as_admin(self, client: TestClient, admin_token: tuple[str, str]) -> None:
+    def test_create_ticket_as_admin(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test that Admin can create tickets."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         # Create project
@@ -154,10 +105,10 @@ class TestCreateTicket:
         assert "created_at" in data
 
     def test_create_ticket_as_project_manager(
-        self, client: TestClient, admin_token: tuple[str, str], project_manager_token: tuple[str, str]
+        self, client: TestClient, org_admin_token: tuple[str, str], project_manager_token: tuple[str, str]
     ) -> None:
         """Test that Project Manager can create tickets."""
-        admin_tok, org_id = admin_token
+        admin_tok, org_id = org_admin_token
         pm_token, _ = project_manager_token
         admin_headers = {"Authorization": f"Bearer {admin_tok}"}
         pm_headers = {"Authorization": f"Bearer {pm_token}"}
@@ -173,10 +124,10 @@ class TestCreateTicket:
         assert response.json()["title"] == "PM Ticket"
 
     def test_create_ticket_as_write_user(
-        self, client: TestClient, admin_token: tuple[str, str], write_user_token: tuple[str, str]
+        self, client: TestClient, org_admin_token: tuple[str, str], write_user_token: tuple[str, str]
     ) -> None:
         """Test that Write user can create tickets."""
-        admin_tok, org_id = admin_token
+        admin_tok, org_id = org_admin_token
         write_token, _ = write_user_token
         admin_headers = {"Authorization": f"Bearer {admin_tok}"}
         write_headers = {"Authorization": f"Bearer {write_token}"}
@@ -193,10 +144,10 @@ class TestCreateTicket:
         assert response.status_code == 201
 
     def test_create_ticket_as_read_user_fails(
-        self, client: TestClient, admin_token: tuple[str, str], read_user_token: tuple[str, str]
+        self, client: TestClient, org_admin_token: tuple[str, str], read_user_token: tuple[str, str]
     ) -> None:
         """Test that Read user cannot create tickets."""
-        admin_tok, org_id = admin_token
+        admin_tok, org_id = org_admin_token
         read_token, _ = read_user_token
         admin_headers = {"Authorization": f"Bearer {admin_tok}"}
         read_headers = {"Authorization": f"Bearer {read_token}"}
@@ -214,10 +165,10 @@ class TestCreateTicket:
         assert "permission" in response.json()["detail"].lower()
 
     def test_create_ticket_with_assignee(
-        self, client: TestClient, admin_token: tuple[str, str], test_repo: Repository
+        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
     ) -> None:
         """Test creating ticket with initial assignee."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         # Create project
@@ -245,9 +196,11 @@ class TestCreateTicket:
         assert response.status_code == 201
         assert response.json()["assignee_id"] == assignee_id
 
-    def test_create_ticket_in_nonexistent_project_fails(self, client: TestClient, admin_token: tuple[str, str]) -> None:
+    def test_create_ticket_in_nonexistent_project_fails(
+        self, client: TestClient, org_admin_token: tuple[str, str]
+    ) -> None:
         """Test creating ticket in non-existent project fails."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         response = client.post("/api/tickets?project_id=nonexistent", json={"title": "Should Fail"}, headers=headers)
@@ -256,10 +209,10 @@ class TestCreateTicket:
         assert "project" in response.json()["detail"].lower()
 
     def test_create_ticket_with_nonexistent_assignee_fails(
-        self, client: TestClient, admin_token: tuple[str, str]
+        self, client: TestClient, org_admin_token: tuple[str, str]
     ) -> None:
         """Test creating ticket with non-existent assignee fails."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         # Create project
@@ -275,9 +228,9 @@ class TestCreateTicket:
         assert response.status_code == 404
         assert "assignee" in response.json()["detail"].lower()
 
-    def test_create_ticket_validates_title_required(self, client: TestClient, admin_token: tuple[str, str]) -> None:
+    def test_create_ticket_validates_title_required(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test that title is required when creating ticket."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         # Create project
@@ -294,9 +247,9 @@ class TestCreateTicket:
 class TestGetTicket:
     """Test GET /api/tickets/{id} endpoint."""
 
-    def test_get_ticket_by_id_in_same_org(self, client: TestClient, admin_token: tuple[str, str]) -> None:
+    def test_get_ticket_by_id_in_same_org(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test retrieving ticket from same organization."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         # Create project and ticket
@@ -319,10 +272,10 @@ class TestGetTicket:
         assert data["title"] == "Test Ticket"
 
     def test_get_ticket_from_different_org_fails(
-        self, client: TestClient, admin_token: tuple[str, str], second_organization: str, test_repo: Repository
+        self, client: TestClient, org_admin_token: tuple[str, str], second_organization: str, test_repo: Repository
     ) -> None:
         """Test that users cannot access tickets from different organizations."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         # Create project and ticket in org1
@@ -356,9 +309,9 @@ class TestGetTicket:
         assert response.status_code == 403
         assert "organization" in response.json()["detail"].lower()
 
-    def test_get_nonexistent_ticket_fails(self, client: TestClient, admin_token: tuple[str, str]) -> None:
+    def test_get_nonexistent_ticket_fails(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test getting non-existent ticket returns 404."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         response = client.get("/api/tickets/nonexistent", headers=headers)
@@ -370,9 +323,9 @@ class TestGetTicket:
 class TestListTickets:
     """Test GET /api/tickets endpoint with filtering."""
 
-    def test_list_tickets_in_organization(self, client: TestClient, admin_token: tuple[str, str]) -> None:
+    def test_list_tickets_in_organization(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test listing all tickets in user's organization."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         # Create project
@@ -391,9 +344,9 @@ class TestListTickets:
         assert len(data) == 2
         assert {t["title"] for t in data} == {"Ticket 1", "Ticket 2"}
 
-    def test_list_tickets_filtered_by_project(self, client: TestClient, admin_token: tuple[str, str]) -> None:
+    def test_list_tickets_filtered_by_project(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test filtering tickets by project ID."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         # Create projects
@@ -416,9 +369,9 @@ class TestListTickets:
         assert data[0]["title"] == "P1 Ticket"
         assert data[0]["project_id"] == project1_id
 
-    def test_list_tickets_filtered_by_status(self, client: TestClient, admin_token: tuple[str, str]) -> None:
+    def test_list_tickets_filtered_by_status(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test filtering tickets by status."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         # Create project
@@ -449,10 +402,10 @@ class TestListTickets:
         assert data[0]["id"] == todo_id
 
     def test_list_tickets_filtered_by_assignee(
-        self, client: TestClient, admin_token: tuple[str, str], test_repo: Repository
+        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
     ) -> None:
         """Test filtering tickets by assignee."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         # Create project
@@ -488,10 +441,10 @@ class TestListTickets:
         assert data[0]["assignee_id"] == assignee_id
 
     def test_list_tickets_combined_filters(
-        self, client: TestClient, admin_token: tuple[str, str], test_repo: Repository
+        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
     ) -> None:
         """Test filtering tickets with multiple criteria."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         # Create project
@@ -537,10 +490,10 @@ class TestListTickets:
         assert data[0]["id"] == match_id
 
     def test_list_tickets_respects_organization_boundary(
-        self, client: TestClient, admin_token: tuple[str, str], second_organization: str, test_repo: Repository
+        self, client: TestClient, org_admin_token: tuple[str, str], second_organization: str, test_repo: Repository
     ) -> None:
         """Test that users only see tickets from their organization."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         # Create project and ticket in org1
@@ -581,9 +534,9 @@ class TestListTickets:
 class TestUpdateTicket:
     """Test PUT /api/tickets/{id} endpoint."""
 
-    def test_update_ticket_fields(self, client: TestClient, admin_token: tuple[str, str]) -> None:
+    def test_update_ticket_fields(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test updating ticket title, description, and priority."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         # Create project
@@ -612,10 +565,10 @@ class TestUpdateTicket:
         assert data["priority"] == "HIGH"
 
     def test_update_ticket_as_write_user(
-        self, client: TestClient, admin_token: tuple[str, str], write_user_token: tuple[str, str]
+        self, client: TestClient, org_admin_token: tuple[str, str], write_user_token: tuple[str, str]
     ) -> None:
         """Test that Write user can update tickets."""
-        admin_tok, org_id = admin_token
+        admin_tok, org_id = org_admin_token
         write_token, _ = write_user_token
         admin_headers = {"Authorization": f"Bearer {admin_tok}"}
         write_headers = {"Authorization": f"Bearer {write_token}"}
@@ -636,10 +589,10 @@ class TestUpdateTicket:
         assert response.json()["title"] == "Updated"
 
     def test_update_ticket_as_read_user_fails(
-        self, client: TestClient, admin_token: tuple[str, str], read_user_token: tuple[str, str]
+        self, client: TestClient, org_admin_token: tuple[str, str], read_user_token: tuple[str, str]
     ) -> None:
         """Test that Read user cannot update tickets."""
-        admin_tok, org_id = admin_token
+        admin_tok, org_id = org_admin_token
         read_token, _ = read_user_token
         admin_headers = {"Authorization": f"Bearer {admin_tok}"}
         read_headers = {"Authorization": f"Bearer {read_token}"}
@@ -658,9 +611,9 @@ class TestUpdateTicket:
 
         assert response.status_code == 403
 
-    def test_update_nonexistent_ticket_fails(self, client: TestClient, admin_token: tuple[str, str]) -> None:
+    def test_update_nonexistent_ticket_fails(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test updating non-existent ticket returns 404."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         response = client.put("/api/tickets/nonexistent", json={"title": "Should Fail"}, headers=headers)
@@ -671,9 +624,9 @@ class TestUpdateTicket:
 class TestUpdateTicketStatus:
     """Test PUT /api/tickets/{id}/status endpoint."""
 
-    def test_update_ticket_status(self, client: TestClient, admin_token: tuple[str, str]) -> None:
+    def test_update_ticket_status(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test changing ticket status."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         # Create project and ticket
@@ -691,9 +644,9 @@ class TestUpdateTicketStatus:
         assert response.status_code == 200
         assert response.json()["status"] == "IN_PROGRESS"
 
-    def test_update_status_all_transitions(self, client: TestClient, admin_token: tuple[str, str]) -> None:
+    def test_update_status_all_transitions(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test all valid status transitions."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         # Create project and ticket
@@ -715,9 +668,9 @@ class TestUpdateTicketStatus:
         response3 = client.put(f"/api/tickets/{ticket_id}/status", json={"status": "TODO"}, headers=headers)
         assert response3.status_code == 200
 
-    def test_update_status_invalid_value_fails(self, client: TestClient, admin_token: tuple[str, str]) -> None:
+    def test_update_status_invalid_value_fails(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test that invalid status value returns validation error."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         # Create project and ticket
@@ -736,9 +689,9 @@ class TestUpdateTicketStatus:
 class TestMoveTicketToProject:
     """Test PUT /api/tickets/{id}/project endpoint."""
 
-    def test_move_ticket_to_different_project(self, client: TestClient, admin_token: tuple[str, str]) -> None:
+    def test_move_ticket_to_different_project(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test moving ticket between projects in same organization."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         # Create projects
@@ -761,10 +714,10 @@ class TestMoveTicketToProject:
         assert response.json()["project_id"] == project2_id
 
     def test_move_ticket_as_write_user_fails(
-        self, client: TestClient, admin_token: tuple[str, str], write_user_token: tuple[str, str]
+        self, client: TestClient, org_admin_token: tuple[str, str], write_user_token: tuple[str, str]
     ) -> None:
         """Test that Write user cannot move tickets."""
-        admin_tok, org_id = admin_token
+        admin_tok, org_id = org_admin_token
         write_token, _ = write_user_token
         admin_headers = {"Authorization": f"Bearer {admin_tok}"}
         write_headers = {"Authorization": f"Bearer {write_token}"}
@@ -789,9 +742,11 @@ class TestMoveTicketToProject:
 
         assert response.status_code == 403
 
-    def test_move_ticket_to_nonexistent_project_fails(self, client: TestClient, admin_token: tuple[str, str]) -> None:
+    def test_move_ticket_to_nonexistent_project_fails(
+        self, client: TestClient, org_admin_token: tuple[str, str]
+    ) -> None:
         """Test moving ticket to non-existent project fails."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         # Create project and ticket
@@ -811,10 +766,10 @@ class TestAssignTicket:
     """Test PUT /api/tickets/{id}/assignee endpoint."""
 
     def test_assign_ticket_to_user(
-        self, client: TestClient, admin_token: tuple[str, str], test_repo: Repository
+        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
     ) -> None:
         """Test assigning ticket to a user."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         # Create project and ticket
@@ -841,9 +796,9 @@ class TestAssignTicket:
         assert response.status_code == 200
         assert response.json()["assignee_id"] == assignee_id
 
-    def test_unassign_ticket(self, client: TestClient, admin_token: tuple[str, str], test_repo: Repository) -> None:
+    def test_unassign_ticket(self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository) -> None:
         """Test unassigning ticket (set to null)."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         # Create project
@@ -876,10 +831,14 @@ class TestAssignTicket:
         assert response.json()["assignee_id"] is None
 
     def test_assign_ticket_as_write_user_fails(
-        self, client: TestClient, admin_token: tuple[str, str], write_user_token: tuple[str, str], test_repo: Repository
+        self,
+        client: TestClient,
+        org_admin_token: tuple[str, str],
+        write_user_token: tuple[str, str],
+        test_repo: Repository,
     ) -> None:
         """Test that Write user cannot assign tickets."""
-        admin_tok, org_id = admin_token
+        admin_tok, org_id = org_admin_token
         write_token, _ = write_user_token
         admin_headers = {"Authorization": f"Bearer {admin_tok}"}
         write_headers = {"Authorization": f"Bearer {write_token}"}
@@ -911,9 +870,9 @@ class TestAssignTicket:
 
         assert response.status_code == 403
 
-    def test_assign_to_nonexistent_user_fails(self, client: TestClient, admin_token: tuple[str, str]) -> None:
+    def test_assign_to_nonexistent_user_fails(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test assigning to non-existent user fails."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         # Create project and ticket
@@ -934,9 +893,9 @@ class TestAssignTicket:
 class TestDeleteTicket:
     """Test DELETE /api/tickets/{id} endpoint."""
 
-    def test_delete_ticket_as_admin(self, client: TestClient, admin_token: tuple[str, str]) -> None:
+    def test_delete_ticket_as_admin(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test that Admin can delete tickets."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         # Create project and ticket
@@ -958,10 +917,10 @@ class TestDeleteTicket:
         assert get_response.status_code == 404
 
     def test_delete_ticket_as_project_manager_fails(
-        self, client: TestClient, admin_token: tuple[str, str], project_manager_token: tuple[str, str]
+        self, client: TestClient, org_admin_token: tuple[str, str], project_manager_token: tuple[str, str]
     ) -> None:
         """Test that Project Manager cannot delete tickets."""
-        admin_tok, org_id = admin_token
+        admin_tok, org_id = org_admin_token
         pm_token, _ = project_manager_token
         admin_headers = {"Authorization": f"Bearer {admin_tok}"}
         pm_headers = {"Authorization": f"Bearer {pm_token}"}
@@ -980,9 +939,9 @@ class TestDeleteTicket:
 
         assert response.status_code == 403
 
-    def test_delete_nonexistent_ticket_fails(self, client: TestClient, admin_token: tuple[str, str]) -> None:
+    def test_delete_nonexistent_ticket_fails(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test deleting non-existent ticket returns 404."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         response = client.delete("/api/tickets/nonexistent", headers=headers)
@@ -994,10 +953,10 @@ class TestTicketWorkflows:
     """Test complete ticket workflows."""
 
     def test_complete_ticket_lifecycle(
-        self, client: TestClient, admin_token: tuple[str, str], test_repo: Repository
+        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
     ) -> None:
         """Test complete workflow: create → assign → update status → move → delete."""
-        token, org_id = admin_token
+        token, org_id = org_admin_token
         headers = {"Authorization": f"Bearer {token}"}
 
         # Create projects

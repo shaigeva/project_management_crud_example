@@ -28,7 +28,8 @@
       "Bash(find:*)",
       "Bash(uv remove:*)",
       "Bash(ruff check:*)",
-      "Bash(python -m pytest:*)"
+      "Bash(python -m pytest:*)",
+      "Bash(perl:*)"
     ],
     "deny": [],
     "ask": [],
