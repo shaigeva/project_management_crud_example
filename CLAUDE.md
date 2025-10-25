@@ -20,6 +20,15 @@ The technical specification is in the `docs/tech_spec/` directory, where the cen
 - Tests verify spec behaviors through external API
 - See `docs/spec/how_to_write_specs.md` for philosophy and examples
 
+### 🚨 GOLDEN RULE 🚨
+
+**NEVER start implementing code without explicit user approval to proceed.**
+
+When you create a task list or plan:
+1. Show the plan to the user
+2. **WAIT for user to explicitly say "implement" or "proceed" or "go ahead"**
+3. ONLY THEN start writing code
+
 ### Workflow Overview
 
 #### Phase 1: Specification & Planning (COLLABORATIVE with user)
@@ -56,9 +65,22 @@ The technical specification is in the `docs/tech_spec/` directory, where the cen
 **What**: Implement tasks to completion
 **Who**: User tells you to implement tasks, you execute autonomously until done
 
+**🚨 CRITICAL: DO NOT START IMPLEMENTATION WITHOUT USER APPROVAL 🚨**
+
+**Before starting ANY implementation work:**
+1. **STOP and ASK the user**: "Should I proceed with implementing [task name]?"
+2. **WAIT for explicit user approval** (e.g., "yes", "go ahead", "proceed")
+3. **ONLY THEN** start implementing
+
+**If the user has NOT explicitly said to implement:**
+- Do NOT start coding
+- Do NOT create files
+- Do NOT modify code
+- Present the plan and WAIT for approval
+
 **See `docs/how_to_implement_tasks.md` for detailed implementation process.**
 
-**Process for each task:**
+**Process for each task (AFTER USER APPROVES IMPLEMENTATION):**
 1. Implement code and tests
 2. Run validations until all pass (zero errors/warnings)
 3. Update task and requirement statuses
@@ -73,7 +95,8 @@ The technical specification is in the `docs/tech_spec/` directory, where the cen
 - Write comprehensive tests: API, repository, utilities, domain logic
 - Use standardized progress messages (see task implementation guide)
 
-**🚨 COMMIT RULE 🚨**
+**🚨 APPROVAL RULES 🚨**
+- **NEVER start implementation without user saying "implement" or "go ahead" or "proceed"**
 - **NEVER commit implementation without asking user first**
 - **ALWAYS: complete task → show summary → ask approval → THEN commit**
 
