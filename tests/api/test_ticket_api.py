@@ -262,14 +262,7 @@ class TestGetTicket:
         # Create user in org2 via API
         from tests.helpers import create_admin_user
 
-        _, org2_password = create_admin_user(
-            client,
-            super_admin_token,
-            second_organization,
-            username="org2admin",
-            email="org2@test.com",
-            full_name="Org2 Admin",
-        )
+        _, org2_password = create_admin_user(client, super_admin_token, second_organization, username="org2admin")
 
         org2_token = client.post("/auth/login", json={"username": "org2admin", "password": org2_password}).json()[
             "access_token"
@@ -461,14 +454,7 @@ class TestListTickets:
         # Create user in org2 via API
         from tests.helpers import create_admin_user
 
-        _, org2_password = create_admin_user(
-            client,
-            super_admin_token,
-            second_organization,
-            username="org2admin",
-            email="org2@test.com",
-            full_name="Org2 Admin",
-        )
+        _, org2_password = create_admin_user(client, super_admin_token, second_organization, username="org2admin")
 
         org2_token = client.post("/auth/login", json={"username": "org2admin", "password": org2_password}).json()[
             "access_token"

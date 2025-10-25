@@ -507,9 +507,7 @@ class TestUpdateUser:
         token, org_id = write_user_token
 
         # Create another user
-        user_id, _password = create_write_user(
-            client, super_admin_token, org_id, username="writer2", email="writer2@example.com"
-        )
+        user_id, _password = create_write_user(client, super_admin_token, org_id, username="writer2")
 
         response = client.put(
             f"/api/users/{user_id}",
