@@ -255,6 +255,29 @@ class UserCreateCommand(BaseModel):
     role: UserRole = Field(..., description="User role")
 
 
+class UserUpdateCommand(BaseModel):
+    """Command model for updating an existing user.
+
+    Only specified fields will be updated. username, organization_id, and password
+    cannot be changed via this command.
+    """
+
+    email: Optional[EmailStr] = Field(None, description="User email address")
+    full_name: Optional[str] = Field(None, min_length=1, max_length=255, description="User full name")
+    role: Optional[UserRole] = Field(None, description="User role")
+    is_active: Optional[bool] = Field(None, description="Whether user is active")
+
+
+class UserCreateResponse(BaseModel):
+    """Response model for user creation including generated password.
+
+    The generated_password is ONLY returned on creation and cannot be retrieved later.
+    """
+
+    user: User = Field(..., description="Created user details")
+    generated_password: str = Field(..., description="Generated password (returned only once)")
+
+
 # Authentication models
 
 

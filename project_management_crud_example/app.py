@@ -22,6 +22,7 @@ from project_management_crud_example.routers import (
     project_api,
     stub_entity_api,
     ticket_api,
+    user_api,
 )
 
 # Configure logging
@@ -78,6 +79,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth_api.router)
+app.include_router(user_api.router)
 app.include_router(organization_api.router)
 app.include_router(project_api.router)
 app.include_router(ticket_api.router)

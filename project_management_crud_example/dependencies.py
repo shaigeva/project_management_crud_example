@@ -121,6 +121,26 @@ async def get_super_admin_user(
     return current_user
 
 
+async def get_admin_user(
+    current_user: User = Depends(get_current_user),  # noqa: B008
+) -> User:
+    """Verify that current user is an Admin (Super Admin or Organization Admin).
+
+    Args:
+        current_user: Current authenticated user
+
+    Returns:
+        User if they are Admin or Super Admin
+
+    Raises:
+        InsufficientPermissionsException: User is not an admin
+    """
+    if current_user.role not in (UserRole.SUPER_ADMIN, UserRole.ADMIN):
+        raise InsufficientPermissionsException(detail="Admin access required")
+
+    return current_user
+
+
 def get_stub_entity_repo(session: Session = Depends(get_db_session)) -> StubEntityRepository:  # noqa: B008
     """Dependency to get stub entity repository - template for creating real repository dependencies."""
     return StubEntityRepository(session)

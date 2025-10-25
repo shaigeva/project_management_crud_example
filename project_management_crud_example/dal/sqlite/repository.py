@@ -34,6 +34,8 @@ from project_management_crud_example.domain_models import (
     User,
     UserAuthData,
     UserCreateCommand,
+    UserRole,
+    UserUpdateCommand,
 )
 from project_management_crud_example.utils.password import PasswordHasher, TestPasswordHasher
 
@@ -183,13 +185,118 @@ class Repository:
             orm_users = self.session.query(UserORM).order_by(UserORM.created_at).all()  # type: ignore[union-attr]
             return [orm_user_to_domain_user(orm_user) for orm_user in orm_users]
 
+        def get_by_filters(
+            self,
+            organization_id: Optional[str] = None,
+            role: Optional[UserRole] = None,
+            is_active: Optional[bool] = None,
+        ) -> List[User]:
+            """Get users filtered by various criteria.
+
+            Args:
+                organization_id: Filter by organization ID
+                role: Filter by user role
+                is_active: Filter by active status
+
+            Returns:
+                List of users matching all provided filters, ordered by creation date
+            """
+            logger.debug(
+                f"Retrieving users with filters: organization_id={organization_id}, role={role}, is_active={is_active}"
+            )
+            query = self.session.query(UserORM)
+
+            if organization_id is not None:
+                query = query.filter(UserORM.organization_id == organization_id)  # type: ignore[operator]
+            if role is not None:
+                query = query.filter(UserORM.role == role.value)  # type: ignore[operator]
+            if is_active is not None:
+                query = query.filter(UserORM.is_active == is_active)  # type: ignore[operator]
+
+            orm_users = query.order_by(UserORM.created_at).all()  # type: ignore[union-attr]
+            return [orm_user_to_domain_user(orm_user) for orm_user in orm_users]
+
+        def update(self, user_id: str, update_command: UserUpdateCommand) -> Optional[User]:
+            """Update an existing user.
+
+            Args:
+                user_id: ID of user to update
+                update_command: Command containing fields to update
+
+            Returns:
+                Updated User if found, None otherwise
+
+            Raises:
+                IntegrityError: If updating to duplicate email within organization
+
+            Note: username, organization_id, and password cannot be changed via this method.
+            """
+            logger.debug(f"Updating user: {user_id}")
+            orm_user = self.session.query(UserORM).filter(UserORM.id == user_id).first()  # type: ignore[operator]
+
+            if orm_user is None:
+                logger.debug(f"User not found for update: {user_id}")
+                return None
+
+            # Update only provided fields
+            if update_command.email is not None:
+                orm_user.email = str(update_command.email)  # type: ignore[assignment]
+            if update_command.full_name is not None:
+                orm_user.full_name = update_command.full_name  # type: ignore[assignment]
+            if update_command.role is not None:
+                orm_user.role = update_command.role.value  # type: ignore[assignment]
+            if update_command.is_active is not None:
+                orm_user.is_active = update_command.is_active  # type: ignore[assignment]
+
+            try:
+                self.session.commit()
+                self.session.refresh(orm_user)
+                logger.debug(f"User updated: {user_id}")
+                return orm_user_to_domain_user(orm_user)
+            except IntegrityError as e:
+                self.session.rollback()
+                logger.warning(f"Failed to update user (likely duplicate email): {user_id}")
+                raise e
+
         def delete(self, user_id: str) -> bool:
-            """Delete a user by ID."""
+            """Delete a user by ID.
+
+            Args:
+                user_id: ID of user to delete
+
+            Returns:
+                True if user was deleted, False if user not found
+
+            Raises:
+                IntegrityError: If user has created data (tickets) - cannot delete
+
+            Note: V1 prevents deletion if user has created tickets (reporter_id reference).
+            """
             logger.debug(f"Deleting user: {user_id}")
             orm_user = self.session.query(UserORM).filter(UserORM.id == user_id).first()  # type: ignore[operator]
             if not orm_user:
                 logger.debug(f"User not found for deletion: {user_id}")
                 return False
+
+            # Check if user has created tickets (reporter)
+            from .orm_data_models import TicketORM
+
+            reporter_tickets_count = (
+                self.session.query(TicketORM)
+                .filter(TicketORM.reporter_id == user_id)  # type: ignore[operator]
+                .count()
+            )
+
+            if reporter_tickets_count > 0:
+                logger.warning(f"Cannot delete user {user_id}: user has created {reporter_tickets_count} ticket(s)")
+                # Create IntegrityError with proper message format
+                error_msg = f"Cannot delete user: user has created {reporter_tickets_count} ticket(s)"
+                # Create a base exception for the orig parameter
+                orig_error = RuntimeError(error_msg)
+                error = IntegrityError(statement=error_msg, params=None, orig=orig_error)
+                # Set the args to make str(error) return our message
+                error.args = (error_msg,)
+                raise error
 
             self.session.delete(orm_user)
             self.session.commit()

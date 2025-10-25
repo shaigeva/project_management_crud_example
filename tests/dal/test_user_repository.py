@@ -1,7 +1,21 @@
 """Tests for user operations through Repository interface."""
 
+from sqlalchemy.exc import IntegrityError
+
 from project_management_crud_example.dal.sqlite.repository import Repository
-from project_management_crud_example.domain_models import UserCreateCommand, UserData, UserRole
+from project_management_crud_example.domain_models import (
+    OrganizationCreateCommand,
+    OrganizationData,
+    ProjectCreateCommand,
+    ProjectData,
+    TicketCreateCommand,
+    TicketData,
+    TicketPriority,
+    UserCreateCommand,
+    UserData,
+    UserRole,
+    UserUpdateCommand,
+)
 from tests.conftest import test_repo  # noqa: F401
 
 
@@ -176,3 +190,239 @@ class TestUserOperations:
         success = test_repo.users.delete("non-existent-id")
 
         assert success is False
+
+    def test_update_user(self, test_repo: Repository) -> None:
+        """Test updating user fields through repository."""
+        # Create user
+        user_data = UserData(username="updateme", email="old@example.com", full_name="Old Name")
+        command = UserCreateCommand(
+            user_data=user_data, password="TestPassword123", organization_id="org-123", role=UserRole.WRITE_ACCESS
+        )
+        created_user = test_repo.users.create(command)
+
+        # Update user
+        update_command = UserUpdateCommand(
+            email="new@example.com", full_name="New Name", role=UserRole.PROJECT_MANAGER, is_active=False
+        )
+        updated_user = test_repo.users.update(created_user.id, update_command)
+
+        assert updated_user is not None
+        assert updated_user.id == created_user.id
+        assert updated_user.email == "new@example.com"
+        assert updated_user.full_name == "New Name"
+        assert updated_user.role == UserRole.PROJECT_MANAGER
+        assert updated_user.is_active is False
+        # Verify unchanged fields
+        assert updated_user.username == "updateme"
+        assert updated_user.organization_id == "org-123"
+
+    def test_update_user_partial_fields(self, test_repo: Repository) -> None:
+        """Test updating only some user fields."""
+        # Create user
+        user_data = UserData(username="partial", email="partial@example.com", full_name="Partial User")
+        command = UserCreateCommand(
+            user_data=user_data, password="TestPassword123", organization_id="org-123", role=UserRole.ADMIN
+        )
+        created_user = test_repo.users.create(command)
+
+        # Update only email
+        update_command = UserUpdateCommand(email="updated@example.com")
+        updated_user = test_repo.users.update(created_user.id, update_command)
+
+        assert updated_user is not None
+        assert updated_user.email == "updated@example.com"
+        # Verify other fields unchanged
+        assert updated_user.full_name == "Partial User"
+        assert updated_user.role == UserRole.ADMIN
+        assert updated_user.is_active is True
+
+    def test_update_user_not_found(self, test_repo: Repository) -> None:
+        """Test updating non-existent user returns None."""
+        update_command = UserUpdateCommand(email="new@example.com")
+        updated_user = test_repo.users.update("non-existent-id", update_command)
+
+        assert updated_user is None
+
+    def test_get_by_filters_organization_id(self, test_repo: Repository) -> None:
+        """Test filtering users by organization ID."""
+        # Create users in different organizations
+        user1_data = UserData(username="user1", email="user1@example.com", full_name="User 1")
+        user2_data = UserData(username="user2", email="user2@example.com", full_name="User 2")
+        user3_data = UserData(username="user3", email="user3@example.com", full_name="User 3")
+
+        test_repo.users.create(
+            UserCreateCommand(
+                user_data=user1_data, password="TestPassword123", organization_id="org-1", role=UserRole.ADMIN
+            )
+        )
+        test_repo.users.create(
+            UserCreateCommand(
+                user_data=user2_data, password="TestPassword123", organization_id="org-2", role=UserRole.ADMIN
+            )
+        )
+        test_repo.users.create(
+            UserCreateCommand(
+                user_data=user3_data, password="TestPassword123", organization_id="org-1", role=UserRole.READ_ACCESS
+            )
+        )
+
+        # Filter by organization
+        org1_users = test_repo.users.get_by_filters(organization_id="org-1")
+
+        assert len(org1_users) == 2
+        usernames = {user.username for user in org1_users}
+        assert usernames == {"user1", "user3"}
+
+    def test_get_by_filters_role(self, test_repo: Repository) -> None:
+        """Test filtering users by role."""
+        # Create users with different roles
+        user1_data = UserData(username="admin1", email="admin1@example.com", full_name="Admin 1")
+        user2_data = UserData(username="reader1", email="reader1@example.com", full_name="Reader 1")
+        user3_data = UserData(username="admin2", email="admin2@example.com", full_name="Admin 2")
+
+        test_repo.users.create(
+            UserCreateCommand(
+                user_data=user1_data, password="TestPassword123", organization_id="org-1", role=UserRole.ADMIN
+            )
+        )
+        test_repo.users.create(
+            UserCreateCommand(
+                user_data=user2_data, password="TestPassword123", organization_id="org-1", role=UserRole.READ_ACCESS
+            )
+        )
+        test_repo.users.create(
+            UserCreateCommand(
+                user_data=user3_data, password="TestPassword123", organization_id="org-1", role=UserRole.ADMIN
+            )
+        )
+
+        # Filter by role
+        admin_users = test_repo.users.get_by_filters(role=UserRole.ADMIN)
+
+        assert len(admin_users) == 2
+        usernames = {user.username for user in admin_users}
+        assert usernames == {"admin1", "admin2"}
+
+    def test_get_by_filters_is_active(self, test_repo: Repository) -> None:
+        """Test filtering users by active status."""
+        # Create active and inactive users
+        user1_data = UserData(username="active", email="active@example.com", full_name="Active User")
+        user2_data = UserData(username="inactive", email="inactive@example.com", full_name="Inactive User")
+
+        test_repo.users.create(
+            UserCreateCommand(
+                user_data=user1_data, password="TestPassword123", organization_id="org-1", role=UserRole.ADMIN
+            )
+        )
+        created_user2 = test_repo.users.create(
+            UserCreateCommand(
+                user_data=user2_data, password="TestPassword123", organization_id="org-1", role=UserRole.ADMIN
+            )
+        )
+
+        # Deactivate user2
+        test_repo.users.update(created_user2.id, UserUpdateCommand(is_active=False))
+
+        # Filter by active status
+        active_users = test_repo.users.get_by_filters(is_active=True)
+        inactive_users = test_repo.users.get_by_filters(is_active=False)
+
+        assert len(active_users) == 1
+        assert active_users[0].username == "active"
+        assert len(inactive_users) == 1
+        assert inactive_users[0].username == "inactive"
+
+    def test_get_by_filters_multiple_criteria(self, test_repo: Repository) -> None:
+        """Test filtering users by multiple criteria."""
+        # Create various users
+        user1_data = UserData(username="user1", email="user1@example.com", full_name="User 1")
+        user2_data = UserData(username="user2", email="user2@example.com", full_name="User 2")
+        user3_data = UserData(username="user3", email="user3@example.com", full_name="User 3")
+
+        test_repo.users.create(
+            UserCreateCommand(
+                user_data=user1_data, password="TestPassword123", organization_id="org-1", role=UserRole.ADMIN
+            )
+        )
+        test_repo.users.create(
+            UserCreateCommand(
+                user_data=user2_data, password="TestPassword123", organization_id="org-1", role=UserRole.READ_ACCESS
+            )
+        )
+        test_repo.users.create(
+            UserCreateCommand(
+                user_data=user3_data, password="TestPassword123", organization_id="org-2", role=UserRole.ADMIN
+            )
+        )
+
+        # Filter by organization AND role
+        filtered_users = test_repo.users.get_by_filters(organization_id="org-1", role=UserRole.ADMIN)
+
+        assert len(filtered_users) == 1
+        assert filtered_users[0].username == "user1"
+
+    def test_get_by_filters_no_results(self, test_repo: Repository) -> None:
+        """Test filtering with criteria that matches no users."""
+        # Create a user
+        user_data = UserData(username="user1", email="user1@example.com", full_name="User 1")
+        test_repo.users.create(
+            UserCreateCommand(
+                user_data=user_data, password="TestPassword123", organization_id="org-1", role=UserRole.ADMIN
+            )
+        )
+
+        # Filter with non-matching criteria
+        filtered_users = test_repo.users.get_by_filters(organization_id="non-existent-org")
+
+        assert filtered_users == []
+
+    def test_delete_user_with_created_tickets_fails(self, test_repo: Repository) -> None:
+        """Test that deleting user who created tickets raises IntegrityError."""
+        # Create organization
+        org_data = OrganizationData(name="Test Org", description="Test")
+        org = test_repo.organizations.create(OrganizationCreateCommand(organization_data=org_data))
+
+        # Create user
+        user_data = UserData(username="creator", email="creator@example.com", full_name="Creator User")
+        user = test_repo.users.create(
+            UserCreateCommand(
+                user_data=user_data, password="TestPassword123", organization_id=org.id, role=UserRole.ADMIN
+            )
+        )
+
+        # Create project
+        project_data = ProjectData(name="Test Project", description="Test")
+        project = test_repo.projects.create(ProjectCreateCommand(project_data=project_data, organization_id=org.id))
+
+        # Create ticket with user as reporter
+        ticket_data = TicketData(title="Test Ticket", description="Test", priority=TicketPriority.MEDIUM)
+        test_repo.tickets.create(
+            TicketCreateCommand(ticket_data=ticket_data, project_id=project.id, assignee_id=None),
+            reporter_id=user.id,
+        )
+
+        # Attempt to delete user should fail
+        try:
+            test_repo.users.delete(user.id)
+            raise AssertionError("Expected IntegrityError to be raised")
+        except IntegrityError as e:
+            assert "Cannot delete user" in str(e)
+            assert "ticket(s)" in str(e)
+
+    def test_delete_user_without_created_tickets_succeeds(self, test_repo: Repository) -> None:
+        """Test that deleting user who has not created tickets succeeds."""
+        # Create user
+        user_data = UserData(username="nodatuser", email="nodatuser@example.com", full_name="No Data User")
+        user = test_repo.users.create(
+            UserCreateCommand(
+                user_data=user_data, password="TestPassword123", organization_id="org-1", role=UserRole.ADMIN
+            )
+        )
+
+        # Delete should succeed
+        success = test_repo.users.delete(user.id)
+
+        assert success is True
+        # Verify user is deleted
+        retrieved_user = test_repo.users.get_by_id(user.id)
+        assert retrieved_user is None
