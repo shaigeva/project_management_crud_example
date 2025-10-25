@@ -4,31 +4,30 @@ import re
 
 from fastapi.testclient import TestClient
 
-from project_management_crud_example.dal.sqlite.repository import Repository
-from project_management_crud_example.domain_models import (
-    TicketCreateCommand,
-    TicketData,
-    TicketPriority,
-    UserRole,
-)
-from tests.conftest import client, test_repo  # noqa: F401
+from tests.conftest import client  # noqa: F401
 from tests.fixtures.auth_fixtures import (  # noqa: F401
     org_admin_token,
     super_admin_token,
     write_user_token,
 )
-from tests.helpers import auth_headers, create_test_org, create_test_project_via_repo, create_test_user
+from tests.helpers import (
+    auth_headers,
+    create_admin_user,
+    create_project_manager,
+    create_read_user,
+    create_test_org,
+    create_test_project,
+    create_write_user,
+)
 
 
 class TestCreateUser:
     """Tests for POST /api/users endpoint - REQ-USER-001, REQ-USER-002."""
 
-    def test_create_user_as_super_admin(
-        self, client: TestClient, super_admin_token: str, test_repo: Repository
-    ) -> None:
+    def test_create_user_as_super_admin(self, client: TestClient, super_admin_token: str) -> None:
         """Test Super Admin creating user in any organization."""
         # Create org first
-        org_id = create_test_org(test_repo, "Target Org")
+        org_id = create_test_org(client, super_admin_token, "Target Org")
 
         # Create user
         response = client.post(
@@ -82,13 +81,13 @@ class TestCreateUser:
         assert "generated_password" in data
 
     def test_create_user_as_org_admin_in_different_org_fails(
-        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
+        self, client: TestClient, org_admin_token: tuple[str, str], super_admin_token: str
     ) -> None:
         """Test Org Admin cannot create user in different organization."""
         token, org_id = org_admin_token
 
         # Create another org
-        other_org_id = create_test_org(test_repo, "Other Org")
+        other_org_id = create_test_org(client, super_admin_token, "Other Org")
 
         response = client.post(
             "/api/users",
@@ -100,11 +99,9 @@ class TestCreateUser:
         assert response.status_code == 403
         assert "own organization" in response.json()["detail"]
 
-    def test_create_user_with_duplicate_username_fails(
-        self, client: TestClient, super_admin_token: str, test_repo: Repository
-    ) -> None:
+    def test_create_user_with_duplicate_username_fails(self, client: TestClient, super_admin_token: str) -> None:
         """Test creating user with duplicate username fails."""
-        org_id = create_test_org(test_repo)
+        org_id = create_test_org(client, super_admin_token)
 
         # Create first user
         response1 = client.post(
@@ -125,11 +122,9 @@ class TestCreateUser:
         assert response2.status_code == 400
         assert "Username already exists" in response2.json()["detail"]
 
-    def test_create_user_with_invalid_role_fails(
-        self, client: TestClient, super_admin_token: str, test_repo: Repository
-    ) -> None:
+    def test_create_user_with_invalid_role_fails(self, client: TestClient, super_admin_token: str) -> None:
         """Test creating user with invalid role fails validation."""
-        org_id = create_test_org(test_repo)
+        org_id = create_test_org(client, super_admin_token)
 
         response = client.post(
             "/api/users",
@@ -140,11 +135,9 @@ class TestCreateUser:
 
         assert response.status_code == 422  # Validation error
 
-    def test_create_user_with_super_admin_role_fails(
-        self, client: TestClient, super_admin_token: str, test_repo: Repository
-    ) -> None:
+    def test_create_user_with_super_admin_role_fails(self, client: TestClient, super_admin_token: str) -> None:
         """Test cannot assign super_admin role via API."""
-        org_id = create_test_org(test_repo)
+        org_id = create_test_org(client, super_admin_token)
 
         response = client.post(
             "/api/users",
@@ -168,9 +161,9 @@ class TestCreateUser:
         assert response.status_code == 400
         assert "Organization not found" in response.json()["detail"]
 
-    def test_create_user_without_auth_fails(self, client: TestClient, test_repo: Repository) -> None:
+    def test_create_user_without_auth_fails(self, client: TestClient, super_admin_token: str) -> None:
         """Test creating user without authentication fails."""
-        org_id = create_test_org(test_repo)
+        org_id = create_test_org(client, super_admin_token)
 
         response = client.post(
             "/api/users",
@@ -198,29 +191,19 @@ class TestCreateUser:
 class TestGetUser:
     """Tests for GET /api/users/{id} endpoint - REQ-USER-007, REQ-USER-008."""
 
-    def test_get_user_by_id_as_super_admin(
-        self, client: TestClient, super_admin_token: str, test_repo: Repository
-    ) -> None:
+    def test_get_user_by_id_as_super_admin(self, client: TestClient, super_admin_token: str) -> None:
         """Test Super Admin can get any user."""
         # Create org and user
-        org_id = create_test_org(test_repo)
-        user_id = create_test_user(
-            test_repo,
-            org_id,
-            username="getme",
-            email="getme@example.com",
-            full_name="Get Me",
-            role=UserRole.ADMIN,
-            password="pass123",
-        )
+        org_id = create_test_org(client, super_admin_token)
+        user_id, password = create_admin_user(client, super_admin_token, org_id)
 
         response = client.get(f"/api/users/{user_id}", headers=auth_headers(super_admin_token))
 
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == user_id
-        assert data["username"] == "getme"
-        assert data["email"] == "getme@example.com"
+        assert data["username"] == "admin"
+        assert data["email"] == "admin@example.com"
         # Verify password is NOT exposed
         assert "password" not in data
         assert "password_hash" not in data
@@ -247,14 +230,14 @@ class TestGetUser:
         assert data["username"] == "teammate"
 
     def test_get_user_in_different_org_returns_404(
-        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
+        self, client: TestClient, org_admin_token: tuple[str, str], super_admin_token: str
     ) -> None:
         """Test user cannot access user from different organization (returns 404)."""
         token, org_id = org_admin_token
 
         # Create another org and user
-        other_org_id = create_test_org(test_repo, "Other Org")
-        other_user_id = create_test_user(test_repo, other_org_id)
+        other_org_id = create_test_org(client, super_admin_token, "Other Org")
+        other_user_id, _password = create_write_user(client, super_admin_token, other_org_id)
 
         response = client.get(f"/api/users/{other_user_id}", headers=auth_headers(token))
 
@@ -269,11 +252,11 @@ class TestGetUser:
         assert response.status_code == 404
         assert "User not found" in response.json()["detail"]
 
-    def test_get_user_without_auth_fails(self, client: TestClient, test_repo: Repository) -> None:
+    def test_get_user_without_auth_fails(self, client: TestClient, super_admin_token: str) -> None:
         """Test getting user without authentication fails."""
         # Create a user
-        org_id = create_test_org(test_repo)
-        user_id = create_test_user(test_repo, org_id)
+        org_id = create_test_org(client, super_admin_token)
+        user_id, _password = create_write_user(client, super_admin_token, org_id)
 
         response = client.get(f"/api/users/{user_id}")
 
@@ -283,32 +266,14 @@ class TestGetUser:
 class TestListUsers:
     """Tests for GET /api/users endpoint - REQ-USER-006."""
 
-    def test_list_users_as_super_admin_sees_all(
-        self, client: TestClient, super_admin_token: str, test_repo: Repository
-    ) -> None:
+    def test_list_users_as_super_admin_sees_all(self, client: TestClient, super_admin_token: str) -> None:
         """Test Super Admin sees all users across all organizations."""
         # Create multiple orgs and users
-        org1_id = create_test_org(test_repo, "Org 1")
-        org2_id = create_test_org(test_repo, "Org 2")
+        org1_id = create_test_org(client, super_admin_token, "Org 1")
+        org2_id = create_test_org(client, super_admin_token, "Org 2")
 
-        create_test_user(
-            test_repo,
-            org1_id,
-            username="user1",
-            email="user1@example.com",
-            full_name="User 1",
-            role=UserRole.ADMIN,
-            password="pass",
-        )
-        create_test_user(
-            test_repo,
-            org2_id,
-            username="user2",
-            email="user2@example.com",
-            full_name="User 2",
-            role=UserRole.READ_ACCESS,
-            password="pass",
-        )
+        create_admin_user(client, super_admin_token, org1_id, username="user1")
+        create_read_user(client, super_admin_token, org2_id, username="user2")
 
         response = client.get("/api/users", headers=auth_headers(super_admin_token))
 
@@ -322,33 +287,17 @@ class TestListUsers:
         assert "superadmin" in usernames
 
     def test_list_users_as_org_admin_sees_only_own_org(
-        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
+        self, client: TestClient, org_admin_token: tuple[str, str], super_admin_token: str
     ) -> None:
         """Test Org Admin sees only users in their organization."""
         token, org_id = org_admin_token
 
         # Create user in same org
-        create_test_user(
-            test_repo,
-            org_id,
-            username="teammate",
-            email="team@example.com",
-            full_name="Team Mate",
-            role=UserRole.WRITE_ACCESS,
-            password="pass",
-        )
+        create_write_user(client, super_admin_token, org_id, username="teammate")
 
         # Create user in different org
-        other_org_id = create_test_org(test_repo, "Other Org")
-        create_test_user(
-            test_repo,
-            other_org_id,
-            username="outsider",
-            email="out@example.com",
-            full_name="Outsider",
-            role=UserRole.ADMIN,
-            password="pass",
-        )
+        other_org_id = create_test_org(client, super_admin_token, "Other Org")
+        create_admin_user(client, super_admin_token, other_org_id, username="outsider")
 
         response = client.get("/api/users", headers=auth_headers(token))
 
@@ -360,30 +309,12 @@ class TestListUsers:
         assert "teammate" in usernames
         assert "outsider" not in usernames
 
-    def test_list_users_with_role_filter(
-        self, client: TestClient, super_admin_token: str, test_repo: Repository
-    ) -> None:
+    def test_list_users_with_role_filter(self, client: TestClient, super_admin_token: str) -> None:
         """Test filtering users by role."""
-        org_id = create_test_org(test_repo)
+        org_id = create_test_org(client, super_admin_token)
 
-        create_test_user(
-            test_repo,
-            org_id,
-            username="admin1",
-            email="admin1@example.com",
-            full_name="Admin 1",
-            role=UserRole.ADMIN,
-            password="pass",
-        )
-        create_test_user(
-            test_repo,
-            org_id,
-            username="reader1",
-            email="reader1@example.com",
-            full_name="Reader 1",
-            role=UserRole.READ_ACCESS,
-            password="pass",
-        )
+        create_admin_user(client, super_admin_token, org_id, username="admin1")
+        create_read_user(client, super_admin_token, org_id, username="reader1")
 
         response = client.get("/api/users", params={"role": "admin"}, headers=auth_headers(super_admin_token))
 
@@ -393,36 +324,16 @@ class TestListUsers:
         for user in users:
             assert user["role"] in ["admin", "super_admin"]
 
-    def test_list_users_with_is_active_filter(
-        self, client: TestClient, super_admin_token: str, test_repo: Repository
-    ) -> None:
+    def test_list_users_with_is_active_filter(self, client: TestClient, super_admin_token: str) -> None:
         """Test filtering users by active status."""
-        org_id = create_test_org(test_repo)
+        org_id = create_test_org(client, super_admin_token)
 
         # Create active user
-        create_test_user(
-            test_repo,
-            org_id,
-            username="active",
-            email="active@example.com",
-            full_name="Active User",
-            role=UserRole.ADMIN,
-            password="pass",
-        )
+        create_admin_user(client, super_admin_token, org_id, username="active")
 
-        # Create and deactivate user
-        inactive_user_id = create_test_user(
-            test_repo,
-            org_id,
-            username="inactive",
-            email="inactive@example.com",
-            full_name="Inactive User",
-            role=UserRole.ADMIN,
-            password="pass",
-        )
-        from project_management_crud_example.domain_models import UserUpdateCommand
-
-        test_repo.users.update(inactive_user_id, UserUpdateCommand(is_active=False))
+        # Create and deactivate user via API
+        inactive_user_id, _password = create_admin_user(client, super_admin_token, org_id, username="inactive")
+        client.put(f"/api/users/{inactive_user_id}", json={"is_active": False}, headers=auth_headers(super_admin_token))
 
         # Filter for active users
         response = client.get("/api/users", params={"is_active": "true"}, headers=auth_headers(super_admin_token))
@@ -443,20 +354,10 @@ class TestListUsers:
 class TestUpdateUser:
     """Tests for PUT /api/users/{id} endpoint - REQ-USER-003, REQ-USER-004."""
 
-    def test_update_user_as_super_admin(
-        self, client: TestClient, super_admin_token: str, test_repo: Repository
-    ) -> None:
+    def test_update_user_as_super_admin(self, client: TestClient, super_admin_token: str) -> None:
         """Test Super Admin can update any user."""
-        org_id = create_test_org(test_repo)
-        user_id = create_test_user(
-            test_repo,
-            org_id,
-            username="updateme",
-            email="old@example.com",
-            full_name="Old Name",
-            role=UserRole.WRITE_ACCESS,
-            password="pass",
-        )
+        org_id = create_test_org(client, super_admin_token)
+        user_id, _password = create_write_user(client, super_admin_token, org_id)
 
         response = client.put(
             f"/api/users/{user_id}",
@@ -470,23 +371,13 @@ class TestUpdateUser:
         assert data["full_name"] == "New Name"
         assert data["role"] == "project_manager"
         # Verify unchanged fields
-        assert data["username"] == "updateme"
+        assert data["username"] == "writer"
         assert data["organization_id"] == org_id
 
-    def test_update_user_partial_fields(
-        self, client: TestClient, super_admin_token: str, test_repo: Repository
-    ) -> None:
+    def test_update_user_partial_fields(self, client: TestClient, super_admin_token: str) -> None:
         """Test updating only some user fields."""
-        org_id = create_test_org(test_repo)
-        user_id = create_test_user(
-            test_repo,
-            org_id,
-            username="partial",
-            email="partial@example.com",
-            full_name="Partial User",
-            role=UserRole.ADMIN,
-            password="pass",
-        )
+        org_id = create_test_org(client, super_admin_token)
+        user_id, _password = create_admin_user(client, super_admin_token, org_id)
 
         # Update only email
         response = client.put(
@@ -499,21 +390,13 @@ class TestUpdateUser:
         data = response.json()
         assert data["email"] == "updated@example.com"
         # Verify other fields unchanged
-        assert data["full_name"] == "Partial User"
+        assert data["full_name"] == "Admin User"
         assert data["role"] == "admin"
 
-    def test_deactivate_user(self, client: TestClient, super_admin_token: str, test_repo: Repository) -> None:
+    def test_deactivate_user(self, client: TestClient, super_admin_token: str) -> None:
         """Test deactivating a user."""
-        org_id = create_test_org(test_repo)
-        user_id = create_test_user(
-            test_repo,
-            org_id,
-            username="deactivateme",
-            email="deactivate@example.com",
-            full_name="Deactivate Me",
-            role=UserRole.ADMIN,
-            password="pass123",
-        )
+        org_id = create_test_org(client, super_admin_token)
+        user_id, password = create_admin_user(client, super_admin_token, org_id, username="deactivateme")
 
         # Deactivate
         response = client.put(
@@ -526,26 +409,16 @@ class TestUpdateUser:
         assert response.json()["is_active"] is False
 
         # Verify user cannot login
-        login_response = client.post("/auth/login", json={"username": "deactivateme", "password": "pass123"})
+        login_response = client.post("/auth/login", json={"username": "deactivateme", "password": password})
         assert login_response.status_code == 401
 
-    def test_reactivate_user(self, client: TestClient, super_admin_token: str, test_repo: Repository) -> None:
+    def test_reactivate_user(self, client: TestClient, super_admin_token: str) -> None:
         """Test reactivating a user."""
-        org_id = create_test_org(test_repo)
-        user_id = create_test_user(
-            test_repo,
-            org_id,
-            username="reactivateme",
-            email="reactivate@example.com",
-            full_name="Reactivate Me",
-            role=UserRole.ADMIN,
-            password="pass123",
-        )
+        org_id = create_test_org(client, super_admin_token)
+        user_id, password = create_admin_user(client, super_admin_token, org_id, username="reactivateme")
 
-        # Deactivate first
-        from project_management_crud_example.domain_models import UserUpdateCommand
-
-        test_repo.users.update(user_id, UserUpdateCommand(is_active=False))
+        # Deactivate first via API
+        client.put(f"/api/users/{user_id}", json={"is_active": False}, headers=auth_headers(super_admin_token))
 
         # Reactivate via API
         response = client.put(
@@ -558,7 +431,7 @@ class TestUpdateUser:
         assert response.json()["is_active"] is True
 
         # Verify user can login again
-        login_response = client.post("/auth/login", json={"username": "reactivateme", "password": "pass123"})
+        login_response = client.post("/auth/login", json={"username": "reactivateme", "password": password})
         assert login_response.status_code == 200
 
     def test_update_user_as_org_admin_in_own_org(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
@@ -585,22 +458,14 @@ class TestUpdateUser:
         assert response.json()["full_name"] == "Updated Name"
 
     def test_update_user_as_org_admin_in_different_org_fails(
-        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
+        self, client: TestClient, org_admin_token: tuple[str, str], super_admin_token: str
     ) -> None:
         """Test Org Admin cannot update users in different organization."""
         token, org_id = org_admin_token
 
         # Create user in different org
-        other_org_id = create_test_org(test_repo, "Other Org")
-        other_user_id = create_test_user(
-            test_repo,
-            other_org_id,
-            username="other",
-            email="other@example.com",
-            full_name="Other User",
-            role=UserRole.ADMIN,
-            password="pass",
-        )
+        other_org_id = create_test_org(client, super_admin_token, "Other Org")
+        other_user_id, _password = create_admin_user(client, super_admin_token, other_org_id, username="other")
 
         response = client.put(
             f"/api/users/{other_user_id}",
@@ -611,20 +476,10 @@ class TestUpdateUser:
         assert response.status_code == 403
         assert "own organization" in response.json()["detail"]
 
-    def test_update_user_with_super_admin_role_fails(
-        self, client: TestClient, super_admin_token: str, test_repo: Repository
-    ) -> None:
+    def test_update_user_with_super_admin_role_fails(self, client: TestClient, super_admin_token: str) -> None:
         """Test cannot assign super_admin role via update."""
-        org_id = create_test_org(test_repo)
-        user_id = create_test_user(
-            test_repo,
-            org_id,
-            username="user1",
-            email="user1@example.com",
-            full_name="User 1",
-            role=UserRole.ADMIN,
-            password="pass",
-        )
+        org_id = create_test_org(client, super_admin_token)
+        user_id, _password = create_admin_user(client, super_admin_token, org_id, username="user1")
 
         response = client.put(
             f"/api/users/{user_id}",
@@ -646,13 +501,15 @@ class TestUpdateUser:
         assert response.status_code == 404
 
     def test_update_user_as_regular_user_fails(
-        self, client: TestClient, write_user_token: tuple[str, str], test_repo: Repository
+        self, client: TestClient, write_user_token: tuple[str, str], super_admin_token: str
     ) -> None:
         """Test regular user cannot update users."""
         token, org_id = write_user_token
 
         # Create another user
-        user_id = create_test_user(test_repo, org_id)
+        user_id, _password = create_write_user(
+            client, super_admin_token, org_id, username="writer2", email="writer2@example.com"
+        )
 
         response = client.put(
             f"/api/users/{user_id}",
@@ -666,12 +523,10 @@ class TestUpdateUser:
 class TestDeleteUser:
     """Tests for DELETE /api/users/{id} endpoint - REQ-USER-005."""
 
-    def test_delete_user_as_super_admin(
-        self, client: TestClient, super_admin_token: str, test_repo: Repository
-    ) -> None:
+    def test_delete_user_as_super_admin(self, client: TestClient, super_admin_token: str) -> None:
         """Test Super Admin can delete users."""
-        org_id = create_test_org(test_repo)
-        user_id = create_test_user(test_repo, org_id)
+        org_id = create_test_org(client, super_admin_token)
+        user_id, _password = create_write_user(client, super_admin_token, org_id)
 
         response = client.delete(f"/api/users/{user_id}", headers=auth_headers(super_admin_token))
 
@@ -681,31 +536,33 @@ class TestDeleteUser:
         get_response = client.get(f"/api/users/{user_id}", headers=auth_headers(super_admin_token))
         assert get_response.status_code == 404
 
-    def test_delete_user_with_created_tickets_fails(
-        self, client: TestClient, super_admin_token: str, test_repo: Repository
-    ) -> None:
+    def test_delete_user_with_created_tickets_fails(self, client: TestClient, super_admin_token: str) -> None:
         """Test cannot delete user who has created tickets."""
-        # Create org, user, project, and ticket
-        org_id = create_test_org(test_repo)
-        user_id = create_test_user(test_repo, org_id)
-        project_id = create_test_project_via_repo(test_repo, org_id)
-        test_repo.tickets.create(
-            TicketCreateCommand(
-                ticket_data=TicketData(title="Test Ticket", description="Test", priority=TicketPriority.MEDIUM),
-                project_id=project_id,
-                assignee_id=None,
-            ),
-            reporter_id=user_id,
+        # Create org and user with PROJECT_MANAGER role to create projects
+        org_id = create_test_org(client, super_admin_token)
+        user_id, password = create_project_manager(client, super_admin_token, org_id)
+
+        # Login as the user to create project and ticket via API
+        login_response = client.post("/auth/login", json={"username": "projectmanager", "password": password})
+        user_token = login_response.json()["access_token"]
+
+        # Create project as the user
+        project_id = create_test_project(client, user_token)
+
+        # Create ticket via API as the user
+        client.post(
+            f"/api/tickets?project_id={project_id}",
+            json={"title": "Test Ticket", "description": "Test", "priority": "MEDIUM"},
+            headers=auth_headers(user_token),
         )
 
+        # Attempt to delete user (should fail because they created a ticket)
         response = client.delete(f"/api/users/{user_id}", headers=auth_headers(super_admin_token))
 
         assert response.status_code == 400
         assert "ticket" in response.json()["detail"].lower()
 
-    def test_delete_user_as_org_admin_fails(
-        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
-    ) -> None:
+    def test_delete_user_as_org_admin_fails(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test Org Admin cannot delete users (Super Admin only)."""
         token, org_id = org_admin_token
 
@@ -730,18 +587,10 @@ class TestDeleteUser:
 
         assert response.status_code == 404
 
-    def test_delete_user_without_auth_fails(self, client: TestClient, test_repo: Repository) -> None:
+    def test_delete_user_without_auth_fails(self, client: TestClient, super_admin_token: str) -> None:
         """Test deleting user without authentication fails."""
-        org_id = create_test_org(test_repo)
-        user_id = create_test_user(
-            test_repo,
-            org_id,
-            username="user1",
-            email="user1@example.com",
-            full_name="User 1",
-            role=UserRole.ADMIN,
-            password="pass",
-        )
+        org_id = create_test_org(client, super_admin_token)
+        user_id, _password = create_admin_user(client, super_admin_token, org_id, username="user1")
 
         response = client.delete(f"/api/users/{user_id}")
 

@@ -2,9 +2,7 @@
 
 from fastapi.testclient import TestClient
 
-from project_management_crud_example.dal.sqlite.repository import Repository
-from project_management_crud_example.domain_models import ProjectCreateCommand, ProjectData
-from tests.conftest import client, test_repo  # noqa: F401
+from tests.conftest import client  # noqa: F401
 from tests.fixtures.auth_fixtures import (  # noqa: F401
     org_admin_token,
     project_manager_token,
@@ -12,8 +10,7 @@ from tests.fixtures.auth_fixtures import (  # noqa: F401
     super_admin_token,
     write_user_token,
 )
-from tests.fixtures.data_fixtures import organization, second_organization  # noqa: F401
-from tests.helpers import auth_headers, create_test_project_via_repo
+from tests.helpers import auth_headers, create_project_manager, create_test_org, create_test_project
 
 
 class TestCreateProject:
@@ -186,14 +183,12 @@ class TestCreateProject:
 class TestGetProject:
     """Tests for GET /api/projects/{id} endpoint."""
 
-    def test_get_project_by_id_in_same_org(
-        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
-    ) -> None:
+    def test_get_project_by_id_in_same_org(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test getting project by ID as user in same organization."""
         token, org_id = org_admin_token
 
         # Create a project
-        project_id = create_test_project_via_repo(test_repo, org_id, "Test Project", "Test description")
+        project_id = create_test_project(client, token, "Test Project", "Test description")
 
         response = client.get(
             f"/api/projects/{project_id}",
@@ -211,14 +206,19 @@ class TestGetProject:
         self,
         client: TestClient,
         org_admin_token: tuple[str, str],
-        second_organization: str,
-        test_repo: Repository,
+        super_admin_token: str,
     ) -> None:
         """Test that user cannot get project from different organization."""
         token, _ = org_admin_token
 
-        # Create project in different organization
-        project_id = create_test_project_via_repo(test_repo, second_organization, "Other Org Project")
+        # Create another organization and project manager in it
+        other_org_id = create_test_org(client, super_admin_token, "Other Org")
+        _, other_pm_password = create_project_manager(client, super_admin_token, other_org_id, username="otherpm")
+
+        # Login as other PM and create project
+        login_resp = client.post("/auth/login", json={"username": "otherpm", "password": other_pm_password})
+        other_token = login_resp.json()["access_token"]
+        project_id = create_test_project(client, other_token, "Other Org Project")
 
         response = client.get(
             f"/api/projects/{project_id}",
@@ -232,12 +232,12 @@ class TestGetProject:
         self,
         client: TestClient,
         super_admin_token: str,
-        organization: str,
-        test_repo: Repository,
+        org_admin_token: tuple[str, str],
     ) -> None:
         """Test that Super Admin can get project from any organization."""
-        # Create project in organization
-        project_id = create_test_project_via_repo(test_repo, organization, "Any Org Project")
+        # Use org_admin to create project
+        token, _ = org_admin_token
+        project_id = create_test_project(client, token, "Any Org Project")
 
         response = client.get(
             f"/api/projects/{project_id}",
@@ -259,10 +259,11 @@ class TestGetProject:
         assert response.status_code == 404
         assert "not found" in response.json()["detail"]
 
-    def test_get_project_without_auth_fails(self, client: TestClient, test_repo: Repository, organization: str) -> None:
+    def test_get_project_without_auth_fails(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test getting project without auth fails."""
         # Create a project
-        project_id = create_test_project_via_repo(test_repo, organization)
+        token, _ = org_admin_token
+        project_id = create_test_project(client, token)
 
         response = client.get(f"/api/projects/{project_id}")
 
@@ -272,15 +273,13 @@ class TestGetProject:
 class TestListProjects:
     """Tests for GET /api/projects endpoint."""
 
-    def test_list_projects_in_own_org(
-        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
-    ) -> None:
+    def test_list_projects_in_own_org(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test listing projects as user sees only their org's projects."""
         token, org_id = org_admin_token
 
         # Create projects in user's organization
         for i in range(3):
-            create_test_project_via_repo(test_repo, org_id, f"Project {i}")
+            create_test_project(client, token, f"Project {i}")
 
         response = client.get(
             "/api/projects",
@@ -296,21 +295,20 @@ class TestListProjects:
         self,
         client: TestClient,
         org_admin_token: tuple[str, str],
-        second_organization: str,
-        test_repo: Repository,
+        super_admin_token: str,
     ) -> None:
         """Test that listing projects does not include projects from other organizations."""
         token, org_id = org_admin_token
 
         # Create project in user's org
-        project_data1 = ProjectData(name="My Project")
-        command1 = ProjectCreateCommand(project_data=project_data1, organization_id=org_id)
-        test_repo.projects.create(command1)
+        create_test_project(client, token, "My Project")
 
-        # Create project in different org
-        project_data2 = ProjectData(name="Other Project")
-        command2 = ProjectCreateCommand(project_data=project_data2, organization_id=second_organization)
-        test_repo.projects.create(command2)
+        # Create another org and project in it
+        other_org_id = create_test_org(client, super_admin_token, "Other Org")
+        _, other_pm_password = create_project_manager(client, super_admin_token, other_org_id, username="otherpm2")
+        login_resp = client.post("/auth/login", json={"username": "otherpm2", "password": other_pm_password})
+        other_token = login_resp.json()["access_token"]
+        create_test_project(client, other_token, "Other Project")
 
         response = client.get(
             "/api/projects",
@@ -327,19 +325,19 @@ class TestListProjects:
         self,
         client: TestClient,
         super_admin_token: str,
-        organization: str,
-        second_organization: str,
-        test_repo: Repository,
+        org_admin_token: tuple[str, str],
     ) -> None:
         """Test that Super Admin sees projects from all organizations."""
-        # Create projects in different orgs
-        project_data1 = ProjectData(name="Org1 Project")
-        command1 = ProjectCreateCommand(project_data=project_data1, organization_id=organization)
-        test_repo.projects.create(command1)
+        # Create project in first org
+        token1, org1_id = org_admin_token
+        create_test_project(client, token1, "Org1 Project")
 
-        project_data2 = ProjectData(name="Org2 Project")
-        command2 = ProjectCreateCommand(project_data=project_data2, organization_id=second_organization)
-        test_repo.projects.create(command2)
+        # Create second org and project in it
+        org2_id = create_test_org(client, super_admin_token, "Org 2")
+        _, pm2_password = create_project_manager(client, super_admin_token, org2_id, username="pm2")
+        login_resp = client.post("/auth/login", json={"username": "pm2", "password": pm2_password})
+        token2 = login_resp.json()["access_token"]
+        create_test_project(client, token2, "Org2 Project")
 
         response = client.get(
             "/api/projects",
@@ -350,7 +348,7 @@ class TestListProjects:
         projects = response.json()
         assert len(projects) == 2
         org_ids = {p["organization_id"] for p in projects}
-        assert org_ids == {organization, second_organization}
+        assert org_ids == {org1_id, org2_id}
 
     def test_list_projects_when_empty(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test listing projects when none exist returns empty array."""
@@ -374,14 +372,12 @@ class TestListProjects:
 class TestUpdateProject:
     """Tests for PUT /api/projects/{id} endpoint."""
 
-    def test_update_project_as_admin(
-        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
-    ) -> None:
+    def test_update_project_as_admin(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test updating project as Admin."""
         token, org_id = org_admin_token
 
         # Create project
-        project_id = create_test_project_via_repo(test_repo, org_id, "Original Name", "Original description")
+        project_id = create_test_project(client, token, "Original Name", "Original description")
 
         # Update project
         update_data = {"name": "Updated Name", "description": "Updated description"}
@@ -398,13 +394,13 @@ class TestUpdateProject:
         assert data["id"] == project_id
 
     def test_update_project_as_project_manager(
-        self, client: TestClient, project_manager_token: tuple[str, str], test_repo: Repository
+        self, client: TestClient, project_manager_token: tuple[str, str]
     ) -> None:
         """Test updating project as Project Manager."""
         token, org_id = project_manager_token
 
         # Create project
-        project_id = create_test_project_via_repo(test_repo, org_id, "Original Name")
+        project_id = create_test_project(client, token, "Original Name")
 
         # Update project
         update_data = {"name": "PM Updated Name"}
@@ -417,14 +413,12 @@ class TestUpdateProject:
         assert response.status_code == 200
         assert response.json()["name"] == "PM Updated Name"
 
-    def test_update_project_partial_update(
-        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
-    ) -> None:
+    def test_update_project_partial_update(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test partial update of project (only name or description)."""
         token, org_id = org_admin_token
 
         # Create project
-        project_id = create_test_project_via_repo(test_repo, org_id, "Original", "Original description")
+        project_id = create_test_project(client, token, "Original", "Original description")
 
         # Update only name
         update_data = {"name": "New Name"}
@@ -443,14 +437,17 @@ class TestUpdateProject:
         self,
         client: TestClient,
         org_admin_token: tuple[str, str],
-        second_organization: str,
-        test_repo: Repository,
+        super_admin_token: str,
     ) -> None:
         """Test that user cannot update project from different organization."""
         token, _ = org_admin_token
 
-        # Create project in different org
-        project_id = create_test_project_via_repo(test_repo, second_organization, "Other Org Project")
+        # Create another org and project in it
+        other_org_id = create_test_org(client, super_admin_token, "Other Org")
+        _, other_pm_password = create_project_manager(client, super_admin_token, other_org_id, username="otherpm3")
+        login_resp = client.post("/auth/login", json={"username": "otherpm3", "password": other_pm_password})
+        other_token = login_resp.json()["access_token"]
+        project_id = create_test_project(client, other_token, "Other Org Project")
 
         # Attempt to update
         update_data = {"name": "Hacked Name"}
@@ -464,13 +461,16 @@ class TestUpdateProject:
         assert "different organization" in response.json()["detail"]
 
     def test_update_project_as_write_user_fails(
-        self, client: TestClient, write_user_token: tuple[str, str], test_repo: Repository
+        self, client: TestClient, write_user_token: tuple[str, str], super_admin_token: str
     ) -> None:
         """Test that Write Access user cannot update projects."""
         token, org_id = write_user_token
 
-        # Create project
-        project_id = create_test_project_via_repo(test_repo, org_id, "Project")
+        # Create project manager in same org to create the project
+        _, pm_password = create_project_manager(client, super_admin_token, org_id, username="pmfortest")
+        login_resp = client.post("/auth/login", json={"username": "pmfortest", "password": pm_password})
+        pm_token = login_resp.json()["access_token"]
+        project_id = create_test_project(client, pm_token, "Project")
 
         # Attempt to update
         update_data = {"name": "Unauthorized Update"}
@@ -500,14 +500,12 @@ class TestUpdateProject:
 class TestDeleteProject:
     """Tests for DELETE /api/projects/{id} endpoint."""
 
-    def test_delete_project_as_admin(
-        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
-    ) -> None:
+    def test_delete_project_as_admin(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test deleting project as Admin."""
         token, org_id = org_admin_token
 
         # Create project
-        project_id = create_test_project_via_repo(test_repo, org_id, "To Delete")
+        project_id = create_test_project(client, token, "To Delete")
 
         # Delete project
         response = client.delete(
@@ -525,13 +523,13 @@ class TestDeleteProject:
         assert get_response.status_code == 404
 
     def test_delete_project_as_project_manager_fails(
-        self, client: TestClient, project_manager_token: tuple[str, str], test_repo: Repository
+        self, client: TestClient, project_manager_token: tuple[str, str]
     ) -> None:
         """Test that Project Manager cannot delete projects."""
         token, org_id = project_manager_token
 
         # Create project
-        project_id = create_test_project_via_repo(test_repo, org_id, "Protected Project")
+        project_id = create_test_project(client, token, "Protected Project")
 
         # Attempt to delete
         response = client.delete(
@@ -546,14 +544,17 @@ class TestDeleteProject:
         self,
         client: TestClient,
         org_admin_token: tuple[str, str],
-        second_organization: str,
-        test_repo: Repository,
+        super_admin_token: str,
     ) -> None:
         """Test that Admin cannot delete project from different organization."""
         token, _ = org_admin_token
 
-        # Create project in different org
-        project_id = create_test_project_via_repo(test_repo, second_organization, "Other Org Project")
+        # Create another org and project in it
+        other_org_id = create_test_org(client, super_admin_token, "Other Org")
+        _, other_pm_password = create_project_manager(client, super_admin_token, other_org_id, username="otherpm4")
+        login_resp = client.post("/auth/login", json={"username": "otherpm4", "password": other_pm_password})
+        other_token = login_resp.json()["access_token"]
+        project_id = create_test_project(client, other_token, "Other Org Project")
 
         # Attempt to delete
         response = client.delete(
@@ -568,12 +569,12 @@ class TestDeleteProject:
         self,
         client: TestClient,
         super_admin_token: str,
-        organization: str,
-        test_repo: Repository,
+        org_admin_token: tuple[str, str],
     ) -> None:
         """Test that Super Admin can delete project from any organization."""
-        # Create project
-        project_id = create_test_project_via_repo(test_repo, organization, "To Delete")
+        # Create project using org admin
+        token, _ = org_admin_token
+        project_id = create_test_project(client, token, "To Delete")
 
         # Delete as Super Admin
         response = client.delete(
@@ -598,9 +599,7 @@ class TestDeleteProject:
 class TestProjectWorkflows:
     """Test complete project workflows."""
 
-    def test_complete_project_crud_workflow(
-        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
-    ) -> None:
+    def test_complete_project_crud_workflow(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test complete CRUD workflow for a project."""
         token, org_id = org_admin_token
 

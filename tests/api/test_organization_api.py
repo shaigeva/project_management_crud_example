@@ -2,9 +2,7 @@
 
 from fastapi.testclient import TestClient
 
-from project_management_crud_example.dal.sqlite.repository import Repository
-from project_management_crud_example.domain_models import OrganizationCreateCommand, OrganizationData
-from tests.conftest import client, test_repo  # noqa: F401
+from tests.conftest import client  # noqa: F401
 from tests.fixtures.auth_fixtures import org_admin_token, super_admin_token  # noqa: F401
 from tests.helpers import auth_headers, create_test_org
 
@@ -133,12 +131,10 @@ class TestCreateOrganization:
 class TestGetOrganization:
     """Tests for GET /api/organizations/{id} endpoint."""
 
-    def test_get_organization_as_super_admin(
-        self, client: TestClient, super_admin_token: str, test_repo: Repository
-    ) -> None:
+    def test_get_organization_as_super_admin(self, client: TestClient, super_admin_token: str) -> None:
         """Test Super Admin can get any organization."""
         # Create organization
-        org_id = create_test_org(test_repo)
+        org_id = create_test_org(client, super_admin_token)
 
         response = client.get(
             f"/api/organizations/{org_id}",
@@ -164,13 +160,13 @@ class TestGetOrganization:
         assert data["id"] == org_id
 
     def test_get_other_organization_as_regular_user_fails(
-        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
+        self, client: TestClient, org_admin_token: tuple[str, str], super_admin_token: str
     ) -> None:
         """Test regular user cannot get different organization."""
         token, _ = org_admin_token
 
         # Create another organization
-        other_org_id = create_test_org(test_repo, "Other Org")
+        other_org_id = create_test_org(client, super_admin_token, "Other Org")
 
         response = client.get(
             f"/api/organizations/{other_org_id}",
@@ -200,13 +196,11 @@ class TestGetOrganization:
 class TestListOrganizations:
     """Tests for GET /api/organizations endpoint."""
 
-    def test_list_organizations_as_super_admin(
-        self, client: TestClient, super_admin_token: str, test_repo: Repository
-    ) -> None:
+    def test_list_organizations_as_super_admin(self, client: TestClient, super_admin_token: str) -> None:
         """Test Super Admin sees all organizations."""
         # Create multiple organizations
-        create_test_org(test_repo, "Org 1")
-        create_test_org(test_repo, "Org 2")
+        create_test_org(client, super_admin_token, "Org 1")
+        create_test_org(client, super_admin_token, "Org 2")
 
         response = client.get(
             "/api/organizations",
@@ -220,13 +214,13 @@ class TestListOrganizations:
         assert org_names == {"Org 1", "Org 2"}
 
     def test_list_organizations_as_regular_user_sees_only_own(
-        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
+        self, client: TestClient, org_admin_token: tuple[str, str], super_admin_token: str
     ) -> None:
         """Test regular user sees only their organization."""
         token, org_id = org_admin_token
 
         # Create another organization that user shouldn't see
-        create_test_org(test_repo, "Other Org")
+        create_test_org(client, super_admin_token, "Other Org")
 
         response = client.get(
             "/api/organizations",
@@ -248,12 +242,10 @@ class TestListOrganizations:
 class TestUpdateOrganization:
     """Tests for PUT /api/organizations/{id} endpoint."""
 
-    def test_update_organization_as_super_admin(
-        self, client: TestClient, super_admin_token: str, test_repo: Repository
-    ) -> None:
+    def test_update_organization_as_super_admin(self, client: TestClient, super_admin_token: str) -> None:
         """Test Super Admin can update organization."""
         # Create organization
-        org_id = create_test_org(test_repo, "Original Name", "Original description")
+        org_id = create_test_org(client, super_admin_token, "Original Name", "Original description")
 
         update_data = {"name": "Updated Name", "description": "Updated description"}
 
@@ -269,12 +261,10 @@ class TestUpdateOrganization:
         assert data["name"] == "Updated Name"
         assert data["description"] == "Updated description"
 
-    def test_update_organization_partial_fields(
-        self, client: TestClient, super_admin_token: str, test_repo: Repository
-    ) -> None:
+    def test_update_organization_partial_fields(self, client: TestClient, super_admin_token: str) -> None:
         """Test updating only some fields."""
         # Create organization
-        org_id = create_test_org(test_repo, "Original Name", "Original description")
+        org_id = create_test_org(client, super_admin_token, "Original Name", "Original description")
 
         update_data = {"description": "New description only"}
 
@@ -289,10 +279,10 @@ class TestUpdateOrganization:
         assert data["name"] == "Original Name"  # Unchanged
         assert data["description"] == "New description only"  # Updated
 
-    def test_deactivate_organization(self, client: TestClient, super_admin_token: str, test_repo: Repository) -> None:
+    def test_deactivate_organization(self, client: TestClient, super_admin_token: str) -> None:
         """Test deactivating an organization."""
         # Create organization
-        org_id = create_test_org(test_repo, "Active Org")
+        org_id = create_test_org(client, super_admin_token, "Active Org")
 
         update_data = {"is_active": False}
 
@@ -335,15 +325,11 @@ class TestUpdateOrganization:
         assert response.status_code == 404
         assert "not found" in response.json()["detail"]
 
-    def test_update_to_duplicate_name_fails(
-        self, client: TestClient, super_admin_token: str, test_repo: Repository
-    ) -> None:
+    def test_update_to_duplicate_name_fails(self, client: TestClient, super_admin_token: str) -> None:
         """Test updating to duplicate name fails."""
         # Create two organizations
-        test_repo.organizations.create(
-            OrganizationCreateCommand(organization_data=OrganizationData(name="Organization 1"))
-        )
-        org2_id = create_test_org(test_repo, "Organization 2")
+        create_test_org(client, super_admin_token, "Organization 1")
+        org2_id = create_test_org(client, super_admin_token, "Organization 2")
 
         # Attempt to update org2 to have same name as org1
         update_data = {"name": "Organization 1"}
@@ -409,7 +395,7 @@ class TestOrganizationWorkflows:
         assert final_get.json()["description"] == "Updated workflow description"
 
     def test_regular_user_can_only_see_own_organization(
-        self, client: TestClient, super_admin_token: str, org_admin_token: tuple[str, str], test_repo: Repository
+        self, client: TestClient, super_admin_token: str, org_admin_token: tuple[str, str]
     ) -> None:
         """Test data isolation between organizations for regular users."""
         token, user_org_id = org_admin_token

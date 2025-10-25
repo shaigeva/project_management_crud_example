@@ -7,69 +7,48 @@ filtering, and all specialized update operations for tickets.
 import pytest
 from fastapi.testclient import TestClient
 
-from project_management_crud_example.dal.sqlite.repository import Repository
-from project_management_crud_example.domain_models import (
-    UserCreateCommand,
-    UserData,
-    UserRole,
-)
-from tests.conftest import client, test_repo  # noqa: F401
+from tests.conftest import client  # noqa: F401
+from tests.fixtures.auth_fixtures import super_admin_token  # noqa: F401
 from tests.fixtures.data_fixtures import organization, second_organization  # noqa: F401
-from tests.helpers import auth_headers, create_test_user
+from tests.helpers import auth_headers, create_write_user
 
 # Local fixtures for ticket tests - create multiple users in the SAME organization
 
 
 @pytest.fixture
-def org_admin_token(test_repo: Repository, client: TestClient, organization: str) -> tuple[str, str]:
+def org_admin_token(client: TestClient, organization: str, super_admin_token: str) -> tuple[str, str]:
     """Create Admin user in shared organization and return token and org_id."""
-    user_data = UserData(username="admin", email="admin@example.com", full_name="Admin User")
-    password = "AdminPass123"
-    test_repo.users.create(
-        UserCreateCommand(user_data=user_data, password=password, organization_id=organization, role=UserRole.ADMIN)
-    )
+    from tests.helpers import create_admin_user
+
+    _, password = create_admin_user(client, super_admin_token, organization)
     response = client.post("/auth/login", json={"username": "admin", "password": password})
     return response.json()["access_token"], organization
 
 
 @pytest.fixture
-def project_manager_token(test_repo: Repository, client: TestClient, organization: str) -> tuple[str, str]:
+def project_manager_token(client: TestClient, organization: str, super_admin_token: str) -> tuple[str, str]:
     """Create Project Manager user in shared organization."""
-    user_data = UserData(username="projectmanager", email="pm@example.com", full_name="Project Manager")
-    password = "PMPass123"
-    test_repo.users.create(
-        UserCreateCommand(
-            user_data=user_data, password=password, organization_id=organization, role=UserRole.PROJECT_MANAGER
-        )
-    )
+    from tests.helpers import create_project_manager
+
+    _, password = create_project_manager(client, super_admin_token, organization)
     response = client.post("/auth/login", json={"username": "projectmanager", "password": password})
     return response.json()["access_token"], organization
 
 
 @pytest.fixture
-def write_user_token(test_repo: Repository, client: TestClient, organization: str) -> tuple[str, str]:
+def write_user_token(client: TestClient, organization: str, super_admin_token: str) -> tuple[str, str]:
     """Create Write Access user in shared organization."""
-    user_data = UserData(username="writer", email="writer@example.com", full_name="Write User")
-    password = "WriterPass123"
-    test_repo.users.create(
-        UserCreateCommand(
-            user_data=user_data, password=password, organization_id=organization, role=UserRole.WRITE_ACCESS
-        )
-    )
+    _, password = create_write_user(client, super_admin_token, organization)
     response = client.post("/auth/login", json={"username": "writer", "password": password})
     return response.json()["access_token"], organization
 
 
 @pytest.fixture
-def read_user_token(test_repo: Repository, client: TestClient, organization: str) -> tuple[str, str]:
+def read_user_token(client: TestClient, organization: str, super_admin_token: str) -> tuple[str, str]:
     """Create Read Access user in shared organization."""
-    user_data = UserData(username="reader", email="reader@example.com", full_name="Read User")
-    password = "ReaderPass123"
-    test_repo.users.create(
-        UserCreateCommand(
-            user_data=user_data, password=password, organization_id=organization, role=UserRole.READ_ACCESS
-        )
-    )
+    from tests.helpers import create_read_user
+
+    _, password = create_read_user(client, super_admin_token, organization)
     response = client.post("/auth/login", json={"username": "reader", "password": password})
     return response.json()["access_token"], organization
 
@@ -166,7 +145,7 @@ class TestCreateTicket:
         assert "permission" in response.json()["detail"].lower()
 
     def test_create_ticket_with_assignee(
-        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
+        self, client: TestClient, org_admin_token: tuple[str, str], super_admin_token: str
     ) -> None:
         """Test creating ticket with initial assignee."""
         token, org_id = org_admin_token
@@ -177,7 +156,7 @@ class TestCreateTicket:
         project_id = project_response.json()["id"]
 
         # Create assignee via helper
-        assignee_id = create_test_user(test_repo, org_id, username="assignee")
+        assignee_id, _ = create_write_user(client, super_admin_token, org_id, username="assignee")
 
         # Create ticket with assignee
         response = client.post(
@@ -265,7 +244,7 @@ class TestGetTicket:
         assert data["title"] == "Test Ticket"
 
     def test_get_ticket_from_different_org_fails(
-        self, client: TestClient, org_admin_token: tuple[str, str], second_organization: str, test_repo: Repository
+        self, client: TestClient, org_admin_token: tuple[str, str], second_organization: str, super_admin_token: str
     ) -> None:
         """Test that users cannot access tickets from different organizations."""
         token, org_id = org_admin_token
@@ -280,16 +259,17 @@ class TestGetTicket:
         )
         ticket_id = create_response.json()["id"]
 
-        # Create user in org2
-        org2_user_data = UserData(username="org2admin", email="org2@test.com", full_name="Org2 Admin")
-        org2_password = "Org2Pass123"
-        org2_command = UserCreateCommand(
-            user_data=org2_user_data,
-            password=org2_password,
-            organization_id=second_organization,
-            role=UserRole.ADMIN,
+        # Create user in org2 via API
+        from tests.helpers import create_admin_user
+
+        _, org2_password = create_admin_user(
+            client,
+            super_admin_token,
+            second_organization,
+            username="org2admin",
+            email="org2@test.com",
+            full_name="Org2 Admin",
         )
-        test_repo.users.create(org2_command)
 
         org2_token = client.post("/auth/login", json={"username": "org2admin", "password": org2_password}).json()[
             "access_token"
@@ -395,7 +375,7 @@ class TestListTickets:
         assert data[0]["id"] == todo_id
 
     def test_list_tickets_filtered_by_assignee(
-        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
+        self, client: TestClient, org_admin_token: tuple[str, str], super_admin_token: str
     ) -> None:
         """Test filtering tickets by assignee."""
         token, org_id = org_admin_token
@@ -406,7 +386,7 @@ class TestListTickets:
         project_id = project_response.json()["id"]
 
         # Create assignee via helper
-        assignee_id = create_test_user(test_repo, org_id, username="assignee")
+        assignee_id, _ = create_write_user(client, super_admin_token, org_id, username="assignee")
 
         # Create tickets
         client.post(
@@ -426,7 +406,7 @@ class TestListTickets:
         assert data[0]["assignee_id"] == assignee_id
 
     def test_list_tickets_combined_filters(
-        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
+        self, client: TestClient, org_admin_token: tuple[str, str], super_admin_token: str
     ) -> None:
         """Test filtering tickets with multiple criteria."""
         token, org_id = org_admin_token
@@ -437,7 +417,7 @@ class TestListTickets:
         project_id = project_response.json()["id"]
 
         # Create assignee via helper
-        assignee_id = create_test_user(test_repo, org_id, username="assignee")
+        assignee_id, _ = create_write_user(client, super_admin_token, org_id, username="assignee")
 
         # Create matching ticket
         match_response = client.post(
@@ -467,7 +447,7 @@ class TestListTickets:
         assert data[0]["id"] == match_id
 
     def test_list_tickets_respects_organization_boundary(
-        self, client: TestClient, org_admin_token: tuple[str, str], second_organization: str, test_repo: Repository
+        self, client: TestClient, org_admin_token: tuple[str, str], second_organization: str, super_admin_token: str
     ) -> None:
         """Test that users only see tickets from their organization."""
         token, org_id = org_admin_token
@@ -478,16 +458,17 @@ class TestListTickets:
         project1_id = project1_response.json()["id"]
         client.post(f"/api/tickets?project_id={project1_id}", json={"title": "Org1 Ticket"}, headers=headers)
 
-        # Create user in org2
-        org2_user_data = UserData(username="org2admin", email="org2@test.com", full_name="Org2 Admin")
-        org2_password = "Org2Pass123"
-        org2_command = UserCreateCommand(
-            user_data=org2_user_data,
-            password=org2_password,
-            organization_id=second_organization,
-            role=UserRole.ADMIN,
+        # Create user in org2 via API
+        from tests.helpers import create_admin_user
+
+        _, org2_password = create_admin_user(
+            client,
+            super_admin_token,
+            second_organization,
+            username="org2admin",
+            email="org2@test.com",
+            full_name="Org2 Admin",
         )
-        test_repo.users.create(org2_command)
 
         org2_token = client.post("/auth/login", json={"username": "org2admin", "password": org2_password}).json()[
             "access_token"
@@ -743,7 +724,7 @@ class TestAssignTicket:
     """Test PUT /api/tickets/{id}/assignee endpoint."""
 
     def test_assign_ticket_to_user(
-        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
+        self, client: TestClient, org_admin_token: tuple[str, str], super_admin_token: str
     ) -> None:
         """Test assigning ticket to a user."""
         token, org_id = org_admin_token
@@ -757,7 +738,7 @@ class TestAssignTicket:
         ticket_id = create_response.json()["id"]
 
         # Create assignee via helper
-        assignee_id = create_test_user(test_repo, org_id, username="assignee")
+        assignee_id, _ = create_write_user(client, super_admin_token, org_id, username="assignee")
 
         # Assign ticket
         response = client.put(f"/api/tickets/{ticket_id}/assignee", json={"assignee_id": assignee_id}, headers=headers)
@@ -765,7 +746,9 @@ class TestAssignTicket:
         assert response.status_code == 200
         assert response.json()["assignee_id"] == assignee_id
 
-    def test_unassign_ticket(self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository) -> None:
+    def test_unassign_ticket(
+        self, client: TestClient, org_admin_token: tuple[str, str], super_admin_token: str
+    ) -> None:
         """Test unassigning ticket (set to null)."""
         token, org_id = org_admin_token
         headers = auth_headers(token)
@@ -775,7 +758,7 @@ class TestAssignTicket:
         project_id = project_response.json()["id"]
 
         # Create assignee via helper
-        assignee_id = create_test_user(test_repo, org_id, username="assignee")
+        assignee_id, _ = create_write_user(client, super_admin_token, org_id, username="assignee")
 
         # Create ticket with assignee
         create_response = client.post(
@@ -796,7 +779,7 @@ class TestAssignTicket:
         client: TestClient,
         org_admin_token: tuple[str, str],
         write_user_token: tuple[str, str],
-        test_repo: Repository,
+        super_admin_token: str,
     ) -> None:
         """Test that Write user cannot assign tickets."""
         admin_tok, org_id = org_admin_token
@@ -814,7 +797,7 @@ class TestAssignTicket:
         ticket_id = create_response.json()["id"]
 
         # Create assignee via helper
-        assignee_id = create_test_user(test_repo, org_id, username="assignee")
+        assignee_id, _ = create_write_user(client, super_admin_token, org_id, username="assignee")
 
         # Attempt to assign
         response = client.put(
@@ -906,7 +889,7 @@ class TestTicketWorkflows:
     """Test complete ticket workflows."""
 
     def test_complete_ticket_lifecycle(
-        self, client: TestClient, org_admin_token: tuple[str, str], test_repo: Repository
+        self, client: TestClient, org_admin_token: tuple[str, str], super_admin_token: str
     ) -> None:
         """Test complete workflow: create → assign → update status → move → delete."""
         token, org_id = org_admin_token
@@ -920,7 +903,7 @@ class TestTicketWorkflows:
         project2_id = project2_response.json()["id"]
 
         # Create assignee via helper
-        assignee_id = create_test_user(test_repo, org_id, username="assignee")
+        assignee_id, _ = create_write_user(client, super_admin_token, org_id, username="assignee")
 
         # 1. Create ticket
         create_response = client.post(
