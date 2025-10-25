@@ -31,7 +31,8 @@
       "Bash(python -m pytest:*)",
       "Bash(perl:*)",
       "Bash(for test in \"test_update_user_partial_fields\" \"test_update_user_as_regular_user_fails\")",
-      "Bash(do echo \"=== $test ===\" sed -n \"/def $test/,/^    def test_/p\" /Users/shai/proj/shaig/learn/ai_framework_posts/project_management_crud_example/tests/api/test_user_api.py)"
+      "Bash(do echo \"=== $test ===\" sed -n \"/def $test/,/^    def test_/p\" /Users/shai/proj/shaig/learn/ai_framework_posts/project_management_crud_example/tests/api/test_user_api.py)",
+      "Bash(sqlite3:*)"
     ],
     "deny": [],
     "ask": [],
