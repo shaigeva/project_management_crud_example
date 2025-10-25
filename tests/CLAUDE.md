@@ -225,6 +225,132 @@ def test_get_stub_entity_by_non_existent_id_is_not_found(self, client: TestClien
     assert data["detail"] == "Stub entity not found"
 ```
 
+### **API Test Helper Functions - CRITICAL**
+
+**ALWAYS use role-specific helper functions** instead of generic create_test_user with explicit role parameters.
+
+#### **✅ CORRECT: Use Role-Specific Helpers**
+
+```python
+from tests.helpers import create_admin_user, create_project_manager, create_write_user, create_read_user
+
+# Create admin user - expressive defaults make intent clear
+user_id, password = create_admin_user(client, super_admin_token, org_id)
+
+# Create project manager - defaults to username="projectmanager", email="pm@example.com"
+pm_id, pm_password = create_project_manager(client, super_admin_token, org_id)
+
+# Override username only when needed for test-specific reasons
+user_id, password = create_write_user(client, super_admin_token, org_id, username="writer2")
+```
+
+#### **❌ WRONG: Generic Helper with Explicit Role**
+
+```python
+# DON'T DO THIS - verbose and requires manual parameter passing
+user_id, password = create_test_user(
+    client,
+    super_admin_token,
+    org_id,
+    username="admin",
+    email="admin@example.com",
+    full_name="Admin User",
+    role=UserRole.ADMIN,  # Role should be implicit in helper name
+)
+```
+
+#### **Why Use Role-Specific Helpers?**
+
+1. **Self-documenting**: `create_admin_user()` immediately communicates intent
+2. **Expressive defaults**: Email "admin@example.com" clearly indicates admin user
+3. **Less boilerplate**: Only override parameters when test requires specific values
+4. **Consistency**: All tests use same defaults, making test data predictable
+
+#### **Available Role-Specific Helpers**
+
+Located in `tests/helpers.py`:
+
+- `create_admin_user()` - username="admin", email="admin@example.com"
+- `create_project_manager()` - username="projectmanager", email="pm@example.com"
+- `create_write_user()` - username="writer", email="writer@example.com"
+- `create_read_user()` - username="reader", email="reader@example.com"
+
+All helpers use expressive defaults that make the role immediately obvious.
+
+### **Fixture Naming and Organization**
+
+#### **Avoid Fixture Name Shadowing**
+
+When creating local fixtures, **NEVER shadow global fixtures** from `tests/fixtures/`.
+
+**❌ WRONG: Shadowing Global Fixtures**
+
+```python
+# In test_ticket_api.py - local fixture shadows global one
+@pytest.fixture
+def org_admin_token(client: TestClient, organization: str, super_admin_token: str):
+    # This shadows tests/fixtures/auth_fixtures.py::org_admin_token
+    ...
+```
+
+**✅ CORRECT: Use Descriptive Prefix**
+
+```python
+# In test_ticket_api.py - clear, non-shadowing name
+@pytest.fixture
+def shared_org_admin_token(client: TestClient, organization: str, super_admin_token: str):
+    """Create Admin user in shared organization and return token and org_id."""
+    from tests.helpers import create_admin_user
+
+    _, password = create_admin_user(client, super_admin_token, organization)
+    response = client.post("/auth/login", json={"username": "admin", "password": password})
+    return response.json()["access_token"], organization
+```
+
+#### **Global vs Local Fixtures**
+
+**Global Fixtures** (`tests/fixtures/auth_fixtures.py`):
+- Each creates its **own separate organization**
+- Use when tests need **organization isolation**
+- Examples: `org_admin_token`, `project_manager_token`, `write_user_token`
+
+**Local Fixtures** (test file-specific):
+- All users share **same organization**
+- Use when tests need **cross-user scenarios** in same org
+- **Prefix with context** (e.g., `shared_org_admin_token`)
+- Common in ticket/project tests where multiple users collaborate
+
+**Pattern for Shared-Org Fixtures:**
+
+```python
+# Note: Prefix with 'shared_org_' to indicate all users share same organization
+@pytest.fixture
+def shared_org_admin_token(client: TestClient, organization: str, super_admin_token: str):
+    """Create Admin user in shared organization."""
+    _, password = create_admin_user(client, super_admin_token, organization)
+    response = client.post("/auth/login", json={"username": "admin", "password": password})
+    return response.json()["access_token"], organization
+
+@pytest.fixture
+def shared_org_pm_token(client: TestClient, organization: str, super_admin_token: str):
+    """Create Project Manager in shared organization."""
+    _, password = create_project_manager(client, super_admin_token, organization)
+    response = client.post("/auth/login", json={"username": "projectmanager", "password": password})
+    return response.json()["access_token"], organization
+```
+
+#### **When to Create Local Fixtures**
+
+Create local fixtures when:
+- ✅ Multiple users need to be in the **same organization** for test scenarios
+- ✅ Testing **cross-user interactions** (assigning tickets, viewing others' work)
+- ✅ Testing **organization-scoped permissions** (can/cannot see other users' data)
+
+Use global fixtures when:
+- ✅ Each test needs **organization isolation**
+- ✅ No cross-user scenarios in same org
+- ✅ Standard permission/CRUD testing
+
 ## Core Testing Principles
 
 ### **Testing Guidelines**

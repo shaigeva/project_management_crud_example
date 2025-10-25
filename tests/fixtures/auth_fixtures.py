@@ -4,20 +4,22 @@ This module provides centralized fixtures for creating users with various roles
 and obtaining their authentication tokens via API endpoints.
 
 Note: Only the super_admin_token fixture uses repository for bootstrap.
-All other fixtures use API endpoints.
+All other fixtures use API endpoints and role-specific helpers.
 """
 
 import pytest
 from fastapi.testclient import TestClient
 
 from project_management_crud_example.dal.sqlite.repository import Repository
-from project_management_crud_example.domain_models import (
-    UserCreateCommand,
-    UserData,
-    UserRole,
-)
+from project_management_crud_example.domain_models import UserCreateCommand, UserData, UserRole
 from tests.conftest import client, test_repo  # noqa: F401
-from tests.helpers import create_test_org, create_test_user
+from tests.helpers import (
+    create_admin_user,
+    create_project_manager,
+    create_read_user,
+    create_test_org,
+    create_write_user,
+)
 
 
 @pytest.fixture
@@ -56,16 +58,8 @@ def org_admin_token(super_admin_token: str, client: TestClient) -> tuple[str, st
     # Create organization via API
     org_id = create_test_org(client, super_admin_token, "Test Organization", "Test org for admin")
 
-    # Create admin user via API
-    user_id, password = create_test_user(
-        client,
-        super_admin_token,
-        org_id,
-        username="orgadmin",
-        email="orgadmin@example.com",
-        full_name="Org Admin",
-        role=UserRole.ADMIN,
-    )
+    # Create admin user via API using role-specific helper
+    user_id, password = create_admin_user(client, super_admin_token, org_id, username="orgadmin")
 
     # Login to get token
     response = client.post("/auth/login", json={"username": "orgadmin", "password": password})
@@ -82,16 +76,8 @@ def project_manager_token(super_admin_token: str, client: TestClient) -> tuple[s
     # Create organization via API
     org_id = create_test_org(client, super_admin_token, "PM Organization", "Org for project manager")
 
-    # Create project manager user via API
-    user_id, password = create_test_user(
-        client,
-        super_admin_token,
-        org_id,
-        username="projectmanager",
-        email="pm@example.com",
-        full_name="Project Manager",
-        role=UserRole.PROJECT_MANAGER,
-    )
+    # Create project manager user via API using role-specific helper
+    user_id, password = create_project_manager(client, super_admin_token, org_id)
 
     # Login to get token
     response = client.post("/auth/login", json={"username": "projectmanager", "password": password})
@@ -108,16 +94,8 @@ def write_user_token(super_admin_token: str, client: TestClient) -> tuple[str, s
     # Create organization via API
     org_id = create_test_org(client, super_admin_token, "Writer Organization", "Org for write user")
 
-    # Create write access user via API
-    user_id, password = create_test_user(
-        client,
-        super_admin_token,
-        org_id,
-        username="writer",
-        email="writer@example.com",
-        full_name="Write User",
-        role=UserRole.WRITE_ACCESS,
-    )
+    # Create write access user via API using role-specific helper
+    user_id, password = create_write_user(client, super_admin_token, org_id)
 
     # Login to get token
     response = client.post("/auth/login", json={"username": "writer", "password": password})
@@ -134,16 +112,8 @@ def read_user_token(super_admin_token: str, client: TestClient) -> tuple[str, st
     # Create organization via API
     org_id = create_test_org(client, super_admin_token, "Reader Organization", "Org for read user")
 
-    # Create read access user via API
-    user_id, password = create_test_user(
-        client,
-        super_admin_token,
-        org_id,
-        username="reader",
-        email="reader@example.com",
-        full_name="Read User",
-        role=UserRole.READ_ACCESS,
-    )
+    # Create read access user via API using role-specific helper
+    user_id, password = create_read_user(client, super_admin_token, org_id)
 
     # Login to get token
     response = client.post("/auth/login", json={"username": "reader", "password": password})
