@@ -11,52 +11,38 @@ from fastapi.testclient import TestClient
 
 from project_management_crud_example.app import app
 from project_management_crud_example.config import settings
-from project_management_crud_example.dal.sqlite.repository import Repository
-from project_management_crud_example.domain_models import UserCreateCommand, UserData, UserRole
-from tests.conftest import client, test_repo  # noqa: F401
+from tests.conftest import client  # noqa: F401
+from tests.fixtures.auth_fixtures import super_admin_token  # noqa: F401
+from tests.helpers import create_admin_user, create_test_org
 
 
 @pytest.fixture
-def test_user(test_repo: Repository) -> tuple[str, str]:
-    """Create a test user and return (user_id, password)."""
-    user_data = UserData(
-        username="testuser",
-        email="testuser@example.com",
-        full_name="Test User",
-    )
+def test_user(client: TestClient, super_admin_token: str) -> tuple[str, str]:
+    """Create a test user via API and return (user_id, password)."""
+    # Create organization first
+    org_id = create_test_org(client, super_admin_token, "Test Org")
 
-    # Create user with known password
-    password = "TestPassword123"
-    command = UserCreateCommand(
-        user_data=user_data,
-        password=password,
-        organization_id="org-123",
-        role=UserRole.ADMIN,
-    )
-    user = test_repo.users.create(command)
+    # Create user via API - returns generated password
+    user_id, password = create_admin_user(client, super_admin_token, org_id, username="testuser")
 
-    return user.id, password
+    return user_id, password
 
 
 @pytest.fixture
-def test_super_admin(test_repo: Repository) -> tuple[str, str]:
-    """Create a super admin user and return (user_id, password)."""
-    user_data = UserData(
-        username="superadmin",
-        email="superadmin@example.com",
-        full_name="Super Admin",
-    )
+def test_super_admin(client: TestClient, super_admin_token: str) -> tuple[str, str]:
+    """Return super admin credentials.
 
-    password = "SuperAdminPassword123"
-    command = UserCreateCommand(
-        user_data=user_data,
-        password=password,
-        organization_id=None,  # Super admin has no organization
-        role=UserRole.SUPER_ADMIN,
-    )
-    user = test_repo.users.create(command)
+    Note: Uses existing super_admin_token fixture which creates the user.
+    Password matches the one from auth_fixtures.py
+    """
+    username = "superadmin"
+    password = "SuperAdminPass123"  # From super_admin_token fixture
 
-    return user.id, password
+    # Login to get user_id
+    response = client.post("/auth/login", json={"username": username, "password": password})
+    user_id = response.json()["user_id"]
+
+    return user_id, password
 
 
 class TestLogin:
@@ -95,7 +81,7 @@ class TestLogin:
         assert "user_id" in data
         assert data["user_id"] == user_id
         assert "organization_id" in data
-        assert data["organization_id"] == "org-123"
+        assert data["organization_id"] is not None  # Org created dynamically via API
         assert "role" in data
         assert data["role"] == "admin"
 
@@ -124,17 +110,15 @@ class TestLogin:
         assert data["error_code"] == "INVALID_CREDENTIALS"
 
     def test_login_with_inactive_user_fails(
-        self, client: TestClient, test_user: tuple[str, str], test_repo: Repository
+        self, client: TestClient, test_user: tuple[str, str], super_admin_token: str
     ) -> None:
         """Test login with inactive user returns 401 ACCOUNT_INACTIVE."""
         user_id, password = test_user
 
-        # Deactivate user using test_repo's session
-        from project_management_crud_example.dal.sqlite.orm_data_models import UserORM
+        # Deactivate user via API
+        from tests.helpers import auth_headers
 
-        orm_user = test_repo.session.query(UserORM).filter(UserORM.id == user_id).first()
-        orm_user.is_active = False
-        test_repo.session.commit()
+        client.put(f"/api/users/{user_id}", json={"is_active": False}, headers=auth_headers(super_admin_token))
 
         response = client.post(
             "/auth/login",
@@ -210,6 +194,7 @@ class TestLogin:
         assert "user_id" in payload
         assert payload["user_id"] == user_id
         assert "organization_id" in payload
+        assert payload["organization_id"] is not None  # Org created dynamically via API
         assert "exp" in payload
         assert "iat" in payload
         # Role is NOT in token - fetched from DB on each request
@@ -409,7 +394,7 @@ class TestProtectedEndpoints:
             assert response.status_code == 401
 
     def test_request_with_deactivated_user_token_fails(
-        self, client: TestClient, test_user: tuple[str, str], test_repo: Repository
+        self, client: TestClient, test_user: tuple[str, str], super_admin_token: str
     ) -> None:
         """Test user deactivated after token issued cannot access protected endpoints."""
         user_id, password = test_user
@@ -421,12 +406,10 @@ class TestProtectedEndpoints:
         )
         token = login_response.json()["access_token"]
 
-        # Deactivate user using test_repo's session
-        from project_management_crud_example.dal.sqlite.orm_data_models import UserORM
+        # Deactivate user via API
+        from tests.helpers import auth_headers
 
-        orm_user = test_repo.session.query(UserORM).filter(UserORM.id == user_id).first()
-        orm_user.is_active = False
-        test_repo.session.commit()
+        client.put(f"/api/users/{user_id}", json={"is_active": False}, headers=auth_headers(super_admin_token))
 
         # Create a test endpoint
         from fastapi import Depends
@@ -447,7 +430,7 @@ class TestProtectedEndpoints:
         assert data["error_code"] == "ACCOUNT_INACTIVE"
 
     def test_token_validation_fetches_current_role(
-        self, client: TestClient, test_user: tuple[str, str], test_repo: Repository
+        self, client: TestClient, test_user: tuple[str, str], super_admin_token: str
     ) -> None:
         """Test role changes are reflected immediately (fetched from DB, not token)."""
         user_id, password = test_user
@@ -459,12 +442,10 @@ class TestProtectedEndpoints:
         )
         token = login_response.json()["access_token"]
 
-        # Change user role in database using test_repo's session
-        from project_management_crud_example.dal.sqlite.orm_data_models import UserORM
+        # Change user role via API
+        from tests.helpers import auth_headers
 
-        orm_user = test_repo.session.query(UserORM).filter(UserORM.id == user_id).first()
-        orm_user.role = UserRole.READ_ACCESS.value
-        test_repo.session.commit()
+        client.put(f"/api/users/{user_id}", json={"role": "read_access"}, headers=auth_headers(super_admin_token))
 
         # Create a test endpoint that returns current user
         from fastapi import Depends
