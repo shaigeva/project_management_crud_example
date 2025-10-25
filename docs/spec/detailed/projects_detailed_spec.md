@@ -1,10 +1,10 @@
 # Projects: Detailed Specification
 
-**Status**: 🟢 4/4 requirements implemented (100%)
+**Status**: 🟢 5/5 requirements implemented (100%)
 **Parent**: [Main Spec](../main_spec.md#feature-projects)
-**Last Updated**: 2025-01-25
+**Last Updated**: 2025-01-26
 
-**Note**: This detailed spec covers requirements REQ-PROJ-001, REQ-PROJ-002, REQ-PROJ-003, and REQ-PROJ-007 (the core CRUD behaviors and validation). Requirements REQ-PROJ-004 (update), REQ-PROJ-005 (delete), and REQ-PROJ-006 (organization scoping) are implemented but documented through tests rather than separate spec sections. REQ-PROJ-009 and REQ-PROJ-010 are pending future implementation.
+**Note**: This detailed spec covers requirements REQ-PROJ-001, REQ-PROJ-002, REQ-PROJ-003, REQ-PROJ-007, and REQ-PROJ-009 (the core CRUD behaviors, validation, and filtering). Requirements REQ-PROJ-004 (update), REQ-PROJ-005 (delete), and REQ-PROJ-006 (organization scoping) are implemented but documented through tests rather than separate spec sections. REQ-PROJ-010 (archive) is pending future implementation.
 
 ## Rationale
 
@@ -126,3 +126,33 @@ User receives clear error messages when providing invalid data, and no invalid d
 - Name too long (>255 characters)
 - Wrong data type for field
 - Invalid characters (if any restrictions exist)
+
+---
+
+## REQ-PROJ-009: Filter and search projects
+**Status**: ✅ Implemented
+**Type**: Product Behavior
+
+### Scenario
+When a user lists projects, they may want to filter by name or active status
+
+### Observable Behavior
+Users can filter project lists using query parameters for name substring search and active status filtering.
+
+### Acceptance Criteria
+- GET /projects?name=substring returns projects containing substring in name (case-insensitive)
+- GET /projects?is_active=true returns only active projects
+- GET /projects?is_active=false returns only inactive projects
+- GET /projects?name=substring&is_active=true combines both filters
+- Name search is case-insensitive (backend, BACKEND, Backend all match "Backend API")
+- Filters respect organization scoping (users only see projects in their org)
+- Super Admin filters work across all organizations
+- No matches returns empty array []
+- Filters work with all role permissions (all roles can filter within their access)
+
+### Edge Cases
+- Filter with no matches returns empty array
+- Empty name parameter (treated as no filter)
+- Name with special characters
+- Multiple projects matching filter
+- Filter combining multiple criteria

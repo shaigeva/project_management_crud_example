@@ -134,7 +134,7 @@ Different users need different levels of access. The system supports five roles:
 ---
 
 ## Feature: Projects
-**Status**: 🟢 8/10 requirements implemented (80%)
+**Status**: 🟢 9/10 requirements implemented (90%)
 **Detail Spec**: [detailed/projects_detailed_spec.md](detailed/projects_detailed_spec.md)
 **Purpose**: Organize work into projects
 **Version**: V1
@@ -151,10 +151,10 @@ Projects (e.g., "Backend", "Frontend") are containers for tickets. Users with ap
 - ✅ REQ-PROJ-006: Projects are organization-scoped
 - ✅ REQ-PROJ-007: Handle not-found errors
 - ✅ REQ-PROJ-008: Handle validation errors
-- 🔴 REQ-PROJ-009: Filter/search projects
+- ✅ REQ-PROJ-009: Filter/search projects
 - 🔴 REQ-PROJ-010: Archive projects (soft delete)
 
-**Notes**: Core CRUD operations implemented with role-based authorization (Admin, Project Manager can create/update; Admin can delete). Organization scoping enforced - users can only access projects in their organization (Super Admin can access all). Filter/search and soft delete are pending future implementation.
+**Notes**: Core CRUD operations implemented with role-based authorization (Admin, Project Manager can create/update; Admin can delete). Organization scoping enforced - users can only access projects in their organization (Super Admin can access all). Filtering by name (case-insensitive substring) and is_active status implemented. Soft delete/archive pending future implementation.
 
 ---
 
