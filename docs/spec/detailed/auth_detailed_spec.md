@@ -1,8 +1,8 @@
 # User Authentication: Detailed Specification
 
-**Status**: 🔴 0/6 requirements implemented (0%)
+**Status**: 🟡 5/6 requirements implemented (83%)
 **Parent**: [Main Spec](../main_spec.md#feature-user-authentication)
-**Last Updated**: 2025-01-20
+**Last Updated**: 2025-01-25
 
 ## Rationale
 
@@ -17,7 +17,7 @@ Users receive generated passwords when created and can change them afterwards.
 ---
 
 ## REQ-AUTH-001: User login with username/password
-**Status**: 🔴 Not Implemented
+**Status**: ✅ Implemented
 **Type**: Product Behavior
 
 ### Scenario
@@ -51,7 +51,7 @@ Users can authenticate with username and password to access the system.
 ---
 
 ## REQ-AUTH-002: Issue bearer token on successful login
-**Status**: 🔴 Not Implemented
+**Status**: ✅ Implemented
 **Type**: Product Behavior
 
 ### Scenario
@@ -76,7 +76,7 @@ Valid bearer token is returned that can be used for subsequent API calls.
 ---
 
 ## REQ-AUTH-003: Validate bearer token on protected endpoints
-**Status**: 🔴 Not Implemented
+**Status**: ✅ Implemented
 **Type**: Product Behavior
 
 ### Scenario
@@ -105,7 +105,7 @@ All endpoints (except login, health check) require valid bearer token.
 ---
 
 ## REQ-AUTH-004: User can change their password
-**Status**: 🔴 Not Implemented
+**Status**: 🔴 Not Implemented (ONLY REMAINING)
 **Type**: Product Behavior
 
 ### Scenario
@@ -138,7 +138,7 @@ Authenticated users can change their own password.
 ---
 
 ## REQ-AUTH-005: Token expiration and refresh
-**Status**: 🔴 Not Implemented
+**Status**: ✅ Implemented
 **Type**: Product Behavior
 
 ### Scenario
@@ -164,7 +164,7 @@ Tokens have limited lifetime and users must re-authenticate when expired.
 ---
 
 ## REQ-AUTH-006: Handle authentication errors
-**Status**: 🔴 Not Implemented
+**Status**: ✅ Implemented
 **Type**: Product Behavior
 
 ### Scenario
