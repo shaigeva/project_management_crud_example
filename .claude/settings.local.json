@@ -26,7 +26,9 @@
       "Bash(time uv run pytest:*)",
       "Bash(time ./devtools/run_all_agent_validations.sh:*)",
       "Bash(find:*)",
-      "Bash(uv remove:*)"
+      "Bash(uv remove:*)",
+      "Bash(ruff check:*)",
+      "Bash(python -m pytest:*)"
     ],
     "deny": [],
     "ask": [],
