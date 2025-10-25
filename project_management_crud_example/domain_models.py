@@ -42,6 +42,46 @@ class StubEntityUpdateCommand(BaseModel):
     description: Optional[str] = Field(None, max_length=1000, description="Stub entity description")
 
 
+# Organization Models
+
+
+class OrganizationData(BaseModel):
+    """Base organization data structure."""
+
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=255,
+        description="Organization name (must be unique)",
+    )
+    description: Optional[str] = Field(None, max_length=1000, description="Organization description")
+
+
+class Organization(OrganizationData):
+    """Complete organization model with metadata."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str = Field(..., description="Organization ID")
+    is_active: bool = Field(True, description="Whether organization is active")
+    created_at: datetime = Field(..., description="Creation timestamp")
+    updated_at: datetime = Field(..., description="Last update timestamp")
+
+
+class OrganizationCreateCommand(BaseModel):
+    """Command model for creating a new organization."""
+
+    organization_data: OrganizationData
+
+
+class OrganizationUpdateCommand(BaseModel):
+    """Command model for updating an existing organization."""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=255, description="Organization name")
+    description: Optional[str] = Field(None, max_length=1000, description="Organization description")
+    is_active: Optional[bool] = Field(None, description="Whether organization is active")
+
+
 # User Management Models
 
 

@@ -90,3 +90,14 @@ class InvalidTokenException(AuthHTTPException):
             error_code="INVALID_TOKEN",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+class InsufficientPermissionsException(AuthHTTPException):
+    """Raised when user lacks required permissions for an action."""
+
+    def __init__(self, detail: str = "Insufficient permissions") -> None:
+        super().__init__(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=detail,
+            error_code="INSUFFICIENT_PERMISSIONS",
+        )

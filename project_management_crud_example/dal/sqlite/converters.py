@@ -46,6 +46,20 @@ def orm_stub_entities_to_business_stub_entities(
     return [orm_stub_entity_to_business_stub_entity(orm_stub_entity) for orm_stub_entity in orm_stub_entities]
 
 
+def orm_organization_to_domain_organization(
+    orm_organization: orm_data_models.OrganizationORM,
+) -> domain_models.Organization:
+    """Convert an ORM Organization model to a domain Organization model."""
+    return domain_models.Organization(
+        id=str(orm_organization.id),
+        name=orm_organization.name,  # type: ignore[arg-type]
+        description=orm_organization.description,  # type: ignore[arg-type]
+        is_active=orm_organization.is_active,  # type: ignore[arg-type]
+        created_at=orm_organization.created_at,  # type: ignore[arg-type]
+        updated_at=orm_organization.updated_at,  # type: ignore[arg-type]
+    )
+
+
 def orm_user_to_domain_user(
     orm_user: orm_data_models.UserORM,
 ) -> domain_models.User:

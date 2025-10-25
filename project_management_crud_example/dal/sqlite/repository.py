@@ -14,9 +14,13 @@ import logging
 from typing import List, Optional
 
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from project_management_crud_example.domain_models import (
+    Organization,
+    OrganizationCreateCommand,
+    OrganizationUpdateCommand,
     StubEntity,
     StubEntityCreateCommand,
     StubEntityUpdateCommand,
@@ -27,12 +31,13 @@ from project_management_crud_example.domain_models import (
 from project_management_crud_example.utils.password import hash_password
 
 from .converters import (
+    orm_organization_to_domain_organization,
     orm_stub_entities_to_business_stub_entities,
     orm_stub_entity_to_business_stub_entity,
     orm_user_to_domain_user,
     orm_user_to_user_auth_data,
 )
-from .orm_data_models import StubEntityORM, UserORM
+from .orm_data_models import OrganizationORM, StubEntityORM, UserORM
 
 logger = logging.getLogger(__name__)
 
@@ -41,15 +46,17 @@ class Repository:
     """Single repository for all data access operations.
 
     Organized using nested classes for clarity:
+    - repo.organizations - organization operations
     - repo.users - user operations
     - repo.stub_entities - scaffolding/example operations
 
-    Future: repo.organizations, repo.projects, repo.tickets, etc.
+    Future: repo.projects, repo.tickets, etc.
     """
 
     def __init__(self, session: Session) -> None:
         """Initialize the repository with a database session."""
         self.session = session
+        self.organizations = self.Organizations(session)
         self.users = self.Users(session)
         self.stub_entities = self.StubEntities(session)
 
@@ -219,6 +226,126 @@ class Repository:
             logger.info(f"Super Admin created successfully: {user.id}")
 
             return True, user
+
+    class Organizations:
+        """Organization-related data access operations."""
+
+        def __init__(self, session: Session) -> None:
+            self.session = session
+
+        def create(self, organization_create_command: OrganizationCreateCommand) -> Organization:
+            """Create a new organization.
+
+            Args:
+                organization_create_command: Command containing organization data
+
+            Returns:
+                Created Organization domain model
+
+            Raises:
+                IntegrityError: If organization with same name already exists
+            """
+            org_data = organization_create_command.organization_data
+            logger.debug(f"Creating new organization: {org_data.name}")
+
+            orm_organization = OrganizationORM(
+                name=org_data.name,
+                description=org_data.description,
+            )
+
+            try:
+                self.session.add(orm_organization)
+                self.session.commit()
+                self.session.refresh(orm_organization)
+                logger.debug(f"Organization created with ID: {orm_organization.id}")
+                return orm_organization_to_domain_organization(orm_organization)
+            except IntegrityError as e:
+                self.session.rollback()
+                logger.warning(f"Failed to create organization (likely duplicate name): {org_data.name}")
+                raise e
+
+        def get_by_id(self, organization_id: str) -> Optional[Organization]:
+            """Get a specific organization by ID."""
+            logger.debug(f"Retrieving organization by ID: {organization_id}")
+            orm_organization = (
+                self.session.query(OrganizationORM)
+                .filter(OrganizationORM.id == organization_id)  # type: ignore[operator]
+                .first()
+            )
+            if orm_organization is None:
+                logger.debug(f"Organization not found: {organization_id}")
+                return None
+            logger.debug(f"Organization found: {organization_id}")
+            return orm_organization_to_domain_organization(orm_organization)
+
+        def get_all(self) -> List[Organization]:
+            """Get all organizations from the database, ordered by creation date."""
+            orm_organizations = (
+                self.session.query(OrganizationORM).order_by(OrganizationORM.created_at).all()  # type: ignore[union-attr]
+            )
+            return [orm_organization_to_domain_organization(org) for org in orm_organizations]
+
+        def update(self, organization_id: str, update_command: OrganizationUpdateCommand) -> Optional[Organization]:
+            """Update an existing organization.
+
+            Args:
+                organization_id: ID of organization to update
+                update_command: Command containing fields to update
+
+            Returns:
+                Updated Organization if found, None otherwise
+
+            Raises:
+                IntegrityError: If updating to duplicate name
+            """
+            logger.debug(f"Updating organization: {organization_id}")
+            orm_organization = (
+                self.session.query(OrganizationORM)
+                .filter(OrganizationORM.id == organization_id)  # type: ignore[operator]
+                .first()
+            )
+
+            if orm_organization is None:
+                logger.debug(f"Organization not found for update: {organization_id}")
+                return None
+
+            # Update only provided fields
+            if update_command.name is not None:
+                orm_organization.name = update_command.name  # type: ignore[assignment]
+            if update_command.description is not None:
+                orm_organization.description = update_command.description  # type: ignore[assignment]
+            if update_command.is_active is not None:
+                orm_organization.is_active = update_command.is_active  # type: ignore[assignment]
+
+            try:
+                self.session.commit()
+                self.session.refresh(orm_organization)
+                logger.debug(f"Organization updated: {organization_id}")
+                return orm_organization_to_domain_organization(orm_organization)
+            except IntegrityError as e:
+                self.session.rollback()
+                logger.warning(f"Failed to update organization (likely duplicate name): {organization_id}")
+                raise e
+
+        def delete(self, organization_id: str) -> bool:
+            """Delete an organization by ID.
+
+            Note: This is for testing/cleanup purposes. In production, use is_active flag instead.
+            """
+            logger.debug(f"Deleting organization: {organization_id}")
+            orm_organization = (
+                self.session.query(OrganizationORM)
+                .filter(OrganizationORM.id == organization_id)  # type: ignore[operator]
+                .first()
+            )
+            if not orm_organization:
+                logger.debug(f"Organization not found for deletion: {organization_id}")
+                return False
+
+            self.session.delete(orm_organization)
+            self.session.commit()
+            logger.debug(f"Organization deleted: {organization_id}")
+            return True
 
     class StubEntities:
         """Stub entity operations - template/scaffolding for reference."""

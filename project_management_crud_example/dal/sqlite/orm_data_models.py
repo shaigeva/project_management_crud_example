@@ -46,6 +46,28 @@ class StubEntityORM(Base):
         return f"<StubEntity(id='{self.id}', name='{self.name}')>"
 
 
+class OrganizationORM(Base):
+    """SQLAlchemy ORM model for organizations."""
+
+    __tablename__ = "organizations"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    name = Column(String(255), unique=True, nullable=False, index=True)
+    description = Column(String(1000), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    def __repr__(self) -> str:
+        return f"<Organization(id='{self.id}', name='{self.name}')>"
+
+
 class UserORM(Base):
     """SQLAlchemy ORM model for users."""
 

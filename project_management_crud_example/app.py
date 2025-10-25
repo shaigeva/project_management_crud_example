@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse
 
 from project_management_crud_example.dependencies import get_database
 from project_management_crud_example.exceptions import AuthHTTPException
-from project_management_crud_example.routers import auth_api, health, stub_entity_api
+from project_management_crud_example.routers import auth_api, health, organization_api, stub_entity_api
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -71,6 +71,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth_api.router)
+app.include_router(organization_api.router)
 app.include_router(stub_entity_api.router)
 app.include_router(health.router)
 

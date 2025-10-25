@@ -11,10 +11,11 @@ from sqlalchemy.orm import Session
 
 from project_management_crud_example.dal.sqlite.database import Database
 from project_management_crud_example.dal.sqlite.repository import Repository, StubEntityRepository
-from project_management_crud_example.domain_models import User
+from project_management_crud_example.domain_models import User, UserRole
 from project_management_crud_example.exceptions import (
     AccountInactiveException,
     AuthenticationRequiredException,
+    InsufficientPermissionsException,
     InvalidTokenError,
     InvalidTokenException,
     TokenExpiredError,
@@ -98,6 +99,26 @@ async def get_current_user(
         raise AccountInactiveException()
 
     return user
+
+
+async def get_super_admin_user(
+    current_user: User = Depends(get_current_user),  # noqa: B008
+) -> User:
+    """Verify that current user is a Super Admin.
+
+    Args:
+        current_user: Current authenticated user
+
+    Returns:
+        User if they are Super Admin
+
+    Raises:
+        InsufficientPermissionsException: User is not a Super Admin
+    """
+    if current_user.role != UserRole.SUPER_ADMIN:
+        raise InsufficientPermissionsException(detail="Super Admin access required")
+
+    return current_user
 
 
 def get_stub_entity_repo(session: Session = Depends(get_db_session)) -> StubEntityRepository:  # noqa: B008
