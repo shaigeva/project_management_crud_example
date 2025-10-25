@@ -104,6 +104,7 @@ class Project(ProjectData):
 
     id: str = Field(..., description="Project ID")
     organization_id: str = Field(..., description="Organization ID this project belongs to")
+    is_active: bool = Field(True, description="Whether project is active")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
@@ -120,6 +121,7 @@ class ProjectUpdateCommand(BaseModel):
 
     name: Optional[str] = Field(None, min_length=1, max_length=255, description="Project name")
     description: Optional[str] = Field(None, max_length=1000, description="Project description")
+    is_active: Optional[bool] = Field(None, description="Whether project is active")
 
 
 # Ticket Models

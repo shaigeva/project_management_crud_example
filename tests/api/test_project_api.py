@@ -10,7 +10,7 @@ from tests.fixtures.auth_fixtures import (  # noqa: F401
     super_admin_token,
     write_user_token,
 )
-from tests.helpers import auth_headers, create_project_manager, create_test_org, create_test_project
+from tests.helpers import auth_headers, create_admin_user, create_project_manager, create_test_org, create_test_project
 
 
 class TestCreateProject:
@@ -367,6 +367,216 @@ class TestListProjects:
         response = client.get("/api/projects")
 
         assert response.status_code == 401
+
+
+class TestFilterProjects:
+    """Tests for GET /api/projects filtering functionality."""
+
+    def test_filter_projects_by_name(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
+        """Test filtering projects by name substring."""
+        token, org_id = org_admin_token
+
+        # Create multiple projects with different names
+        create_test_project(client, token, "Backend API")
+        create_test_project(client, token, "Frontend App")
+        create_test_project(client, token, "Mobile Backend")
+
+        # Filter by "backend" (case-insensitive)
+        response = client.get(
+            "/api/projects?name=backend",
+            headers=auth_headers(token),
+        )
+
+        assert response.status_code == 200
+        projects = response.json()
+        assert len(projects) == 2  # Backend API and Mobile Backend
+        names = {p["name"] for p in projects}
+        assert "Backend API" in names
+        assert "Mobile Backend" in names
+        assert "Frontend App" not in names
+
+    def test_filter_projects_by_name_case_insensitive(
+        self, client: TestClient, org_admin_token: tuple[str, str]
+    ) -> None:
+        """Test name filtering is case-insensitive."""
+        token, org_id = org_admin_token
+
+        create_test_project(client, token, "Backend API")
+        create_test_project(client, token, "frontend app")
+
+        # Try different case variations
+        for search_term in ["BACKEND", "backend", "Backend", "BaCkEnD"]:
+            response = client.get(
+                f"/api/projects?name={search_term}",
+                headers=auth_headers(token),
+            )
+
+            assert response.status_code == 200
+            projects = response.json()
+            assert len(projects) == 1
+            assert projects[0]["name"] == "Backend API"
+
+    def test_filter_projects_by_is_active(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
+        """Test filtering projects by active status."""
+        token, org_id = org_admin_token
+
+        # Create active project
+        active_id = create_test_project(client, token, "Active Project")
+
+        # Create inactive project
+        inactive_id = create_test_project(client, token, "Inactive Project")
+        client.put(
+            f"/api/projects/{inactive_id}",
+            json={"is_active": False},
+            headers=auth_headers(token),
+        )
+
+        # Filter for active projects only
+        response = client.get(
+            "/api/projects?is_active=true",
+            headers=auth_headers(token),
+        )
+
+        assert response.status_code == 200
+        projects = response.json()
+        project_ids = {p["id"] for p in projects}
+        assert active_id in project_ids
+        assert inactive_id not in project_ids
+
+    def test_filter_projects_by_is_active_false(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
+        """Test filtering for inactive projects only."""
+        token, org_id = org_admin_token
+
+        # Create active project
+        active_id = create_test_project(client, token, "Active Project")
+
+        # Create inactive project
+        inactive_id = create_test_project(client, token, "Inactive Project")
+        client.put(
+            f"/api/projects/{inactive_id}",
+            json={"is_active": False},
+            headers=auth_headers(token),
+        )
+
+        # Filter for inactive projects only
+        response = client.get(
+            "/api/projects?is_active=false",
+            headers=auth_headers(token),
+        )
+
+        assert response.status_code == 200
+        projects = response.json()
+        project_ids = {p["id"] for p in projects}
+        assert inactive_id in project_ids
+        assert active_id not in project_ids
+
+    def test_filter_projects_by_name_and_is_active(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
+        """Test combining name and is_active filters."""
+        token, org_id = org_admin_token
+
+        # Create projects
+        backend_active = create_test_project(client, token, "Backend API")
+        backend_inactive = create_test_project(client, token, "Backend Service")
+
+        # Deactivate backend service
+        client.put(
+            f"/api/projects/{backend_inactive}",
+            json={"is_active": False},
+            headers=auth_headers(token),
+        )
+
+        # Filter by name="backend" and is_active=true
+        response = client.get(
+            "/api/projects?name=backend&is_active=true",
+            headers=auth_headers(token),
+        )
+
+        assert response.status_code == 200
+        projects = response.json()
+        assert len(projects) == 1
+        assert projects[0]["id"] == backend_active
+        assert projects[0]["name"] == "Backend API"
+
+    def test_filter_projects_no_matches(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
+        """Test filtering with no matches returns empty array."""
+        token, org_id = org_admin_token
+
+        create_test_project(client, token, "Backend API")
+
+        # Search for non-existent name
+        response = client.get(
+            "/api/projects?name=nonexistent",
+            headers=auth_headers(token),
+        )
+
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_filter_projects_respects_organization_scope(
+        self, client: TestClient, org_admin_token: tuple[str, str], super_admin_token: str
+    ) -> None:
+        """Test filtering respects organization boundaries."""
+        token1, org1_id = org_admin_token
+
+        # Create org2 and its admin
+        org2_id = create_test_org(client, super_admin_token, "Org 2")
+        _, password2 = create_admin_user(client, super_admin_token, org2_id, username="admin2")
+        login2 = client.post("/auth/login", json={"username": "admin2", "password": password2})
+        token2 = login2.json()["access_token"]
+
+        # Create projects in both orgs with "backend" in name
+        create_test_project(client, token1, "Backend API")
+        create_test_project(client, token2, "Backend Service")
+
+        # Admin1 filters by "backend" - should only see org1 project
+        response1 = client.get(
+            "/api/projects?name=backend",
+            headers=auth_headers(token1),
+        )
+
+        assert response1.status_code == 200
+        projects1 = response1.json()
+        assert len(projects1) == 1
+        assert projects1[0]["organization_id"] == org1_id
+
+        # Admin2 filters by "backend" - should only see org2 project
+        response2 = client.get(
+            "/api/projects?name=backend",
+            headers=auth_headers(token2),
+        )
+
+        assert response2.status_code == 200
+        projects2 = response2.json()
+        assert len(projects2) == 1
+        assert projects2[0]["organization_id"] == org2_id
+
+    def test_filter_projects_as_super_admin_sees_all(
+        self, client: TestClient, org_admin_token: tuple[str, str], super_admin_token: str
+    ) -> None:
+        """Test Super Admin filtering sees projects across all organizations."""
+        token1, org1_id = org_admin_token
+
+        # Create org2 and its admin
+        org2_id = create_test_org(client, super_admin_token, "Org 2")
+        _, password2 = create_admin_user(client, super_admin_token, org2_id, username="admin2")
+        login2 = client.post("/auth/login", json={"username": "admin2", "password": password2})
+        token2 = login2.json()["access_token"]
+
+        # Create projects in both orgs with "backend" in name
+        create_test_project(client, token1, "Backend API")
+        create_test_project(client, token2, "Backend Service")
+
+        # Super Admin filters by "backend" - should see both
+        response = client.get(
+            "/api/projects?name=backend",
+            headers=auth_headers(super_admin_token),
+        )
+
+        assert response.status_code == 200
+        projects = response.json()
+        assert len(projects) == 2
+        org_ids = {p["organization_id"] for p in projects}
+        assert org_ids == {org1_id, org2_id}
 
 
 class TestUpdateProject:

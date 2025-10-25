@@ -77,6 +77,7 @@ class ProjectORM(Base):
     name = Column(String(255), nullable=False)
     description = Column(String(1000), nullable=True)
     organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=False, index=True)
+    is_active = Column(Boolean, default=True, nullable=False)
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(

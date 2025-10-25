@@ -565,6 +565,38 @@ class Repository:
             )
             return [orm_project_to_domain_project(proj) for proj in orm_projects]
 
+        def get_by_filters(
+            self,
+            organization_id: Optional[str] = None,
+            name: Optional[str] = None,
+            is_active: Optional[bool] = None,
+        ) -> List[Project]:
+            """Get projects filtered by various criteria.
+
+            Args:
+                organization_id: Filter by organization ID (required for non-Super Admin users)
+                name: Filter by name substring (case-insensitive)
+                is_active: Filter by active status
+
+            Returns:
+                List of projects matching all provided filters, ordered by creation date
+            """
+            logger.debug(
+                f"Retrieving projects with filters: organization_id={organization_id}, name={name}, is_active={is_active}"
+            )
+            query = self.session.query(ProjectORM)
+
+            if organization_id is not None:
+                query = query.filter(ProjectORM.organization_id == organization_id)  # type: ignore[operator]
+            if name is not None:
+                # Case-insensitive substring search
+                query = query.filter(ProjectORM.name.ilike(f"%{name}%"))  # type: ignore[attr-defined]
+            if is_active is not None:
+                query = query.filter(ProjectORM.is_active == is_active)  # type: ignore[operator]
+
+            orm_projects = query.order_by(ProjectORM.created_at).all()  # type: ignore[union-attr]
+            return [orm_project_to_domain_project(proj) for proj in orm_projects]
+
         def update(self, project_id: str, update_command: ProjectUpdateCommand) -> Optional[Project]:
             """Update an existing project.
 
@@ -589,6 +621,8 @@ class Repository:
                 orm_project.name = update_command.name  # type: ignore[assignment]
             if update_command.description is not None:
                 orm_project.description = update_command.description  # type: ignore[assignment]
+            if update_command.is_active is not None:
+                orm_project.is_active = update_command.is_active  # type: ignore[assignment]
 
             self.session.commit()
             self.session.refresh(orm_project)

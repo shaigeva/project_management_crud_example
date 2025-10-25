@@ -69,6 +69,7 @@ def orm_project_to_domain_project(
         name=orm_project.name,  # type: ignore[arg-type]
         description=orm_project.description,  # type: ignore[arg-type]
         organization_id=str(orm_project.organization_id),
+        is_active=orm_project.is_active,  # type: ignore[arg-type]
         created_at=orm_project.created_at,  # type: ignore[arg-type]
         updated_at=orm_project.updated_at,  # type: ignore[arg-type]
     )

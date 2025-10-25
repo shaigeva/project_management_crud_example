@@ -161,6 +161,30 @@ class TestProjectRepositoryUpdate:
         assert updated_project.description == "New description"
         assert updated_project.name == project.name  # Unchanged
 
+    def test_update_project_is_active(self, test_repo: Repository) -> None:
+        """Test updating project is_active status."""
+        # Create organization and project
+        org = create_test_org_via_repo(test_repo)
+        project = create_test_project_via_repo(test_repo, org.id, "Project")
+
+        # Verify project is active by default
+        assert project.is_active is True
+
+        # Deactivate project
+        update_command = ProjectUpdateCommand(is_active=False)
+        updated_project = test_repo.projects.update(project.id, update_command)
+
+        assert updated_project is not None
+        assert updated_project.is_active is False
+        assert updated_project.name == project.name  # Unchanged
+
+        # Reactivate project
+        reactivate_command = ProjectUpdateCommand(is_active=True)
+        reactivated_project = test_repo.projects.update(project.id, reactivate_command)
+
+        assert reactivated_project is not None
+        assert reactivated_project.is_active is True
+
     def test_update_project_all_fields(self, test_repo: Repository) -> None:
         """Test updating all project fields."""
         # Create organization and project
@@ -168,12 +192,13 @@ class TestProjectRepositoryUpdate:
         project = create_test_project_via_repo(test_repo, org.id, "Old Name", "Old description")
 
         # Update all fields
-        update_command = ProjectUpdateCommand(name="New Name", description="New description")
+        update_command = ProjectUpdateCommand(name="New Name", description="New description", is_active=False)
         updated_project = test_repo.projects.update(project.id, update_command)
 
         assert updated_project is not None
         assert updated_project.name == "New Name"
         assert updated_project.description == "New description"
+        assert updated_project.is_active is False
 
     def test_update_project_not_found(self, test_repo: Repository) -> None:
         """Test updating non-existent project returns None."""
@@ -237,6 +262,136 @@ class TestProjectRepositoryTimestamps:
         # Initially, created_at and updated_at should be very close
         time_diff = abs((project.updated_at - project.created_at).total_seconds())
         assert time_diff < 1.0  # Less than 1 second difference
+
+
+class TestProjectRepositoryFilters:
+    """Test project filtering operations."""
+
+    def test_filter_by_name_substring(self, test_repo: Repository) -> None:
+        """Test filtering projects by name substring."""
+        org = create_test_org_via_repo(test_repo)
+
+        # Create projects with different names
+        create_test_project_via_repo(test_repo, org.id, "Backend API")
+        create_test_project_via_repo(test_repo, org.id, "Frontend App")
+        create_test_project_via_repo(test_repo, org.id, "Mobile Backend")
+
+        # Filter by "backend"
+        results = test_repo.projects.get_by_filters(organization_id=org.id, name="backend")
+
+        assert len(results) == 2
+        assert {p.name for p in results} == {"Backend API", "Mobile Backend"}
+
+    def test_filter_by_name_case_insensitive(self, test_repo: Repository) -> None:
+        """Test name filtering is case-insensitive."""
+        org = create_test_org_via_repo(test_repo)
+        create_test_project_via_repo(test_repo, org.id, "Backend API")
+
+        # Test different case variations
+        for search_term in ["BACKEND", "backend", "Backend", "BaCkEnD"]:
+            results = test_repo.projects.get_by_filters(organization_id=org.id, name=search_term)
+            assert len(results) == 1
+            assert results[0].name == "Backend API"
+
+    def test_filter_by_is_active(self, test_repo: Repository) -> None:
+        """Test filtering projects by active status."""
+        org = create_test_org_via_repo(test_repo)
+
+        # Create active and inactive projects
+        active_project = create_test_project_via_repo(test_repo, org.id, "Active Project")
+        inactive_project = create_test_project_via_repo(test_repo, org.id, "Inactive Project")
+
+        # Deactivate one project
+        test_repo.projects.update(inactive_project.id, ProjectUpdateCommand(is_active=False))
+
+        # Filter for active only
+        active_results = test_repo.projects.get_by_filters(organization_id=org.id, is_active=True)
+        assert len(active_results) == 1
+        assert active_results[0].id == active_project.id
+
+        # Filter for inactive only
+        inactive_results = test_repo.projects.get_by_filters(organization_id=org.id, is_active=False)
+        assert len(inactive_results) == 1
+        assert inactive_results[0].id == inactive_project.id
+
+    def test_filter_by_name_and_is_active(self, test_repo: Repository) -> None:
+        """Test combining name and is_active filters."""
+        org = create_test_org_via_repo(test_repo)
+
+        # Create projects
+        backend_active = create_test_project_via_repo(test_repo, org.id, "Backend API")
+        backend_inactive = create_test_project_via_repo(test_repo, org.id, "Backend Service")
+
+        # Deactivate backend service
+        test_repo.projects.update(backend_inactive.id, ProjectUpdateCommand(is_active=False))
+
+        # Filter by name="backend" and is_active=True
+        results = test_repo.projects.get_by_filters(organization_id=org.id, name="backend", is_active=True)
+
+        assert len(results) == 1
+        assert results[0].id == backend_active.id
+
+    def test_filter_by_organization_id(self, test_repo: Repository) -> None:
+        """Test filtering projects by organization ID."""
+        org1 = create_test_org_via_repo(test_repo, "Org 1")
+        org2 = create_test_org_via_repo(test_repo, "Org 2")
+
+        # Create projects in both orgs
+        create_test_project_via_repo(test_repo, org1.id, "Org1 Project")
+        create_test_project_via_repo(test_repo, org2.id, "Org2 Project")
+
+        # Filter by org1
+        org1_results = test_repo.projects.get_by_filters(organization_id=org1.id)
+        assert len(org1_results) == 1
+        assert org1_results[0].organization_id == org1.id
+
+        # Filter by org2
+        org2_results = test_repo.projects.get_by_filters(organization_id=org2.id)
+        assert len(org2_results) == 1
+        assert org2_results[0].organization_id == org2.id
+
+    def test_filter_with_no_organization_filter_returns_all(self, test_repo: Repository) -> None:
+        """Test filtering without organization_id returns all projects."""
+        org1 = create_test_org_via_repo(test_repo, "Org 1")
+        org2 = create_test_org_via_repo(test_repo, "Org 2")
+
+        create_test_project_via_repo(test_repo, org1.id, "Project 1")
+        create_test_project_via_repo(test_repo, org2.id, "Project 2")
+
+        # Filter without organization_id
+        results = test_repo.projects.get_by_filters()
+
+        assert len(results) == 2
+        assert {p.name for p in results} == {"Project 1", "Project 2"}
+
+    def test_filter_with_no_matches_returns_empty_list(self, test_repo: Repository) -> None:
+        """Test filtering with no matches returns empty list."""
+        org = create_test_org_via_repo(test_repo)
+        create_test_project_via_repo(test_repo, org.id, "Backend API")
+
+        # Search for non-existent name
+        results = test_repo.projects.get_by_filters(organization_id=org.id, name="nonexistent")
+
+        assert results == []
+
+    def test_filter_respects_organization_boundaries(self, test_repo: Repository) -> None:
+        """Test filtering respects organization boundaries."""
+        org1 = create_test_org_via_repo(test_repo, "Org 1")
+        org2 = create_test_org_via_repo(test_repo, "Org 2")
+
+        # Create projects with "backend" in both orgs
+        create_test_project_via_repo(test_repo, org1.id, "Backend API")
+        create_test_project_via_repo(test_repo, org2.id, "Backend Service")
+
+        # Filter by name in org1
+        org1_results = test_repo.projects.get_by_filters(organization_id=org1.id, name="backend")
+        assert len(org1_results) == 1
+        assert org1_results[0].organization_id == org1.id
+
+        # Filter by name in org2
+        org2_results = test_repo.projects.get_by_filters(organization_id=org2.id, name="backend")
+        assert len(org2_results) == 1
+        assert org2_results[0].organization_id == org2.id
 
 
 class TestProjectRepositoryWorkflows:

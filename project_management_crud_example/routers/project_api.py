@@ -4,7 +4,7 @@ This module provides project CRUD endpoints with role-based permissions and orga
 """
 
 import logging
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -130,37 +130,50 @@ async def get_project(
 
 @router.get("", response_model=List[Project])
 async def list_projects(
+    name: Optional[str] = None,
+    is_active: Optional[bool] = None,
     repo: Repository = Depends(get_repository),  # noqa: B008
     current_user: User = Depends(get_current_user),  # noqa: B008
 ) -> List[Project]:
-    """List all projects accessible to the current user.
+    """List all projects accessible to the current user with optional filtering.
 
     Permission rules:
     - Super Admin: Can see all projects across all organizations
     - Other users: Can only see projects in their organization
 
+    Query parameters:
+    - name: Filter by name substring (case-insensitive)
+    - is_active: Filter by active status (true/false)
+
     Args:
+        name: Optional name filter (substring search, case-insensitive)
+        is_active: Optional filter for active/inactive projects
         repo: Repository instance for database access
         current_user: Current authenticated user
 
     Returns:
-        List of projects the user has permission to access
+        List of projects the user has permission to access, filtered by query parameters
     """
-    logger.debug(f"Listing projects (by user {current_user.id}, role {current_user.role})")
+    logger.debug(
+        f"Listing projects (by user {current_user.id}, role {current_user.role}, name={name}, is_active={is_active})"
+    )
 
-    if current_user.role == UserRole.SUPER_ADMIN:
-        # Super Admin sees all projects
-        projects = repo.projects.get_all()
-        logger.debug(f"Super Admin retrieved {len(projects)} projects")
-    else:
-        # Regular users see only their organization's projects
-        if not current_user.organization_id:
-            logger.warning(f"User {current_user.id} has no organization_id")
-            return []
+    # Determine organization filter based on user role
+    organization_filter = None if current_user.role == UserRole.SUPER_ADMIN else current_user.organization_id
 
-        projects = repo.projects.get_by_organization_id(current_user.organization_id)
-        logger.debug(f"User retrieved {len(projects)} projects from org {current_user.organization_id}")
+    # For non-Super Admin users with no organization, return empty list
+    if current_user.role != UserRole.SUPER_ADMIN and not current_user.organization_id:
+        logger.warning(f"User {current_user.id} has no organization_id")
+        return []
 
+    # Use filtering method with all criteria
+    projects = repo.projects.get_by_filters(
+        organization_id=organization_filter,
+        name=name,
+        is_active=is_active,
+    )
+
+    logger.debug(f"Retrieved {len(projects)} projects matching filters")
     return projects
 
 
