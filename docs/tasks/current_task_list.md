@@ -1,64 +1,89 @@
-# Current Task List - Complete Projects Feature
+# Current Task List - Implement Epics Feature
 
-**Created**: 2025-01-25
-**Spec Reference**: [Projects](../spec/detailed/projects_detailed_spec.md)
-
----
-
-## Task 1: Add project filtering/search (REQ-PROJ-009)
-**Status**: ✅ Complete
-**Implements**: REQ-PROJ-009
-
-Add query parameters to GET /api/projects endpoint to filter projects by name (search) and is_active status.
-
-**What was implemented**:
-- Added optional query parameters: `name` (substring search), `is_active` (boolean filter)
-- Implemented repository method `get_by_filters()` with organization_id, name, and is_active filtering
-- Added comprehensive API tests (11 tests) covering all filter combinations
-- Added comprehensive repository tests (9 tests) for filtering logic
-
-**Completed**:
-- ✅ GET /api/projects?name=backend returns projects with "backend" in name (case-insensitive)
-- ✅ GET /api/projects?is_active=true returns only active projects
-- ✅ GET /api/projects?name=api&is_active=true combines filters
-- ✅ Filters work within organization scope (users still only see their org's projects)
-- ✅ All validations pass (zero errors/warnings)
+**Created**: 2025-01-26
+**Spec Reference**: [Epics](../spec/detailed/epics_detailed_spec.md)
 
 ---
 
-## Task 2: Add project soft delete/archive (REQ-PROJ-010)
-**Status**: ✅ Complete
-**Implements**: REQ-PROJ-010
+## Task 1: Implement Epic CRUD operations (REQ-EPIC-001 through REQ-EPIC-005)
+**Status**: ⏳ Pending
+**Implements**: REQ-EPIC-001, REQ-EPIC-002, REQ-EPIC-003, REQ-EPIC-004, REQ-EPIC-005, REQ-EPIC-009, REQ-EPIC-010
 
-Add archive functionality to allow soft deletion of projects rather than permanent removal.
+Implement core CRUD operations for epics with organization scoping and role-based permissions.
 
-**What was implemented**:
-- Added `is_archived` (boolean) and `archived_at` (datetime) fields to ProjectORM and Project domain model
-- Added repository methods: `archive()` and `unarchive()` in Projects class
-- Updated repository filtering: `get_by_filters()` with `include_archived` parameter, updated `get_all()` and `get_by_organization_id()` to exclude archived by default
-- Added PATCH /api/projects/{id}/archive endpoint (Admin, PM can access)
-- Added PATCH /api/projects/{id}/unarchive endpoint (Admin only)
-- Added `include_archived` query parameter to GET /api/projects
-- Added comprehensive tests: 11 repository tests + 15 API tests
+**What to implement**:
+- Domain model: Epic with id, name, description, organization_id, created_at, updated_at
+- ORM model: EpicORM with database schema
+- Repository: create, get_by_id, get_by_organization_id, get_all, update, delete methods
+- API endpoints:
+  - POST /api/epics (create)
+  - GET /api/epics/{id} (retrieve)
+  - GET /api/epics (list with org scoping)
+  - PUT /api/epics/{id} (update)
+  - DELETE /api/epics/{id} (delete)
+- Permission rules:
+  - Admin, PM can create/update epics
+  - Admin can delete epics
+  - All roles can view epics in their organization
+  - Super Admin can access all organizations
+- Comprehensive tests: API tests and repository tests
 
-**Completed**:
-- ✅ PATCH /api/projects/{id}/archive sets is_archived=true and archived_at=now
-- ✅ Archived projects don't appear in GET /api/projects by default
-- ✅ GET /api/projects?include_archived=true shows archived projects
-- ✅ PATCH /api/projects/{id}/unarchive restores project (is_archived=false, archived_at=null)
-- ✅ Admin and PM can archive projects
-- ✅ Only Admin can unarchive projects
-- ✅ All validations pass (zero errors/warnings)
-- ℹ️ Cannot create tickets in archived projects - noted in spec as future validation (not implemented yet since depends on ticket creation logic)
+**Acceptance criteria**:
+- POST /api/epics creates epic in user's organization
+- GET /api/epics/{id} retrieves epic or returns 404/403
+- GET /api/epics lists only user's organization epics
+- PUT /api/epics/{id} updates epic fields
+- DELETE /api/epics/{id} removes epic
+- Organization scoping enforced
+- Validation errors handled (empty name, too long, etc.)
+
+---
+
+## Task 2: Implement epic-ticket relationships (REQ-EPIC-006, REQ-EPIC-007, REQ-EPIC-008)
+**Status**: ⏳ Pending
+**Implements**: REQ-EPIC-006, REQ-EPIC-007, REQ-EPIC-008
+
+Implement many-to-many relationship between epics and tickets.
+
+**What to implement**:
+- Database: epic_tickets association table (epic_id, ticket_id)
+- ORM model: EpicTicketORM for association table
+- Domain model: Update Epic model if needed for ticket relationship
+- Repository methods:
+  - add_ticket_to_epic(epic_id, ticket_id)
+  - remove_ticket_from_epic(epic_id, ticket_id)
+  - get_tickets_in_epic(epic_id)
+- API endpoints:
+  - POST /api/epics/{id}/tickets (add ticket)
+  - DELETE /api/epics/{id}/tickets/{ticket_id} (remove ticket)
+  - GET /api/epics/{id}/tickets (list tickets)
+- Cross-project support: tickets from different projects can be in same epic
+- Organization validation: epic and ticket must be in same organization
+- Comprehensive tests
+
+**Acceptance criteria**:
+- POST /api/epics/{id}/tickets adds ticket to epic
+- Can add tickets from different projects (same org)
+- Cannot add tickets from different organizations (403)
+- Adding same ticket twice is idempotent
+- DELETE /api/epics/{id}/tickets/{ticket_id} removes association
+- Removing ticket doesn't delete the ticket
+- Removal is idempotent
+- GET /api/epics/{id}/tickets returns all tickets in epic
+- Returns tickets from multiple projects
+- Deleting epic removes associations but not tickets
 
 ---
 
 ## Completion
 
-- [x] Task 1 marked ✅
-- [x] REQ-PROJ-009 marked ✅ in spec
-- [x] Updated main_spec.md status to 🟢 9/10 (90%)
-- [x] Task 2 marked ✅
-- [x] REQ-PROJ-010 marked ✅ in spec
-- [x] Updated main_spec.md status to ✅ 10/10 (100%) - V1 Complete
-- [ ] Archive to `archive/2025-01-26_complete_projects.md`
+- [ ] Task 1 marked ✅
+- [ ] REQ-EPIC-001 through REQ-EPIC-005 marked ✅ in spec
+- [ ] REQ-EPIC-009 marked ✅ in spec
+- [ ] REQ-EPIC-010 marked ✅ in spec
+- [ ] Task 2 marked ✅
+- [ ] REQ-EPIC-006 marked ✅ in spec
+- [ ] REQ-EPIC-007 marked ✅ in spec
+- [ ] REQ-EPIC-008 marked ✅ in spec
+- [ ] Update main_spec.md status to 🟢 10/10 (100%)
+- [ ] Archive to `archive/2025-01-26_implement_epics.md`
