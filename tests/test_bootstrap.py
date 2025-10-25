@@ -7,7 +7,7 @@ from project_management_crud_example.config import settings
 from project_management_crud_example.dal.sqlite.database import Database
 from project_management_crud_example.dal.sqlite.repository import Repository
 from project_management_crud_example.domain_models import UserRole
-from project_management_crud_example.utils.password import verify_password
+from project_management_crud_example.utils.password import TestPasswordHasher
 from tests.conftest import test_db  # noqa: F401
 
 
@@ -23,7 +23,7 @@ class TestBootstrapSuperAdmin:
 
         # Verify user was created
         with test_db.get_session() as session:
-            repo = Repository(session)
+            repo = Repository(session, password_hasher=TestPasswordHasher())
             users = repo.users.get_all()
             super_admins = [u for u in users if u.role == UserRole.SUPER_ADMIN]
 
@@ -50,7 +50,7 @@ class TestBootstrapSuperAdmin:
 
         # Verify only one Super Admin exists
         with test_db.get_session() as session:
-            repo = Repository(session)
+            repo = Repository(session, password_hasher=TestPasswordHasher())
             users = repo.users.get_all()
             super_admins = [u for u in users if u.role == UserRole.SUPER_ADMIN]
             assert len(super_admins) == 1
@@ -62,12 +62,13 @@ class TestBootstrapSuperAdmin:
         assert user_id is not None
 
         # Get user auth data and verify constant password works
+        password_hasher = TestPasswordHasher()  # Use test hasher since bootstrap used it in test mode
         with test_db.get_session() as session:
-            repo = Repository(session)
+            repo = Repository(session, password_hasher=password_hasher)
             user_auth = repo.users.get_by_username_with_password(settings.BOOTSTRAP_ADMIN_USERNAME)
 
             assert user_auth is not None
-            assert verify_password(SUPER_ADMIN_PASSWORD, user_auth.password_hash) is True
+            assert password_hasher.verify_password(SUPER_ADMIN_PASSWORD, user_auth.password_hash) is True
 
     def test_bootstrap_uses_constant_password(self, test_db: Database) -> None:
         """Test that bootstrap uses the constant password for development convenience."""
@@ -79,11 +80,12 @@ class TestBootstrapSuperAdmin:
         assert len(SUPER_ADMIN_PASSWORD) >= 8  # Reasonable minimum
 
         # Verify it works for authentication
+        password_hasher = TestPasswordHasher()  # Use test hasher since bootstrap used it in test mode
         with test_db.get_session() as session:
-            repo = Repository(session)
+            repo = Repository(session, password_hasher=password_hasher)
             user_auth = repo.users.get_by_username_with_password(settings.BOOTSTRAP_ADMIN_USERNAME)
             assert user_auth is not None
-            assert verify_password(SUPER_ADMIN_PASSWORD, user_auth.password_hash) is True
+            assert password_hasher.verify_password(SUPER_ADMIN_PASSWORD, user_auth.password_hash) is True
 
     def test_bootstrap_respects_env_configuration(self, test_db: Database, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that bootstrap uses environment configuration."""
@@ -102,7 +104,7 @@ class TestBootstrapSuperAdmin:
 
         # Verify custom values were used
         with test_db.get_session() as session:
-            repo = Repository(session)
+            repo = Repository(session, password_hasher=TestPasswordHasher())
             user = repo.users.get_by_username("customadmin")
 
             assert user is not None
@@ -119,7 +121,7 @@ class TestBootstrapSuperAdmin:
         from project_management_crud_example.domain_models import UserCreateCommand, UserData
 
         with test_db.get_session() as session:
-            repo = Repository(session)
+            repo = Repository(session, password_hasher=TestPasswordHasher())
             user_data = UserData(
                 username="existing_admin",
                 email="existing@example.com",
@@ -140,7 +142,7 @@ class TestBootstrapSuperAdmin:
 
         # Verify no additional Super Admin was created
         with test_db.get_session() as session:
-            repo = Repository(session)
+            repo = Repository(session, password_hasher=TestPasswordHasher())
             users = repo.users.get_all()
             super_admins = [u for u in users if u.role == UserRole.SUPER_ADMIN]
             assert len(super_admins) == 1

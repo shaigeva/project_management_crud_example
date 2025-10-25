@@ -13,7 +13,6 @@ from project_management_crud_example.dependencies import get_repository
 from project_management_crud_example.domain_models import LoginRequest, LoginResponse
 from project_management_crud_example.exceptions import AccountInactiveException, InvalidCredentialsException
 from project_management_crud_example.utils.jwt import create_access_token
-from project_management_crud_example.utils.password import verify_password
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +58,7 @@ async def login(
         raise AccountInactiveException()
 
     # Verify password
-    if not verify_password(request.password, user_auth.password_hash):
+    if not repo.password_hasher.verify_password(request.password, user_auth.password_hash):
         logger.debug(f"Invalid password for user: {request.username}")
         raise InvalidCredentialsException()
 

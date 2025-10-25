@@ -22,8 +22,10 @@ class Database:
 
         Args:
             db_path: Path to database file or ':memory:' for in-memory database
-            is_testing: Whether this is a test database
+            is_testing: Whether this is a test database (uses fast password hashing)
         """
+        self.is_testing = is_testing
+
         # Convert db_path to SQLite URL
         if db_path == ":memory:":
             db_url = "sqlite:///:memory:"

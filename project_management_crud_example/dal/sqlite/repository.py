@@ -31,7 +31,7 @@ from project_management_crud_example.domain_models import (
     UserAuthData,
     UserCreateCommand,
 )
-from project_management_crud_example.utils.password import hash_password
+from project_management_crud_example.utils.password import PasswordHasher, TestPasswordHasher
 
 from .converters import (
     orm_organization_to_domain_organization,
@@ -57,19 +57,30 @@ class Repository:
     Future: repo.projects, repo.tickets, etc.
     """
 
-    def __init__(self, session: Session) -> None:
-        """Initialize the repository with a database session."""
+    def __init__(self, session: Session, password_hasher: Optional[PasswordHasher | TestPasswordHasher] = None) -> None:
+        """Initialize the repository with a database session.
+
+        Args:
+            session: SQLAlchemy database session
+            password_hasher: Password hasher to use. Defaults to PasswordHasher(is_secure=True).
+                            Pass TestPasswordHasher() for fast testing.
+        """
         self.session = session
+        if password_hasher is None:
+            password_hasher = PasswordHasher(is_secure=True)
+        self.password_hasher = password_hasher
+
         self.organizations = self.Organizations(session)
         self.projects = self.Projects(session)
-        self.users = self.Users(session)
+        self.users = self.Users(session, password_hasher)
         self.stub_entities = self.StubEntities(session)
 
     class Users:
         """User-related data access operations."""
 
-        def __init__(self, session: Session) -> None:
+        def __init__(self, session: Session, password_hasher: PasswordHasher | TestPasswordHasher) -> None:
             self.session = session
+            self.password_hasher = password_hasher
 
         def create(self, user_create_command: UserCreateCommand) -> User:
             """Create a new user with provided password.
@@ -86,7 +97,7 @@ class Repository:
             logger.debug(f"Creating new user: {user_data.username}")
 
             # Hash the provided password
-            password_hash = hash_password(user_create_command.password)
+            password_hash = self.password_hasher.hash_password(user_create_command.password)
 
             orm_user = UserORM(
                 username=user_data.username,

@@ -13,6 +13,7 @@ In production applications:
 from project_management_crud_example.config import get_settings
 from project_management_crud_example.dal.sqlite.database import Database
 from project_management_crud_example.dal.sqlite.repository import Repository
+from project_management_crud_example.utils.password import PasswordHasher, TestPasswordHasher
 
 # CONSTANT PASSWORD FOR EXAMPLE APPLICATION
 # WARNING: This is a constant password for development/testing convenience only.
@@ -50,7 +51,9 @@ def ensure_super_admin(db: Database) -> tuple[bool, str | None]:
     settings = get_settings()
 
     with db.get_session() as session:
-        repo = Repository(session)
+        # Use fast test hasher in testing mode, secure hasher in production
+        password_hasher = TestPasswordHasher() if db.is_testing else PasswordHasher(is_secure=True)
+        repo = Repository(session, password_hasher=password_hasher)
 
         created, user = repo.users.create_super_admin_if_needed(
             username=settings.BOOTSTRAP_ADMIN_USERNAME,

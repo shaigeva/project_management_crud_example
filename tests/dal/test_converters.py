@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 from project_management_crud_example.dal.sqlite.converters import orm_user_to_domain_user
 from project_management_crud_example.dal.sqlite.orm_data_models import UserORM
 from project_management_crud_example.domain_models import UserRole
-from project_management_crud_example.utils.password import hash_password
 from tests.conftest import test_db, test_session  # noqa: F401
 
 
@@ -14,7 +13,8 @@ class TestUserConverter:
 
     def test_orm_to_domain_user_excludes_password_hash(self, test_session: Session) -> None:
         """Test that domain User doesn't include password_hash."""
-        password_hash = hash_password("test_password_123")
+        # Use fake hash for converter tests - no need for real password hashing
+        password_hash = "fake_hash_for_converter_test"
 
         user_orm = UserORM(
             username="testuser",
@@ -45,7 +45,8 @@ class TestUserConverter:
 
     def test_orm_to_domain_user_with_null_organization(self, test_session: Session) -> None:
         """Test conversion for Super Admin with no organization."""
-        password_hash = hash_password("admin_password")
+        # Use fake hash for converter tests - no need for real password hashing
+        password_hash = "fake_hash_for_converter_test"
 
         user_orm = UserORM(
             username="superadmin",

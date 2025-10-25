@@ -1,21 +1,26 @@
 """Pytest configuration and shared fixtures."""
 
 import os
+
+# CRITICAL: Set test environment variables BEFORE any project imports
+# These must be set before the config module is loaded
+os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-for-testing-only-not-for-production")
+os.environ.setdefault("BCRYPT_ROUNDS", "4")  # Minimal bcrypt hashing for fast tests (4 is minimum, 12 default = ~300ms)
+
 import tempfile
 from pathlib import Path
 from typing import Generator
 
 import pytest
+from fastapi import Depends
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from project_management_crud_example.app import app
 from project_management_crud_example.dal.sqlite.database import Database
 from project_management_crud_example.dal.sqlite.repository import Repository, StubEntityRepository, UserRepository
-from project_management_crud_example.dependencies import get_db_session
-
-# Set test environment variables before importing config
-os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-for-testing-only-not-for-production")
+from project_management_crud_example.dependencies import get_db_session, get_repository
+from project_management_crud_example.utils.password import TestPasswordHasher
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -81,9 +86,10 @@ def test_repo(test_session: Session) -> Repository:
     """Get the main repository for testing.
 
     This fixture provides a Repository instance connected to the test database session.
+    Uses TestPasswordHasher for fast password hashing in tests.
     Access nested operations via repo.users, repo.organizations, etc.
     """
-    return Repository(test_session)
+    return Repository(test_session, password_hasher=TestPasswordHasher())
 
 
 @pytest.fixture
@@ -111,7 +117,7 @@ def client(test_db: Database) -> Generator[TestClient, None, None]:
     """Standardized FastAPI TestClient fixture for all API tests.
 
     - Ensures every test gets a fresh, isolated database (disk-based by default).
-    - Overrides the get_db_session dependency to use the test database.
+    - Overrides the get_db_session and get_repository dependencies to use test database with fast password hashing.
     - Cleans up dependency overrides after each test to prevent leakage.
     - All API tests MUST use this fixture for client access.
     """
@@ -120,7 +126,11 @@ def client(test_db: Database) -> Generator[TestClient, None, None]:
         with test_db.get_session() as session:
             yield session
 
+    def override_get_repository(session: Session = Depends(override_get_db_session)) -> Repository:  # noqa: B008
+        return Repository(session, password_hasher=TestPasswordHasher())
+
     app.dependency_overrides[get_db_session] = override_get_db_session
+    app.dependency_overrides[get_repository] = override_get_repository
 
     with TestClient(app) as test_client:
         yield test_client
