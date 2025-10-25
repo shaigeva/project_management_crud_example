@@ -1,6 +1,6 @@
 # User Authentication: Detailed Specification
 
-**Status**: 🟡 5/6 requirements implemented (83%)
+**Status**: 🟢 6/6 requirements implemented (100%)
 **Parent**: [Main Spec](../main_spec.md#feature-user-authentication)
 **Last Updated**: 2025-01-25
 
@@ -105,7 +105,7 @@ All endpoints (except login, health check) require valid bearer token.
 ---
 
 ## REQ-AUTH-004: User can change their password
-**Status**: 🔴 Not Implemented (ONLY REMAINING)
+**Status**: ✅ Implemented
 **Type**: Product Behavior
 
 ### Scenario

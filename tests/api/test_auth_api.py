@@ -501,3 +501,311 @@ class TestProtectedEndpoints:
         assert "updated_at" in data
         # Password hash should NOT be exposed
         assert "password_hash" not in data
+
+
+class TestChangePassword:
+    """Tests for POST /auth/change-password endpoint."""
+
+    def test_change_password_with_valid_data_succeeds(self, client: TestClient, test_user: tuple[str, str]) -> None:
+        """Test changing password with valid current password and strong new password."""
+        user_id, current_password = test_user
+
+        # Login to get token
+        login_response = client.post(
+            "/auth/login",
+            json={"username": "testuser", "password": current_password},
+        )
+        token = login_response.json()["access_token"]
+
+        # Change password
+        new_password = "NewSecure123!"
+        response = client.post(
+            "/auth/change-password",
+            json={"current_password": current_password, "new_password": new_password},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "message" in data
+        assert data["message"] == "Password changed successfully"
+
+    def test_after_password_change_can_login_with_new_password(
+        self, client: TestClient, test_user: tuple[str, str]
+    ) -> None:
+        """Test user can login with new password after change."""
+        user_id, current_password = test_user
+
+        # Login to get token
+        login_response = client.post(
+            "/auth/login",
+            json={"username": "testuser", "password": current_password},
+        )
+        token = login_response.json()["access_token"]
+
+        # Change password
+        new_password = "NewSecure123!"
+        client.post(
+            "/auth/change-password",
+            json={"current_password": current_password, "new_password": new_password},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Try to login with new password
+        new_login_response = client.post(
+            "/auth/login",
+            json={"username": "testuser", "password": new_password},
+        )
+
+        assert new_login_response.status_code == 200
+        assert "access_token" in new_login_response.json()
+
+    def test_after_password_change_old_password_fails(self, client: TestClient, test_user: tuple[str, str]) -> None:
+        """Test old password no longer works after password change."""
+        user_id, current_password = test_user
+
+        # Login to get token
+        login_response = client.post(
+            "/auth/login",
+            json={"username": "testuser", "password": current_password},
+        )
+        token = login_response.json()["access_token"]
+
+        # Change password
+        new_password = "NewSecure123!"
+        client.post(
+            "/auth/change-password",
+            json={"current_password": current_password, "new_password": new_password},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Try to login with old password - should fail
+        old_login_response = client.post(
+            "/auth/login",
+            json={"username": "testuser", "password": current_password},
+        )
+
+        assert old_login_response.status_code == 401
+        assert old_login_response.json()["error_code"] == "INVALID_CREDENTIALS"
+
+    def test_change_password_with_wrong_current_password_fails(
+        self, client: TestClient, test_user: tuple[str, str]
+    ) -> None:
+        """Test changing password with wrong current password returns 401."""
+        user_id, current_password = test_user
+
+        # Login to get token
+        login_response = client.post(
+            "/auth/login",
+            json={"username": "testuser", "password": current_password},
+        )
+        token = login_response.json()["access_token"]
+
+        # Try to change password with wrong current password
+        response = client.post(
+            "/auth/change-password",
+            json={"current_password": "WrongPassword123!", "new_password": "NewSecure123!"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 401
+        data = response.json()
+        assert data["detail"] == "Invalid credentials"
+        assert data["error_code"] == "INVALID_CREDENTIALS"
+
+    def test_change_password_without_token_fails(self, client: TestClient) -> None:
+        """Test changing password without authentication returns 401."""
+        response = client.post(
+            "/auth/change-password",
+            json={"current_password": "OldPassword123!", "new_password": "NewSecure123!"},
+        )
+
+        assert response.status_code == 401
+        data = response.json()
+        assert data["error_code"] == "AUTHENTICATION_REQUIRED"
+
+    def test_change_password_with_weak_password_fails(self, client: TestClient, test_user: tuple[str, str]) -> None:
+        """Test changing to weak password returns 400/422 with validation error."""
+        user_id, current_password = test_user
+
+        # Login to get token
+        login_response = client.post(
+            "/auth/login",
+            json={"username": "testuser", "password": current_password},
+        )
+        token = login_response.json()["access_token"]
+
+        # Test password too short (Pydantic validation - 422)
+        response = client.post(
+            "/auth/change-password",
+            json={"current_password": current_password, "new_password": "short"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 422  # Pydantic validation
+
+        # Test various weak passwords (custom validation - 400)
+        weak_passwords = [
+            ("nouppercase1!", "Password must contain at least one uppercase letter"),
+            ("NOLOWERCASE1!", "Password must contain at least one lowercase letter"),
+            ("NoDigits!!", "Password must contain at least one digit"),
+            ("NoSpecial123", "Password must contain at least one special character"),
+        ]
+
+        for weak_password, expected_error in weak_passwords:
+            response = client.post(
+                "/auth/change-password",
+                json={"current_password": current_password, "new_password": weak_password},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+            assert response.status_code == 400
+            assert expected_error in response.json()["detail"]
+
+    def test_change_password_same_as_current_succeeds(self, client: TestClient, test_user: tuple[str, str]) -> None:
+        """Test changing password to same value succeeds (edge case)."""
+        user_id, current_password = test_user
+
+        # Login to get token
+        login_response = client.post(
+            "/auth/login",
+            json={"username": "testuser", "password": current_password},
+        )
+        token = login_response.json()["access_token"]
+
+        # Change password to same value (if current password is strong)
+        # First ensure we have a strong password - change to a known strong password
+        strong_password = "StrongPass123!"
+        client.post(
+            "/auth/change-password",
+            json={"current_password": current_password, "new_password": strong_password},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Re-login with new password
+        login_response2 = client.post(
+            "/auth/login",
+            json={"username": "testuser", "password": strong_password},
+        )
+        token2 = login_response2.json()["access_token"]
+
+        # Now change to same password
+        response = client.post(
+            "/auth/change-password",
+            json={"current_password": strong_password, "new_password": strong_password},
+            headers={"Authorization": f"Bearer {token2}"},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["message"] == "Password changed successfully"
+
+    def test_existing_token_remains_valid_after_password_change(
+        self, client: TestClient, test_user: tuple[str, str]
+    ) -> None:
+        """Test existing token continues to work after password change (stateless tokens)."""
+        user_id, current_password = test_user
+
+        # Login to get token
+        login_response = client.post(
+            "/auth/login",
+            json={"username": "testuser", "password": current_password},
+        )
+        token = login_response.json()["access_token"]
+
+        # Change password
+        new_password = "NewSecure123!"
+        client.post(
+            "/auth/change-password",
+            json={"current_password": current_password, "new_password": new_password},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Old token should still work for API calls
+        from fastapi import Depends
+
+        from project_management_crud_example.dependencies import get_current_user
+        from project_management_crud_example.domain_models import User
+
+        @app.get("/test/protected_after_password_change")
+        async def protected_endpoint(current_user: User = Depends(get_current_user)) -> dict:  # noqa: B008
+            return {"user_id": current_user.id}
+
+        response = client.get(
+            "/test/protected_after_password_change",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["user_id"] == user_id
+
+    def test_change_password_with_special_characters_succeeds(
+        self, client: TestClient, test_user: tuple[str, str]
+    ) -> None:
+        """Test password with various special characters works correctly."""
+        user_id, current_password = test_user
+
+        # Login to get token
+        login_response = client.post(
+            "/auth/login",
+            json={"username": "testuser", "password": current_password},
+        )
+        token = login_response.json()["access_token"]
+
+        # Try password with various special characters
+        special_passwords = [
+            "Pass@word123",
+            "P@ssw0rd!2023",
+            "Secure#Pass1",
+            "Strong$Pass2",
+            "My%Password3",
+        ]
+
+        for special_password in special_passwords:
+            response = client.post(
+                "/auth/change-password",
+                json={"current_password": current_password, "new_password": special_password},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+            assert response.status_code == 200
+
+            # Verify can login with new password
+            verify_response = client.post(
+                "/auth/login",
+                json={"username": "testuser", "password": special_password},
+            )
+            assert verify_response.status_code == 200
+
+            # Update current_password for next iteration
+            current_password = special_password
+            token = verify_response.json()["access_token"]
+
+    def test_change_password_with_very_long_password_succeeds(
+        self, client: TestClient, test_user: tuple[str, str]
+    ) -> None:
+        """Test password change with very long password (edge case)."""
+        user_id, current_password = test_user
+
+        # Login to get token
+        login_response = client.post(
+            "/auth/login",
+            json={"username": "testuser", "password": current_password},
+        )
+        token = login_response.json()["access_token"]
+
+        # Very long password (but still valid)
+        long_password = "VeryLongPassword123!" * 5  # 100 characters
+
+        response = client.post(
+            "/auth/change-password",
+            json={"current_password": current_password, "new_password": long_password},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+
+        # Verify can login with long password
+        verify_response = client.post(
+            "/auth/login",
+            json={"username": "testuser", "password": long_password},
+        )
+        assert verify_response.status_code == 200

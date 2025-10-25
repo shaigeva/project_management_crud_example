@@ -6,7 +6,7 @@
 ---
 
 ## Task 1: Password change endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Complete
 **Implements**: REQ-AUTH-004
 
 Add POST /auth/change-password endpoint allowing users to change their own password with current password verification and strength validation.
@@ -15,7 +15,7 @@ Add POST /auth/change-password endpoint allowing users to change their own passw
 
 ## Completion
 
-- [ ] All tasks marked ✅
-- [ ] REQ-AUTH-004 marked ✅ in spec
-- [ ] Update main_spec.md status to 🟢 6/6 (100%)
+- [x] All tasks marked ✅
+- [x] REQ-AUTH-004 marked ✅ in spec
+- [x] Update main_spec.md status to 🟢 6/6 (100%)
 - [ ] Archive to `archive/2025-01-25_complete_authentication.md`

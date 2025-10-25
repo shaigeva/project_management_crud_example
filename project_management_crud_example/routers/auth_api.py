@@ -5,14 +5,15 @@ This module provides authentication endpoints including login.
 
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from project_management_crud_example.config import settings
 from project_management_crud_example.dal.sqlite.repository import Repository
-from project_management_crud_example.dependencies import get_repository
-from project_management_crud_example.domain_models import LoginRequest, LoginResponse
+from project_management_crud_example.dependencies import get_current_user, get_repository
+from project_management_crud_example.domain_models import ChangePasswordRequest, LoginRequest, LoginResponse, User
 from project_management_crud_example.exceptions import AccountInactiveException, InvalidCredentialsException
 from project_management_crud_example.utils.jwt import create_access_token
+from project_management_crud_example.utils.password import validate_password_strength
 
 logger = logging.getLogger(__name__)
 
@@ -78,3 +79,60 @@ async def login(
         organization_id=user_auth.organization_id,
         role=user_auth.role,
     )
+
+
+@router.post("/change-password")
+async def change_password(
+    request: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),  # noqa: B008
+    repo: Repository = Depends(get_repository),  # noqa: B008
+) -> dict:
+    """Change the authenticated user's password.
+
+    Args:
+        request: Password change request with current and new passwords
+        current_user: Current authenticated user from bearer token
+        repo: Repository instance for database access
+
+    Returns:
+        Success message
+
+    Raises:
+        InvalidCredentialsException: Current password is incorrect
+        HTTPException 400: New password does not meet strength requirements
+
+    Note:
+        - User can only change their own password
+        - Current password must be correct
+        - New password must meet strength requirements (8+ chars, upper, lower, digit, special)
+        - Existing tokens remain valid after password change (stateless tokens)
+    """
+    logger.debug(f"Password change request for user: {current_user.id}")
+
+    # Fetch user with password hash for verification
+    user_auth = repo.users.get_by_username_with_password(current_user.username)
+
+    if not user_auth:
+        logger.error(f"User not found during password change: {current_user.id}")
+        raise InvalidCredentialsException()
+
+    # Verify current password
+    if not repo.password_hasher.verify_password(request.current_password, user_auth.password_hash):
+        logger.debug(f"Invalid current password for user: {current_user.id}")
+        raise InvalidCredentialsException()
+
+    # Validate new password strength
+    is_valid, error_message = validate_password_strength(request.new_password)
+    if not is_valid:
+        logger.debug(f"Weak password rejected for user {current_user.id}: {error_message}")
+        raise HTTPException(status_code=400, detail=error_message)
+
+    # Update password
+    success = repo.users.update_password(current_user.id, request.new_password)
+
+    if not success:
+        logger.error(f"Failed to update password for user: {current_user.id}")
+        raise HTTPException(status_code=500, detail="Failed to update password")
+
+    logger.info(f"Password changed successfully for user: {current_user.id}")
+    return {"message": "Password changed successfully"}

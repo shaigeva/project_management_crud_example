@@ -303,6 +303,33 @@ class Repository:
             logger.debug(f"User deleted: {user_id}")
             return True
 
+        def update_password(self, user_id: str, new_password: str) -> bool:
+            """Update a user's password.
+
+            Args:
+                user_id: ID of user whose password to update
+                new_password: New plain text password (will be hashed before storage)
+
+            Returns:
+                True if password was updated, False if user not found
+
+            Note: Plain text password is never stored - it's hashed immediately.
+            """
+            logger.debug(f"Updating password for user: {user_id}")
+            orm_user = self.session.query(UserORM).filter(UserORM.id == user_id).first()  # type: ignore[operator]
+
+            if orm_user is None:
+                logger.debug(f"User not found for password update: {user_id}")
+                return False
+
+            # Hash the new password
+            password_hash = self.password_hasher.hash_password(new_password)
+            orm_user.password_hash = password_hash  # type: ignore[assignment]
+
+            self.session.commit()
+            logger.debug(f"Password updated for user: {user_id}")
+            return True
+
         def create_super_admin_if_needed(
             self, username: str, email: str, full_name: str, password: str
         ) -> tuple[bool, Optional[User]]:

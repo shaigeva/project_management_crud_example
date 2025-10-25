@@ -297,3 +297,10 @@ class LoginResponse(BaseModel):
     user_id: str = Field(..., description="ID of authenticated user")
     organization_id: Optional[str] = Field(None, description="User's organization ID")
     role: UserRole = Field(..., description="User's current role")
+
+
+class ChangePasswordRequest(BaseModel):
+    """Request to change user's password."""
+
+    current_password: str = Field(..., min_length=1, description="Current password for verification")
+    new_password: str = Field(..., min_length=8, description="New password (must meet strength requirements)")
