@@ -74,6 +74,24 @@ def orm_project_to_domain_project(
     )
 
 
+def orm_ticket_to_domain_ticket(
+    orm_ticket: orm_data_models.TicketORM,
+) -> domain_models.Ticket:
+    """Convert an ORM Ticket model to a domain Ticket model."""
+    return domain_models.Ticket(
+        id=str(orm_ticket.id),
+        title=orm_ticket.title,  # type: ignore[arg-type]
+        description=orm_ticket.description,  # type: ignore[arg-type]
+        status=domain_models.TicketStatus(orm_ticket.status),  # type: ignore[arg-type]
+        priority=domain_models.TicketPriority(orm_ticket.priority) if orm_ticket.priority else None,  # type: ignore[arg-type]
+        assignee_id=str(orm_ticket.assignee_id) if orm_ticket.assignee_id else None,
+        reporter_id=str(orm_ticket.reporter_id),
+        project_id=str(orm_ticket.project_id),
+        created_at=orm_ticket.created_at,  # type: ignore[arg-type]
+        updated_at=orm_ticket.updated_at,  # type: ignore[arg-type]
+    )
+
+
 def orm_user_to_domain_user(
     orm_user: orm_data_models.UserORM,
 ) -> domain_models.User:

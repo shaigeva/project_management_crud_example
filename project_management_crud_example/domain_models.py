@@ -122,6 +122,69 @@ class ProjectUpdateCommand(BaseModel):
     description: Optional[str] = Field(None, max_length=1000, description="Project description")
 
 
+# Ticket Models
+
+
+class TicketStatus(str, Enum):
+    """Ticket status workflow states."""
+
+    TODO = "TODO"
+    IN_PROGRESS = "IN_PROGRESS"
+    DONE = "DONE"
+
+
+class TicketPriority(str, Enum):
+    """Ticket priority levels."""
+
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
+class TicketData(BaseModel):
+    """Base ticket data structure."""
+
+    title: str = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="Ticket title",
+    )
+    description: Optional[str] = Field(None, max_length=2000, description="Ticket description")
+    priority: Optional[TicketPriority] = Field(None, description="Ticket priority level")
+
+
+class Ticket(TicketData):
+    """Complete ticket model with metadata."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str = Field(..., description="Ticket ID")
+    status: TicketStatus = Field(..., description="Ticket status")
+    assignee_id: Optional[str] = Field(None, description="ID of user assigned to this ticket")
+    reporter_id: str = Field(..., description="ID of user who created this ticket")
+    project_id: str = Field(..., description="Project ID this ticket belongs to")
+    created_at: datetime = Field(..., description="Creation timestamp")
+    updated_at: datetime = Field(..., description="Last update timestamp")
+
+
+class TicketCreateCommand(BaseModel):
+    """Command model for creating a new ticket."""
+
+    ticket_data: TicketData
+    project_id: str = Field(..., description="Project ID this ticket belongs to")
+    assignee_id: Optional[str] = Field(None, description="ID of user to assign to this ticket")
+
+
+class TicketUpdateCommand(BaseModel):
+    """Command model for updating an existing ticket."""
+
+    title: Optional[str] = Field(None, min_length=1, max_length=500, description="Ticket title")
+    description: Optional[str] = Field(None, max_length=2000, description="Ticket description")
+    priority: Optional[TicketPriority] = Field(None, description="Ticket priority level")
+
+
 # User Management Models
 
 

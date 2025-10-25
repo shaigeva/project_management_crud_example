@@ -27,6 +27,10 @@ from project_management_crud_example.domain_models import (
     StubEntity,
     StubEntityCreateCommand,
     StubEntityUpdateCommand,
+    Ticket,
+    TicketCreateCommand,
+    TicketStatus,
+    TicketUpdateCommand,
     User,
     UserAuthData,
     UserCreateCommand,
@@ -38,10 +42,11 @@ from .converters import (
     orm_project_to_domain_project,
     orm_stub_entities_to_business_stub_entities,
     orm_stub_entity_to_business_stub_entity,
+    orm_ticket_to_domain_ticket,
     orm_user_to_domain_user,
     orm_user_to_user_auth_data,
 )
-from .orm_data_models import OrganizationORM, ProjectORM, StubEntityORM, UserORM
+from .orm_data_models import OrganizationORM, ProjectORM, StubEntityORM, TicketORM, UserORM
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +77,7 @@ class Repository:
 
         self.organizations = self.Organizations(session)
         self.projects = self.Projects(session)
+        self.tickets = self.Tickets(session)
         self.users = self.Users(session, password_hasher)
         self.stub_entities = self.StubEntities(session)
 
@@ -471,6 +477,213 @@ class Repository:
             self.session.delete(orm_project)
             self.session.commit()
             logger.debug(f"Project deleted: {project_id}")
+            return True
+
+    class Tickets:
+        """Ticket-related data access operations."""
+
+        def __init__(self, session: Session) -> None:
+            self.session = session
+
+        def create(self, ticket_create_command: TicketCreateCommand, reporter_id: str) -> Ticket:
+            """Create a new ticket.
+
+            Args:
+                ticket_create_command: Command containing ticket data and project_id
+                reporter_id: ID of the user creating this ticket (current user)
+
+            Returns:
+                Created Ticket domain model
+            """
+            ticket_data = ticket_create_command.ticket_data
+            logger.debug(f"Creating new ticket: {ticket_data.title} in project: {ticket_create_command.project_id}")
+
+            orm_ticket = TicketORM(
+                title=ticket_data.title,
+                description=ticket_data.description,
+                status=TicketStatus.TODO.value,  # Default status
+                priority=ticket_data.priority.value if ticket_data.priority else None,
+                assignee_id=ticket_create_command.assignee_id,
+                reporter_id=reporter_id,
+                project_id=ticket_create_command.project_id,
+            )
+
+            self.session.add(orm_ticket)
+            self.session.commit()
+            self.session.refresh(orm_ticket)
+            logger.debug(f"Ticket created with ID: {orm_ticket.id}")
+            return orm_ticket_to_domain_ticket(orm_ticket)
+
+        def get_by_id(self, ticket_id: str) -> Optional[Ticket]:
+            """Get a specific ticket by ID."""
+            logger.debug(f"Retrieving ticket by ID: {ticket_id}")
+            orm_ticket = self.session.query(TicketORM).filter(TicketORM.id == ticket_id).first()  # type: ignore[operator]
+            if orm_ticket is None:
+                logger.debug(f"Ticket not found: {ticket_id}")
+                return None
+            logger.debug(f"Ticket found: {ticket_id}")
+            return orm_ticket_to_domain_ticket(orm_ticket)
+
+        def get_by_project_id(self, project_id: str) -> List[Ticket]:
+            """Get all tickets for a specific project."""
+            logger.debug(f"Retrieving tickets for project: {project_id}")
+            orm_tickets = (
+                self.session.query(TicketORM)
+                .filter(TicketORM.project_id == project_id)  # type: ignore[operator]
+                .order_by(TicketORM.created_at)  # type: ignore[union-attr]
+                .all()
+            )
+            return [orm_ticket_to_domain_ticket(ticket) for ticket in orm_tickets]
+
+        def get_all(self) -> List[Ticket]:
+            """Get all tickets from the database, ordered by creation date."""
+            orm_tickets = self.session.query(TicketORM).order_by(TicketORM.created_at).all()  # type: ignore[union-attr]
+            return [orm_ticket_to_domain_ticket(ticket) for ticket in orm_tickets]
+
+        def get_by_filters(
+            self,
+            project_id: Optional[str] = None,
+            status: Optional[TicketStatus] = None,
+            assignee_id: Optional[str] = None,
+        ) -> List[Ticket]:
+            """Get tickets filtered by various criteria.
+
+            Args:
+                project_id: Filter by project ID
+                status: Filter by ticket status
+                assignee_id: Filter by assignee user ID
+
+            Returns:
+                List of tickets matching all provided filters
+            """
+            logger.debug(
+                f"Retrieving tickets with filters: project_id={project_id}, status={status}, assignee_id={assignee_id}"
+            )
+            query = self.session.query(TicketORM)
+
+            if project_id is not None:
+                query = query.filter(TicketORM.project_id == project_id)  # type: ignore[operator]
+            if status is not None:
+                query = query.filter(TicketORM.status == status.value)  # type: ignore[operator]
+            if assignee_id is not None:
+                query = query.filter(TicketORM.assignee_id == assignee_id)  # type: ignore[operator]
+
+            orm_tickets = query.order_by(TicketORM.created_at).all()  # type: ignore[union-attr]
+            return [orm_ticket_to_domain_ticket(ticket) for ticket in orm_tickets]
+
+        def update(self, ticket_id: str, update_command: TicketUpdateCommand) -> Optional[Ticket]:
+            """Update an existing ticket.
+
+            Args:
+                ticket_id: ID of ticket to update
+                update_command: Command containing fields to update
+
+            Returns:
+                Updated Ticket if found, None otherwise
+            """
+            logger.debug(f"Updating ticket: {ticket_id}")
+            orm_ticket = self.session.query(TicketORM).filter(TicketORM.id == ticket_id).first()  # type: ignore[operator]
+
+            if orm_ticket is None:
+                logger.debug(f"Ticket not found for update: {ticket_id}")
+                return None
+
+            # Update only provided fields
+            if update_command.title is not None:
+                orm_ticket.title = update_command.title  # type: ignore[assignment]
+            if update_command.description is not None:
+                orm_ticket.description = update_command.description  # type: ignore[assignment]
+            if update_command.priority is not None:
+                orm_ticket.priority = update_command.priority.value  # type: ignore[assignment]
+
+            self.session.commit()
+            self.session.refresh(orm_ticket)
+            logger.debug(f"Ticket updated: {ticket_id}")
+            return orm_ticket_to_domain_ticket(orm_ticket)
+
+        def update_status(self, ticket_id: str, status: TicketStatus) -> Optional[Ticket]:
+            """Change ticket status.
+
+            Args:
+                ticket_id: ID of ticket to update
+                status: New ticket status
+
+            Returns:
+                Updated Ticket if found, None otherwise
+            """
+            logger.debug(f"Updating ticket status: {ticket_id} to {status.value}")
+            orm_ticket = self.session.query(TicketORM).filter(TicketORM.id == ticket_id).first()  # type: ignore[operator]
+
+            if orm_ticket is None:
+                logger.debug(f"Ticket not found for status update: {ticket_id}")
+                return None
+
+            orm_ticket.status = status.value  # type: ignore[assignment]
+            self.session.commit()
+            self.session.refresh(orm_ticket)
+            logger.debug(f"Ticket status updated: {ticket_id}")
+            return orm_ticket_to_domain_ticket(orm_ticket)
+
+        def update_project(self, ticket_id: str, project_id: str) -> Optional[Ticket]:
+            """Move ticket to different project.
+
+            Args:
+                ticket_id: ID of ticket to move
+                project_id: ID of target project
+
+            Returns:
+                Updated Ticket if found, None otherwise
+            """
+            logger.debug(f"Moving ticket {ticket_id} to project {project_id}")
+            orm_ticket = self.session.query(TicketORM).filter(TicketORM.id == ticket_id).first()  # type: ignore[operator]
+
+            if orm_ticket is None:
+                logger.debug(f"Ticket not found for project update: {ticket_id}")
+                return None
+
+            orm_ticket.project_id = project_id  # type: ignore[assignment]
+            self.session.commit()
+            self.session.refresh(orm_ticket)
+            logger.debug(f"Ticket moved to project: {project_id}")
+            return orm_ticket_to_domain_ticket(orm_ticket)
+
+        def update_assignee(self, ticket_id: str, assignee_id: Optional[str]) -> Optional[Ticket]:
+            """Assign or unassign ticket to a user.
+
+            Args:
+                ticket_id: ID of ticket to update
+                assignee_id: ID of user to assign (None to unassign)
+
+            Returns:
+                Updated Ticket if found, None otherwise
+            """
+            logger.debug(f"Updating ticket assignee: {ticket_id} to {assignee_id}")
+            orm_ticket = self.session.query(TicketORM).filter(TicketORM.id == ticket_id).first()  # type: ignore[operator]
+
+            if orm_ticket is None:
+                logger.debug(f"Ticket not found for assignee update: {ticket_id}")
+                return None
+
+            orm_ticket.assignee_id = assignee_id  # type: ignore[assignment]
+            self.session.commit()
+            self.session.refresh(orm_ticket)
+            logger.debug(f"Ticket assignee updated: {ticket_id}")
+            return orm_ticket_to_domain_ticket(orm_ticket)
+
+        def delete(self, ticket_id: str) -> bool:
+            """Delete a ticket by ID.
+
+            Note: This is for testing/cleanup purposes. In production, consider archival instead.
+            """
+            logger.debug(f"Deleting ticket: {ticket_id}")
+            orm_ticket = self.session.query(TicketORM).filter(TicketORM.id == ticket_id).first()  # type: ignore[operator]
+            if not orm_ticket:
+                logger.debug(f"Ticket not found for deletion: {ticket_id}")
+                return False
+
+            self.session.delete(orm_ticket)
+            self.session.commit()
+            logger.debug(f"Ticket deleted: {ticket_id}")
             return True
 
     class StubEntities:

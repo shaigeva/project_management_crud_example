@@ -90,6 +90,32 @@ class ProjectORM(Base):
         return f"<Project(id='{self.id}', name='{self.name}', organization_id='{self.organization_id}')>"
 
 
+class TicketORM(Base):
+    """SQLAlchemy ORM model for tickets."""
+
+    __tablename__ = "tickets"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    title = Column(String(500), nullable=False)
+    description = Column(String(2000), nullable=True)
+    status = Column(String(50), nullable=False, index=True)  # TODO, IN_PROGRESS, DONE
+    priority = Column(String(50), nullable=True)  # LOW, MEDIUM, HIGH, CRITICAL
+    assignee_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
+    reporter_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True)
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    def __repr__(self) -> str:
+        return f"<Ticket(id='{self.id}', title='{self.title}', status='{self.status}', project_id='{self.project_id}')>"
+
+
 class UserORM(Base):
     """SQLAlchemy ORM model for users."""
 
