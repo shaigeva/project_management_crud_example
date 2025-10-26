@@ -15,7 +15,7 @@ A multi-tenant project management backend system supporting:
 - Epics that span multiple projects
 - Comments on tickets
 - Activity logs and audit trails with permission-based access
-- Ticket workflows (V1: TODO/IN-PROGRESS/DONE, future: custom workflows)
+- Custom workflows (define ticket statuses per project)
 
 ---
 
@@ -134,7 +134,7 @@ Different users need different levels of access. The system supports five roles:
 ---
 
 ## Feature: Projects
-**Status**: ✅ 10/10 requirements implemented (100%) - V1 Complete
+**Status**: 🟡 10/11 requirements implemented (91%)
 **Detail Spec**: [detailed/projects_detailed_spec.md](detailed/projects_detailed_spec.md)
 **Purpose**: Organize work into projects
 **Version**: V1
@@ -153,13 +153,14 @@ Projects (e.g., "Backend", "Frontend") are containers for tickets. Users with ap
 - ✅ REQ-PROJ-008: Handle validation errors
 - ✅ REQ-PROJ-009: Filter/search projects
 - ✅ REQ-PROJ-010: Archive projects (soft delete)
+- 🔴 REQ-PROJ-011: Projects reference workflows
 
-**Notes**: Complete project management with CRUD operations, role-based authorization (Admin, PM can create/update/archive; Admin can delete/unarchive), organization scoping, filtering by name and is_active status, and archive/soft delete functionality with include_archived parameter for listings.
+**Notes**: Complete project management with CRUD operations, role-based authorization (Admin, PM can create/update/archive; Admin can delete/unarchive), organization scoping, filtering by name and is_active status, and archive/soft delete functionality with include_archived parameter for listings. Workflow integration (REQ-PROJ-011) pending implementation.
 
 ---
 
 ## Feature: Tickets
-**Status**: 🟢 15/15 requirements implemented (100%) - V1 Complete
+**Status**: 🟡 15/17 requirements implemented (88%)
 **Detail Spec**: [detailed/tickets_detailed_spec.md](detailed/tickets_detailed_spec.md)
 **Purpose**: Track work items within projects
 **Version**: V1
@@ -181,10 +182,12 @@ Tickets are the core work items. They have a predefined set of fields (V1), belo
 - ✅ REQ-TICKET-011: Tickets are organization-scoped
 - ✅ REQ-TICKET-012: Handle not-found errors
 - ✅ REQ-TICKET-013: Handle validation errors
-- ✅ REQ-TICKET-014: Ticket status workflow validation (valid transitions)
+- ✅ REQ-TICKET-014: Ticket status workflow validation (basic - hardcoded enum)
 - ✅ REQ-TICKET-015: Activity log for ticket changes
+- 🔴 REQ-TICKET-016: Validate status against project workflow (custom workflows)
+- 🔴 REQ-TICKET-017: Validate workflow when moving tickets between projects
 
-**Notes**: Complete ticket management with 9 REST endpoints including specialized operations (status change, project moves, assignments). Role-based authorization implemented (Admin/PM/Write can create/update, Admin/PM can assign/move, Admin can delete). Organization scoping enforced via project relationships. Activity logging implemented for all 6 ticket operations (create, update, status change, assign, move, delete).
+**Notes**: Complete ticket management with 9 REST endpoints including specialized operations (status change, project moves, assignments). Role-based authorization implemented (Admin/PM/Write can create/update, Admin/PM can assign/move, Admin can delete). Organization scoping enforced via project relationships. Activity logging implemented for all 6 ticket operations (create, update, status change, assign, move, delete). Custom workflow integration (REQ-TICKET-016, REQ-TICKET-017) pending implementation.
 
 ---
 
@@ -258,13 +261,32 @@ For compliance and transparency, the system tracks all changes to tickets, proje
 
 ---
 
-## Future Features (Not in V1)
-
-### Custom Workflows
+## Feature: Custom Workflows
+**Status**: 🔴 0/10 requirements implemented (0%)
+**Detail Spec**: [detailed/workflows_detailed_spec.md](detailed/workflows_detailed_spec.md)
+**Purpose**: Allow organizations to define custom ticket workflows
 **Version**: V2
-- Define custom ticket statuses
-- Configure status transitions
-- Workflow templates
+
+### Rationale
+Different teams have different processes. While TODO/IN_PROGRESS/DONE works for many, others need custom statuses that match their specific workflows (e.g., "BACKLOG", "CODE_REVIEW", "QA", "DEPLOYED" or "NEW", "TRIAGED", "ASSIGNED", "RESOLVED", "CLOSED").
+
+### High-Level Requirements
+- 🔴 REQ-WORKFLOW-001: Create workflow with custom statuses
+- 🔴 REQ-WORKFLOW-002: Retrieve workflow by ID
+- 🔴 REQ-WORKFLOW-003: List workflows in organization
+- 🔴 REQ-WORKFLOW-004: Update workflow details
+- 🔴 REQ-WORKFLOW-005: Delete workflow (if not in use)
+- 🔴 REQ-WORKFLOW-006: Default workflow exists for each organization
+- 🔴 REQ-WORKFLOW-007: Workflow validation (status format, uniqueness)
+- 🔴 REQ-WORKFLOW-008: Organization scoping for workflows
+- 🔴 REQ-WORKFLOW-009: Cannot update workflow if it breaks existing tickets
+- 🔴 REQ-WORKFLOW-010: Handle not-found and permission errors
+
+**Notes**: Workflows are organization-scoped. Each org has a default workflow (TODO/IN_PROGRESS/DONE) for backward compatibility. Projects can choose a workflow; tickets must have statuses valid for their project's workflow. V1 allows all status transitions; future versions may add transition constraints.
+
+---
+
+## Future Features (Not Yet Planned)
 
 ### Custom Fields
 **Version**: V2

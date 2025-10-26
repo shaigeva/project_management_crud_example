@@ -1,6 +1,6 @@
 # Projects: Detailed Specification
 
-**Status**: ✅ 6/6 requirements implemented (100%) - V1 Complete
+**Status**: 🟡 6/7 requirements implemented (86%)
 **Parent**: [Main Spec](../main_spec.md#feature-projects)
 **Last Updated**: 2025-01-26
 
@@ -204,3 +204,60 @@ Projects can be archived (soft deleted) and unarchived (restored). Archived proj
 - Filter combinations: include_archived with name/is_active filters
 - Cross-organization archive attempts (403 forbidden)
 - Future: Prevent ticket creation in archived projects (not yet implemented)
+
+---
+
+## REQ-PROJ-011: Projects reference workflows
+**Status**: 🔴 Not Implemented
+**Type**: Product Behavior
+
+### Scenario
+When creating or updating a project, users can optionally specify which workflow the project should use for its tickets
+
+### Observable Behavior
+Projects can reference a workflow, and tickets in that project must have statuses valid for the project's workflow.
+
+### Acceptance Criteria
+**Project Creation with Workflow**:
+- POST /api/projects can include optional `workflow_id` parameter
+- If workflow_id provided:
+  - Workflow must exist in the same organization
+  - Workflow from different organization returns 403
+  - Non-existent workflow returns 404
+  - Response includes workflow_id in project data
+- If workflow_id not provided:
+  - Project uses organization's default workflow
+  - Response includes workflow_id set to default workflow's ID
+- GET /api/projects/{id} returns project with workflow_id field
+
+**Project Update with Workflow**:
+- PUT /api/projects/{id} can update workflow_id
+- Changing workflow validates:
+  - New workflow exists in same organization
+  - All existing tickets in project have statuses valid in new workflow
+  - If any ticket has invalid status for new workflow, update fails with 400
+  - Error message lists which tickets/statuses are incompatible
+- Changing to null/omitting workflow_id sets to organization's default workflow
+- Successful workflow change updates project and returns updated project data
+
+**Project Retrieval**:
+- GET /api/projects/{id} response includes:
+  - `workflow_id`: ID of the workflow this project uses
+  - All existing fields (id, name, description, organization_id, is_archived, etc.)
+- GET /api/projects list response includes workflow_id for each project
+
+**Workflow Association**:
+- Projects can only reference workflows from their organization
+- Multiple projects can use the same workflow
+- Default workflow is used if workflow_id is null or not specified
+- Project's workflow determines valid statuses for its tickets
+
+### Edge Cases
+- Creating project without workflow_id (uses default)
+- Creating project with explicit workflow_id
+- Creating project with non-existent workflow_id (404)
+- Creating project with workflow from different org (403)
+- Updating project to change workflow (validates ticket compatibility)
+- Updating project to workflow that's incompatible with existing tickets (fails)
+- Updating project to null workflow_id (uses default)
+- Deleting workflow that projects reference (see REQ-WORKFLOW-005 - should fail)

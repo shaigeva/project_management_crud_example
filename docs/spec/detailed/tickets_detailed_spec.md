@@ -1,6 +1,6 @@
 # Tickets: Detailed Specification
 
-**Status**: ✅ 14/15 requirements implemented (93%) - V1 Complete
+**Status**: 🟡 15/17 requirements implemented (88%)
 **Parent**: [Main Spec](../main_spec.md#feature-tickets)
 **Last Updated**: 2025-01-25
 
@@ -360,12 +360,12 @@ Clear validation error messages.
 
 ---
 
-## REQ-TICKET-014: Ticket status workflow validation
+## REQ-TICKET-014: Ticket status workflow validation (basic)
 **Status**: ✅ Implemented
 **Type**: Product Behavior
 
 ### Scenario
-When changing ticket status
+When changing ticket status (V1: hardcoded workflow)
 
 ### Observable Behavior
 Status changes follow valid workflow rules.
@@ -374,15 +374,16 @@ Status changes follow valid workflow rules.
 - V1: All transitions allowed (TODO ↔ IN_PROGRESS ↔ DONE)
 - Invalid status values return 422
 - Status is case-sensitive (must match enum exactly)
+- See REQ-TICKET-016 for custom workflow validation
 
 ### Edge Cases
 - Invalid status values
-- Future: May add workflow restrictions
+- Hardcoded enum validation (V1)
 
 ---
 
 ## REQ-TICKET-015: Activity log for ticket changes
-**Status**: 🔴 Not Implemented
+**Status**: ✅ Implemented
 **Type**: Product Behavior
 
 ### Scenario
@@ -392,9 +393,95 @@ When tickets are modified
 Changes to tickets are logged for audit trail.
 
 ### Acceptance Criteria
-- NOT IMPLEMENTED IN V1
-- Future feature: Track who changed what and when
-- Will be added after core CRUD is complete
+- All ticket operations create activity log entries
+- Logged operations: create, update, status change, assign, move, delete
+- Activity logs include: entity_id, entity_type, action_type, actor_id, organization_id, timestamp
+- Activity logs are queryable via activity log API
+- Logs respect organization scoping
 
 ### Edge Cases
-- Future requirement
+- All mutation operations logged
+- Logs are immutable
+- Permission-based log access
+
+---
+
+## REQ-TICKET-016: Validate status against project workflow
+**Status**: 🔴 Not Implemented
+**Type**: Product Behavior
+
+### Scenario
+When creating or updating a ticket's status, the status must be valid for the project's workflow
+
+### Observable Behavior
+Ticket status values are validated against the project's workflow statuses.
+
+### Acceptance Criteria
+**Ticket Creation**:
+- POST /api/tickets validates status against project's workflow
+- If status provided is not in project's workflow statuses, returns 422
+- If status not provided, defaults to first status in workflow (backward compat: "TODO")
+- Error message indicates which statuses are valid for the project's workflow
+- Project's workflow is determined by project.workflow_id (or org's default workflow)
+
+**Status Update**:
+- PUT /api/tickets/{id}/status validates new status against project's workflow
+- If new status not in project's workflow statuses, returns 422
+- Error message lists valid statuses for the project
+- Valid status update succeeds and returns updated ticket
+
+**Ticket Update**:
+- PUT /api/tickets/{id} with TicketUpdateCommand does not change status
+- Status changes must use dedicated status update endpoint
+- General ticket update (title, description, priority) ignores status field
+
+**Status Retrieval**:
+- GET /api/tickets/{id} returns ticket with status string
+- Status is one of the project's workflow's statuses
+- All existing tickets have valid statuses for their project's workflow
+
+### Edge Cases
+- Creating ticket with status not in workflow (validation error)
+- Creating ticket without status (uses first workflow status)
+- Updating to invalid status (validation error)
+- Project with custom workflow
+- Project with default workflow
+- Error messages include valid statuses
+
+---
+
+## REQ-TICKET-017: Validate workflow when moving tickets between projects
+**Status**: 🔴 Not Implemented
+**Type**: Product Behavior
+
+### Scenario
+When moving a ticket from one project to another, if projects have different workflows, validate ticket's status
+
+### Observable Behavior
+Moving tickets between projects validates status compatibility with target project's workflow.
+
+### Acceptance Criteria
+**Moving Ticket**:
+- PUT /api/tickets/{id}/project moves ticket to different project
+- Before moving, validates ticket's current status is valid in target project's workflow
+- If ticket status invalid in target workflow:
+  - Returns 400 with error message
+  - Error indicates status incompatibility
+  - Error lists valid statuses in target workflow
+  - Suggests updating status first
+- If ticket status valid in target workflow:
+  - Move succeeds
+  - Returns updated ticket with new project_id
+- Same workflow (or both using default): always succeeds
+
+**Status Validation Logic**:
+- Get target project's workflow (via workflow_id or default)
+- Check if ticket's current status is in target workflow's statuses
+- Case-sensitive string match
+
+### Edge Cases
+- Moving between projects with same workflow (always succeeds)
+- Moving between projects with different workflows (validates status)
+- Moving to project where status is invalid (fails with clear error)
+- Moving ticket with "TODO" status (usually succeeds - in most workflows)
+- Moving ticket with custom status to project with default workflow (likely fails)
