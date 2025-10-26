@@ -16,7 +16,11 @@ from project_management_crud_example.domain_models import (
     UserRole,
 )
 from tests.conftest import test_repo  # noqa: F401
-from tests.dal.helpers import create_test_org_via_repo, create_test_project_via_repo, create_test_user_via_repo
+from tests.dal.helpers import (
+    create_test_org_with_workflow_via_repo,
+    create_test_project_via_repo,
+    create_test_user_via_repo,
+)
 
 
 class TestCommentRepositoryCreate:
@@ -25,7 +29,7 @@ class TestCommentRepositoryCreate:
     def test_create_comment_with_all_fields(self, test_repo: Repository) -> None:
         """Test creating a comment with content through repository."""
         # Create organization, project, ticket, and author
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id)
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter", role=UserRole.ADMIN)
         author = create_test_user_via_repo(test_repo, org.id, username="author", role=UserRole.WRITE_ACCESS)
@@ -56,7 +60,7 @@ class TestCommentRepositoryCreate:
     def test_create_comment_with_long_content(self, test_repo: Repository) -> None:
         """Test creating a comment with maximum length content."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id)
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter")
         author = create_test_user_via_repo(test_repo, org.id, username="author")
@@ -81,7 +85,7 @@ class TestCommentRepositoryCreate:
     def test_create_comment_persists_to_database(self, test_repo: Repository) -> None:
         """Test that created comment can be retrieved from database."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id)
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter")
         author = create_test_user_via_repo(test_repo, org.id, username="author")
@@ -113,7 +117,7 @@ class TestCommentRepositoryGet:
     def test_get_comment_by_id_found(self, test_repo: Repository) -> None:
         """Test retrieving an existing comment by ID."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id)
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter")
         author = create_test_user_via_repo(test_repo, org.id, username="author")
@@ -148,7 +152,7 @@ class TestCommentRepositoryGet:
     def test_get_comments_by_ticket_id(self, test_repo: Repository) -> None:
         """Test retrieving all comments for a specific ticket."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id)
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter")
         author = create_test_user_via_repo(test_repo, org.id, username="author")
@@ -198,7 +202,7 @@ class TestCommentRepositoryGet:
     def test_get_comments_by_ticket_id_ordered_chronologically(self, test_repo: Repository) -> None:
         """Test that comments are returned in chronological order (oldest first)."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id)
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter")
         author = create_test_user_via_repo(test_repo, org.id, username="author")
@@ -245,7 +249,7 @@ class TestCommentRepositoryGet:
     def test_get_comments_by_ticket_id_empty(self, test_repo: Repository) -> None:
         """Test getting comments for ticket with no comments returns empty list."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id)
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter")
 
@@ -266,7 +270,7 @@ class TestCommentRepositoryUpdate:
     def test_update_comment_content(self, test_repo: Repository) -> None:
         """Test updating comment content."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id)
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter")
         author = create_test_user_via_repo(test_repo, org.id, username="author")
@@ -307,7 +311,7 @@ class TestCommentRepositoryUpdate:
     def test_update_comment_persists(self, test_repo: Repository) -> None:
         """Test that comment update persists to database."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id)
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter")
         author = create_test_user_via_repo(test_repo, org.id, username="author")
@@ -341,7 +345,7 @@ class TestCommentRepositoryDelete:
     def test_delete_comment(self, test_repo: Repository) -> None:
         """Test deleting a comment."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id)
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter")
         author = create_test_user_via_repo(test_repo, org.id, username="author")
@@ -378,7 +382,7 @@ class TestCommentRepositoryDelete:
     def test_delete_comment_removes_from_ticket_list(self, test_repo: Repository) -> None:
         """Test that deleted comment no longer appears in ticket's comment list."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id)
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter")
         author = create_test_user_via_repo(test_repo, org.id, username="author")
@@ -420,7 +424,7 @@ class TestCommentRepositoryMultipleAuthors:
     def test_comments_from_different_authors(self, test_repo: Repository) -> None:
         """Test that comments can have different authors on same ticket."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id)
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter")
         author1 = create_test_user_via_repo(test_repo, org.id, username="author1")

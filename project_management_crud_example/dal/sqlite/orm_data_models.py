@@ -77,6 +77,7 @@ class ProjectORM(Base):
     name = Column(String(255), nullable=False)
     description = Column(String(1000), nullable=True)
     organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=False, index=True)
+    workflow_id = Column(String(36), ForeignKey("workflows.id"), nullable=False, index=True)
     is_active = Column(Boolean, default=True, nullable=False)
     is_archived = Column(Boolean, default=False, nullable=False)
     archived_at = Column(DateTime, nullable=True)

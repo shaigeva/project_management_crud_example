@@ -552,22 +552,52 @@ class Repository:
 
             Returns:
                 Created Project domain model
+
+            Raises:
+                ValueError: If specified workflow doesn't exist or is from different organization
             """
             project_data = project_create_command.project_data
-            logger.debug(
-                f"Creating new project: {project_data.name} for organization: {project_create_command.organization_id}"
-            )
+            organization_id = project_create_command.organization_id
+            logger.debug(f"Creating new project: {project_data.name} for organization: {organization_id}")
+
+            # Determine workflow_id
+            workflow_id = project_data.workflow_id
+            if workflow_id:
+                # Validate specified workflow exists and is in same organization
+                workflow = (
+                    self.session.query(WorkflowORM)
+                    .filter(WorkflowORM.id == workflow_id)  # type: ignore[operator]
+                    .first()
+                )
+                if not workflow:
+                    raise ValueError(f"Workflow not found: {workflow_id}")
+                if workflow.organization_id != organization_id:
+                    raise ValueError(
+                        f"Workflow {workflow_id} belongs to different organization {workflow.organization_id}"
+                    )
+            else:
+                # Use organization's default workflow
+                default_workflow = (
+                    self.session.query(WorkflowORM)
+                    .filter(WorkflowORM.organization_id == organization_id)  # type: ignore[operator]
+                    .filter(WorkflowORM.is_default == True)  # type: ignore[operator]  # noqa: E712
+                    .first()
+                )
+                if not default_workflow:
+                    raise ValueError(f"No default workflow found for organization: {organization_id}")
+                workflow_id = str(default_workflow.id)
 
             orm_project = ProjectORM(
                 name=project_data.name,
                 description=project_data.description,
-                organization_id=project_create_command.organization_id,
+                organization_id=organization_id,
+                workflow_id=workflow_id,
             )
 
             self.session.add(orm_project)
             self.session.commit()
             self.session.refresh(orm_project)
-            logger.debug(f"Project created with ID: {orm_project.id}")
+            logger.debug(f"Project created with ID: {orm_project.id}, workflow: {workflow_id}")
             return orm_project_to_domain_project(orm_project)
 
         def get_by_id(self, project_id: str) -> Optional[Project]:
@@ -652,6 +682,9 @@ class Repository:
 
             Returns:
                 Updated Project if found, None otherwise
+
+            Raises:
+                ValueError: If specified workflow doesn't exist or is from different organization
             """
             logger.debug(f"Updating project: {project_id}")
             orm_project = (
@@ -667,6 +700,23 @@ class Repository:
                 orm_project.name = update_command.name  # type: ignore[assignment]
             if update_command.description is not None:
                 orm_project.description = update_command.description  # type: ignore[assignment]
+            if update_command.workflow_id is not None:
+                # Validate new workflow exists and is in same organization
+                workflow = (
+                    self.session.query(WorkflowORM)
+                    .filter(WorkflowORM.id == update_command.workflow_id)  # type: ignore[operator]
+                    .first()
+                )
+                if not workflow:
+                    raise ValueError(f"Workflow not found: {update_command.workflow_id}")
+                if workflow.organization_id != orm_project.organization_id:
+                    raise ValueError(
+                        f"Workflow {update_command.workflow_id} belongs to different organization "
+                        f"{workflow.organization_id}"
+                    )
+                # Note: Validation that existing tickets have valid statuses for new workflow
+                # will be implemented in Task 5 when we integrate ticket status validation
+                orm_project.workflow_id = update_command.workflow_id  # type: ignore[assignment]
             if update_command.is_active is not None:
                 orm_project.is_active = update_command.is_active  # type: ignore[assignment]
 

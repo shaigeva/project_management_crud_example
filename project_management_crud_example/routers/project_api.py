@@ -81,19 +81,27 @@ async def create_project(
         organization_id=current_user.organization_id,
     )
 
-    project = repo.projects.create(command)
-    logger.info(f"Project created: {project.id}")
+    try:
+        project = repo.projects.create(command)
+        logger.info(f"Project created: {project.id}")
 
-    # Log activity - command-based
-    log_activity(
-        repo=repo,
-        command=command,
-        entity_id=project.id,
-        actor_id=current_user.id,
-        organization_id=project.organization_id,
-    )
+        # Log activity - command-based
+        log_activity(
+            repo=repo,
+            command=command,
+            entity_id=project.id,
+            actor_id=current_user.id,
+            organization_id=project.organization_id,
+        )
 
-    return project
+        return project
+    except ValueError as e:
+        # Handle workflow validation errors
+        logger.warning(f"Failed to create project: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from None
 
 
 @router.get("/{project_id}", response_model=Project)
@@ -257,28 +265,36 @@ async def update_project(
     # Capture old state for debug logging
     old_project = project
 
-    updated_project = repo.projects.update(project_id, update_data)
-    if not updated_project:
-        # Should not happen since we verified existence, but defensive check
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found",
+    try:
+        updated_project = repo.projects.update(project_id, update_data)
+        if not updated_project:
+            # Should not happen since we verified existence, but defensive check
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found",
+            )
+
+        # Debug logging: show what changed
+        log_diff_debug(old_project, updated_project, "project", "update_project")
+
+        # Log activity - command-based
+        log_activity(
+            repo=repo,
+            command=update_data,
+            entity_id=project_id,
+            actor_id=current_user.id,
+            organization_id=updated_project.organization_id,
         )
 
-    # Debug logging: show what changed
-    log_diff_debug(old_project, updated_project, "project", "update_project")
-
-    # Log activity - command-based
-    log_activity(
-        repo=repo,
-        command=update_data,
-        entity_id=project_id,
-        actor_id=current_user.id,
-        organization_id=updated_project.organization_id,
-    )
-
-    logger.info(f"Project updated: {project_id}")
-    return updated_project
+        logger.info(f"Project updated: {project_id}")
+        return updated_project
+    except ValueError as e:
+        # Handle workflow validation errors
+        logger.warning(f"Failed to update project {project_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from None
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)

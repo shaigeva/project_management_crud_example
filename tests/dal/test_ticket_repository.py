@@ -16,7 +16,11 @@ from project_management_crud_example.domain_models import (
     UserRole,
 )
 from tests.conftest import test_repo  # noqa: F401
-from tests.dal.helpers import create_test_org_via_repo, create_test_project_via_repo, create_test_user_via_repo
+from tests.dal.helpers import (
+    create_test_org_with_workflow_via_repo,
+    create_test_project_via_repo,
+    create_test_user_via_repo,
+)
 
 
 class TestTicketRepositoryCreate:
@@ -25,7 +29,7 @@ class TestTicketRepositoryCreate:
     def test_create_ticket_with_all_fields(self, test_repo: Repository) -> None:
         """Test creating a ticket with all fields through repository."""
         # Create organization, project, and users
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id)
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter", role=UserRole.ADMIN)
         assignee = create_test_user_via_repo(test_repo, org.id, username="assignee", role=UserRole.WRITE_ACCESS)
@@ -58,7 +62,7 @@ class TestTicketRepositoryCreate:
     def test_create_ticket_without_optional_fields(self, test_repo: Repository) -> None:
         """Test creating a ticket without optional fields (description, priority, assignee)."""
         # Create organization, project, and reporter
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id, "Project")
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter", role=UserRole.ADMIN)
 
@@ -78,7 +82,7 @@ class TestTicketRepositoryCreate:
     def test_create_ticket_persists_to_database(self, test_repo: Repository) -> None:
         """Test that created ticket can be retrieved from database."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id, "Project")
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter", role=UserRole.ADMIN)
 
@@ -102,7 +106,7 @@ class TestTicketRepositoryGet:
     def test_get_ticket_by_id_found(self, test_repo: Repository) -> None:
         """Test retrieving an existing ticket by ID."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id, "Project")
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter", role=UserRole.ADMIN)
 
@@ -129,7 +133,7 @@ class TestTicketRepositoryGet:
     def test_get_tickets_by_project_id(self, test_repo: Repository) -> None:
         """Test retrieving all tickets for a specific project."""
         # Create organization
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter", role=UserRole.ADMIN)
 
         # Create two projects
@@ -162,7 +166,7 @@ class TestTicketRepositoryGet:
     def test_get_all_tickets(self, test_repo: Repository) -> None:
         """Test retrieving all tickets across all projects."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id, "Project")
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter", role=UserRole.ADMIN)
 
@@ -189,7 +193,7 @@ class TestTicketRepositoryFilters:
     def test_get_tickets_by_filters_project_id(self, test_repo: Repository) -> None:
         """Test filtering tickets by project ID."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project1 = create_test_project_via_repo(test_repo, org.id, "Project 1")
         project2 = create_test_project_via_repo(test_repo, org.id, "Project 2")
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter", role=UserRole.ADMIN)
@@ -213,7 +217,7 @@ class TestTicketRepositoryFilters:
     def test_get_tickets_by_filters_status(self, test_repo: Repository) -> None:
         """Test filtering tickets by status."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id, "Project")
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter", role=UserRole.ADMIN)
 
@@ -238,7 +242,7 @@ class TestTicketRepositoryFilters:
     def test_get_tickets_by_filters_assignee_id(self, test_repo: Repository) -> None:
         """Test filtering tickets by assignee."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id, "Project")
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter", role=UserRole.ADMIN)
         assignee = create_test_user_via_repo(test_repo, org.id, username="assignee", role=UserRole.WRITE_ACCESS)
@@ -264,7 +268,7 @@ class TestTicketRepositoryFilters:
     def test_get_tickets_by_filters_combined(self, test_repo: Repository) -> None:
         """Test filtering tickets by multiple criteria (AND logic)."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id, "Project")
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter", role=UserRole.ADMIN)
         assignee = create_test_user_via_repo(test_repo, org.id, username="assignee", role=UserRole.WRITE_ACCESS)
@@ -303,7 +307,7 @@ class TestTicketRepositoryUpdate:
     def test_update_ticket_title(self, test_repo: Repository) -> None:
         """Test updating ticket title."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id, "Project")
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter", role=UserRole.ADMIN)
         ticket = test_repo.tickets.create(
@@ -322,7 +326,7 @@ class TestTicketRepositoryUpdate:
     def test_update_ticket_all_fields(self, test_repo: Repository) -> None:
         """Test updating all ticket fields."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id, "Project")
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter", role=UserRole.ADMIN)
         ticket = test_repo.tickets.create(
@@ -356,7 +360,7 @@ class TestTicketRepositoryUpdate:
     def test_update_status(self, test_repo: Repository) -> None:
         """Test updating ticket status."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id, "Project")
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter", role=UserRole.ADMIN)
         ticket = test_repo.tickets.create(
@@ -373,7 +377,7 @@ class TestTicketRepositoryUpdate:
     def test_update_project(self, test_repo: Repository) -> None:
         """Test moving ticket to different project."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project1 = create_test_project_via_repo(test_repo, org.id, "Project 1")
         project2 = create_test_project_via_repo(test_repo, org.id, "Project 2")
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter", role=UserRole.ADMIN)
@@ -391,7 +395,7 @@ class TestTicketRepositoryUpdate:
     def test_update_assignee_assign(self, test_repo: Repository) -> None:
         """Test assigning ticket to a user."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id, "Project")
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter", role=UserRole.ADMIN)
         assignee = create_test_user_via_repo(test_repo, org.id, username="assignee", role=UserRole.WRITE_ACCESS)
@@ -409,7 +413,7 @@ class TestTicketRepositoryUpdate:
     def test_update_assignee_unassign(self, test_repo: Repository) -> None:
         """Test unassigning ticket (set to None)."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id, "Project")
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter", role=UserRole.ADMIN)
         assignee = create_test_user_via_repo(test_repo, org.id, username="assignee", role=UserRole.WRITE_ACCESS)
@@ -431,7 +435,7 @@ class TestTicketRepositoryDelete:
     def test_delete_ticket_succeeds(self, test_repo: Repository) -> None:
         """Test deleting an existing ticket."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id, "Project")
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter", role=UserRole.ADMIN)
         ticket = test_repo.tickets.create(
@@ -461,7 +465,7 @@ class TestTicketRepositoryTimestamps:
     def test_created_at_and_updated_at_are_set_on_create(self, test_repo: Repository) -> None:
         """Test that both timestamps are set when creating a ticket."""
         # Setup
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id, "Project")
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter", role=UserRole.ADMIN)
 
@@ -484,7 +488,7 @@ class TestTicketRepositoryWorkflows:
     def test_complete_ticket_workflow(self, test_repo: Repository) -> None:
         """Test complete workflow: create, read, update, change status, move project, assign, delete."""
         # Setup
-        org = create_test_org_via_repo(test_repo, "Workflow Org")
+        org = create_test_org_with_workflow_via_repo(test_repo, "Workflow Org")
         project1 = create_test_project_via_repo(test_repo, org.id, "Project 1")
         project2 = create_test_project_via_repo(test_repo, org.id, "Project 2")
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter", role=UserRole.ADMIN)
@@ -550,7 +554,7 @@ class TestTicketRepositoryWorkflows:
     def test_multiple_tickets_in_same_project(self, test_repo: Repository) -> None:
         """Test creating multiple tickets within the same project."""
         # Setup
-        org = create_test_org_via_repo(test_repo, "Multi-Ticket Org")
+        org = create_test_org_with_workflow_via_repo(test_repo, "Multi-Ticket Org")
         project = create_test_project_via_repo(test_repo, org.id, "Project")
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter", role=UserRole.ADMIN)
 
@@ -578,7 +582,7 @@ class TestTicketRepositoryWorkflows:
     def test_tickets_isolated_by_project(self, test_repo: Repository) -> None:
         """Test that tickets are properly isolated by project."""
         # Setup
-        org = create_test_org_via_repo(test_repo, "Isolation Org")
+        org = create_test_org_with_workflow_via_repo(test_repo, "Isolation Org")
         project1 = create_test_project_via_repo(test_repo, org.id, "Backend")
         project2 = create_test_project_via_repo(test_repo, org.id, "Frontend")
         reporter = create_test_user_via_repo(test_repo, org.id, username="reporter", role=UserRole.ADMIN)

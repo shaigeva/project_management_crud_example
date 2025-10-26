@@ -130,6 +130,7 @@ class TestProjectModel:
             name="Backend",
             description="REST API",
             organization_id="org-456",
+            workflow_id="workflow-789",
             created_at=now,
             updated_at=now,
         )
@@ -138,6 +139,7 @@ class TestProjectModel:
         assert project.name == "Backend"
         assert project.description == "REST API"
         assert project.organization_id == "org-456"
+        assert project.workflow_id == "workflow-789"
         assert project.created_at == now
         assert project.updated_at == now
 
@@ -148,11 +150,13 @@ class TestProjectModel:
             id="proj-123",
             name="Backend",
             organization_id="org-456",
+            workflow_id="workflow-789",
             created_at=now,
             updated_at=now,
         )
 
         assert project.description is None
+        assert project.workflow_id == "workflow-789"
 
     def test_project_requires_organization_id(self) -> None:
         """Test that organization_id is required."""

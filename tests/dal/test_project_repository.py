@@ -13,7 +13,7 @@ from project_management_crud_example.domain_models import (
     ProjectUpdateCommand,
 )
 from tests.conftest import test_repo  # noqa: F401
-from tests.dal.helpers import create_test_org_via_repo, create_test_project_via_repo
+from tests.dal.helpers import create_test_org_with_workflow_via_repo, create_test_project_via_repo
 
 
 class TestProjectRepositoryCreate:
@@ -22,7 +22,7 @@ class TestProjectRepositoryCreate:
     def test_create_project_with_all_fields(self, test_repo: Repository) -> None:
         """Test creating a project with all fields through repository."""
         # Create organization first
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
 
         # Create project
         project_data = ProjectData(name="Backend API", description="REST API for the application")
@@ -40,7 +40,7 @@ class TestProjectRepositoryCreate:
     def test_create_project_without_description(self, test_repo: Repository) -> None:
         """Test creating a project without optional description."""
         # Create organization
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
 
         # Create project without description
         project_data = ProjectData(name="Frontend")
@@ -55,7 +55,7 @@ class TestProjectRepositoryCreate:
     def test_create_project_persists_to_database(self, test_repo: Repository) -> None:
         """Test that created project can be retrieved from database."""
         # Create organization
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
 
         # Create project
         project_data = ProjectData(name="Mobile App")
@@ -77,7 +77,7 @@ class TestProjectRepositoryGet:
     def test_get_project_by_id_found(self, test_repo: Repository) -> None:
         """Test retrieving an existing project by ID."""
         # Create organization and project
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id)
 
         # Retrieve project
@@ -96,8 +96,8 @@ class TestProjectRepositoryGet:
     def test_get_projects_by_organization_id(self, test_repo: Repository) -> None:
         """Test retrieving all projects for a specific organization."""
         # Create two organizations
-        org1 = create_test_org_via_repo(test_repo, "Org 1")
-        org2 = create_test_org_via_repo(test_repo, "Org 2")
+        org1 = create_test_org_with_workflow_via_repo(test_repo, "Org 1")
+        org2 = create_test_org_with_workflow_via_repo(test_repo, "Org 2")
 
         # Create projects for org1
         create_test_project_via_repo(test_repo, org1.id, "Org1 Project 1")
@@ -116,8 +116,8 @@ class TestProjectRepositoryGet:
     def test_get_all_projects(self, test_repo: Repository) -> None:
         """Test retrieving all projects across all organizations."""
         # Create two organizations
-        org1 = create_test_org_via_repo(test_repo, "Org 1")
-        org2 = create_test_org_via_repo(test_repo, "Org 2")
+        org1 = create_test_org_with_workflow_via_repo(test_repo, "Org 1")
+        org2 = create_test_org_with_workflow_via_repo(test_repo, "Org 2")
 
         # Create projects
         create_test_project_via_repo(test_repo, org1.id, "Project 1")
@@ -136,7 +136,7 @@ class TestProjectRepositoryUpdate:
     def test_update_project_name(self, test_repo: Repository) -> None:
         """Test updating project name."""
         # Create organization and project
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id, "Old Name")
 
         # Update name
@@ -150,7 +150,7 @@ class TestProjectRepositoryUpdate:
     def test_update_project_description(self, test_repo: Repository) -> None:
         """Test updating project description."""
         # Create organization and project
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id, "Project", "Old description")
 
         # Update description
@@ -164,7 +164,7 @@ class TestProjectRepositoryUpdate:
     def test_update_project_is_active(self, test_repo: Repository) -> None:
         """Test updating project is_active status."""
         # Create organization and project
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id, "Project")
 
         # Verify project is active by default
@@ -188,7 +188,7 @@ class TestProjectRepositoryUpdate:
     def test_update_project_all_fields(self, test_repo: Repository) -> None:
         """Test updating all project fields."""
         # Create organization and project
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id, "Old Name", "Old description")
 
         # Update all fields
@@ -210,7 +210,7 @@ class TestProjectRepositoryUpdate:
     def test_update_project_with_empty_command(self, test_repo: Repository) -> None:
         """Test updating project with no fields succeeds (no-op)."""
         # Create organization and project
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id, "Project")
 
         # Update with empty command
@@ -228,7 +228,7 @@ class TestProjectRepositoryDelete:
     def test_delete_project_succeeds(self, test_repo: Repository) -> None:
         """Test deleting an existing project."""
         # Create organization and project
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id, "To Delete")
 
         # Delete project
@@ -253,7 +253,7 @@ class TestProjectRepositoryTimestamps:
     def test_created_at_and_updated_at_are_set_on_create(self, test_repo: Repository) -> None:
         """Test that both timestamps are set when creating a project."""
         # Create organization and project
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id)
 
         assert isinstance(project.created_at, datetime)
@@ -269,7 +269,7 @@ class TestProjectRepositoryFilters:
 
     def test_filter_by_name_substring(self, test_repo: Repository) -> None:
         """Test filtering projects by name substring."""
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
 
         # Create projects with different names
         create_test_project_via_repo(test_repo, org.id, "Backend API")
@@ -284,7 +284,7 @@ class TestProjectRepositoryFilters:
 
     def test_filter_by_name_case_insensitive(self, test_repo: Repository) -> None:
         """Test name filtering is case-insensitive."""
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         create_test_project_via_repo(test_repo, org.id, "Backend API")
 
         # Test different case variations
@@ -295,7 +295,7 @@ class TestProjectRepositoryFilters:
 
     def test_filter_by_is_active(self, test_repo: Repository) -> None:
         """Test filtering projects by active status."""
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
 
         # Create active and inactive projects
         active_project = create_test_project_via_repo(test_repo, org.id, "Active Project")
@@ -316,7 +316,7 @@ class TestProjectRepositoryFilters:
 
     def test_filter_by_name_and_is_active(self, test_repo: Repository) -> None:
         """Test combining name and is_active filters."""
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
 
         # Create projects
         backend_active = create_test_project_via_repo(test_repo, org.id, "Backend API")
@@ -333,8 +333,8 @@ class TestProjectRepositoryFilters:
 
     def test_filter_by_organization_id(self, test_repo: Repository) -> None:
         """Test filtering projects by organization ID."""
-        org1 = create_test_org_via_repo(test_repo, "Org 1")
-        org2 = create_test_org_via_repo(test_repo, "Org 2")
+        org1 = create_test_org_with_workflow_via_repo(test_repo, "Org 1")
+        org2 = create_test_org_with_workflow_via_repo(test_repo, "Org 2")
 
         # Create projects in both orgs
         create_test_project_via_repo(test_repo, org1.id, "Org1 Project")
@@ -352,8 +352,8 @@ class TestProjectRepositoryFilters:
 
     def test_filter_with_no_organization_filter_returns_all(self, test_repo: Repository) -> None:
         """Test filtering without organization_id returns all projects."""
-        org1 = create_test_org_via_repo(test_repo, "Org 1")
-        org2 = create_test_org_via_repo(test_repo, "Org 2")
+        org1 = create_test_org_with_workflow_via_repo(test_repo, "Org 1")
+        org2 = create_test_org_with_workflow_via_repo(test_repo, "Org 2")
 
         create_test_project_via_repo(test_repo, org1.id, "Project 1")
         create_test_project_via_repo(test_repo, org2.id, "Project 2")
@@ -366,7 +366,7 @@ class TestProjectRepositoryFilters:
 
     def test_filter_with_no_matches_returns_empty_list(self, test_repo: Repository) -> None:
         """Test filtering with no matches returns empty list."""
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         create_test_project_via_repo(test_repo, org.id, "Backend API")
 
         # Search for non-existent name
@@ -376,8 +376,8 @@ class TestProjectRepositoryFilters:
 
     def test_filter_respects_organization_boundaries(self, test_repo: Repository) -> None:
         """Test filtering respects organization boundaries."""
-        org1 = create_test_org_via_repo(test_repo, "Org 1")
-        org2 = create_test_org_via_repo(test_repo, "Org 2")
+        org1 = create_test_org_with_workflow_via_repo(test_repo, "Org 1")
+        org2 = create_test_org_with_workflow_via_repo(test_repo, "Org 2")
 
         # Create projects with "backend" in both orgs
         create_test_project_via_repo(test_repo, org1.id, "Backend API")
@@ -400,7 +400,7 @@ class TestProjectRepositoryArchive:
     def test_archive_project_sets_fields(self, test_repo: Repository) -> None:
         """Test archiving project sets is_archived and archived_at."""
         # Create organization and project
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id, "To Archive")
 
         # Archive project
@@ -420,7 +420,7 @@ class TestProjectRepositoryArchive:
     def test_archive_project_persists(self, test_repo: Repository) -> None:
         """Test archived state persists in database."""
         # Create and archive project
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id, "Persist Archive")
         archived = test_repo.projects.archive(project.id)
         assert archived is not None
@@ -434,7 +434,7 @@ class TestProjectRepositoryArchive:
     def test_unarchive_project_clears_fields(self, test_repo: Repository) -> None:
         """Test unarchiving project clears is_archived and archived_at."""
         # Create and archive project
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
         project = create_test_project_via_repo(test_repo, org.id, "To Unarchive")
         archived = test_repo.projects.archive(project.id)
         assert archived is not None
@@ -455,7 +455,7 @@ class TestProjectRepositoryArchive:
 
     def test_get_by_filters_excludes_archived_by_default(self, test_repo: Repository) -> None:
         """Test get_by_filters excludes archived projects by default."""
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
 
         # Create two projects, archive one
         active_project = create_test_project_via_repo(test_repo, org.id, "Active")
@@ -470,7 +470,7 @@ class TestProjectRepositoryArchive:
 
     def test_get_by_filters_includes_archived_when_requested(self, test_repo: Repository) -> None:
         """Test get_by_filters includes archived when include_archived=True."""
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
 
         # Create two projects, archive one
         active_project = create_test_project_via_repo(test_repo, org.id, "Active")
@@ -487,7 +487,7 @@ class TestProjectRepositoryArchive:
 
     def test_get_by_filters_name_filter_with_archived(self, test_repo: Repository) -> None:
         """Test combining name filter with include_archived."""
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
 
         # Create projects
         create_test_project_via_repo(test_repo, org.id, "Backend API")
@@ -506,7 +506,7 @@ class TestProjectRepositoryArchive:
 
     def test_get_all_excludes_archived_by_default(self, test_repo: Repository) -> None:
         """Test get_all excludes archived projects."""
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
 
         # Create two projects, archive one
         create_test_project_via_repo(test_repo, org.id, "Active")
@@ -521,7 +521,7 @@ class TestProjectRepositoryArchive:
 
     def test_get_by_organization_id_excludes_archived(self, test_repo: Repository) -> None:
         """Test get_by_organization_id excludes archived projects."""
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
 
         # Create two projects, archive one
         create_test_project_via_repo(test_repo, org.id, "Active")
@@ -541,7 +541,7 @@ class TestProjectRepositoryWorkflows:
     def test_complete_project_workflow(self, test_repo: Repository) -> None:
         """Test complete workflow: create, read, update, list, delete."""
         # 1. Create organization
-        org = create_test_org_via_repo(test_repo, "Workflow Org")
+        org = create_test_org_with_workflow_via_repo(test_repo, "Workflow Org")
 
         # 2. Create project
         project_data = ProjectData(name="Workflow Project", description="Initial description")
@@ -578,7 +578,7 @@ class TestProjectRepositoryWorkflows:
     def test_multiple_projects_in_same_organization(self, test_repo: Repository) -> None:
         """Test creating multiple projects within the same organization."""
         # Create organization
-        org = create_test_org_via_repo(test_repo, "Multi-Project Org")
+        org = create_test_org_with_workflow_via_repo(test_repo, "Multi-Project Org")
 
         # Create multiple projects
         create_test_project_via_repo(test_repo, org.id, "Backend")
@@ -595,8 +595,8 @@ class TestProjectRepositoryWorkflows:
     def test_projects_isolated_by_organization(self, test_repo: Repository) -> None:
         """Test that projects are properly isolated by organization."""
         # Create two organizations
-        org1 = create_test_org_via_repo(test_repo, "Org 1")
-        org2 = create_test_org_via_repo(test_repo, "Org 2")
+        org1 = create_test_org_with_workflow_via_repo(test_repo, "Org 1")
+        org2 = create_test_org_with_workflow_via_repo(test_repo, "Org 2")
 
         # Create projects for each organization
         create_test_project_via_repo(test_repo, org1.id, "Org1 Backend")
@@ -614,3 +614,167 @@ class TestProjectRepositoryWorkflows:
         assert all(p.organization_id == org2.id for p in org2_projects)
         assert {p.name for p in org1_projects} == {"Org1 Backend", "Org1 Frontend"}
         assert {p.name for p in org2_projects} == {"Org2 Mobile"}
+
+
+class TestProjectWorkflowIntegration:
+    """Tests for project-workflow integration."""
+
+    def test_create_project_uses_default_workflow_when_not_specified(self, test_repo: Repository) -> None:
+        """Test that project uses organization's default workflow when workflow_id not specified."""
+        # Create organization (with default workflow)
+        org = create_test_org_with_workflow_via_repo(test_repo)
+
+        # Get default workflow for org
+        default_workflow = test_repo.workflows.get_default_workflow(org.id)
+        assert default_workflow is not None
+
+        # Create project without specifying workflow_id
+        project_data = ProjectData(name="Test Project", description="Test")
+        command = ProjectCreateCommand(project_data=project_data, organization_id=org.id)
+        project = test_repo.projects.create(command)
+
+        # Verify project uses default workflow
+        assert project.workflow_id == default_workflow.id
+
+    def test_create_project_with_explicit_workflow_id(self, test_repo: Repository) -> None:
+        """Test creating project with explicitly specified workflow."""
+        # Create organization and custom workflow
+        org = create_test_org_with_workflow_via_repo(test_repo)
+
+        from project_management_crud_example.domain_models import WorkflowCreateCommand, WorkflowData
+
+        workflow_data = WorkflowData(name="Custom Workflow", statuses=["BACKLOG", "IN_PROGRESS", "DONE"])
+        custom_workflow = test_repo.workflows.create(
+            WorkflowCreateCommand(workflow_data=workflow_data, organization_id=org.id)
+        )
+
+        # Create project with custom workflow
+        project_data = ProjectData(name="Test Project", workflow_id=custom_workflow.id)
+        command = ProjectCreateCommand(project_data=project_data, organization_id=org.id)
+        project = test_repo.projects.create(command)
+
+        # Verify project uses custom workflow
+        assert project.workflow_id == custom_workflow.id
+
+    def test_create_project_with_nonexistent_workflow_fails(self, test_repo: Repository) -> None:
+        """Test that creating project with non-existent workflow fails."""
+        import pytest
+
+        org = create_test_org_with_workflow_via_repo(test_repo)
+
+        # Try to create project with non-existent workflow
+        project_data = ProjectData(name="Test Project", workflow_id="non-existent-workflow-id")
+        command = ProjectCreateCommand(project_data=project_data, organization_id=org.id)
+
+        with pytest.raises(ValueError, match="Workflow not found"):
+            test_repo.projects.create(command)
+
+    def test_create_project_with_workflow_from_different_org_fails(self, test_repo: Repository) -> None:
+        """Test that creating project with workflow from different org fails."""
+        import pytest
+
+        from project_management_crud_example.domain_models import WorkflowCreateCommand, WorkflowData
+
+        # Create two organizations
+        org1 = create_test_org_with_workflow_via_repo(test_repo, "Org 1")
+        org2 = create_test_org_with_workflow_via_repo(test_repo, "Org 2")
+
+        # Create workflow in org2
+        workflow_data = WorkflowData(name="Org2 Workflow", statuses=["TODO", "DONE"])
+        org2_workflow = test_repo.workflows.create(
+            WorkflowCreateCommand(workflow_data=workflow_data, organization_id=org2.id)
+        )
+
+        # Try to create project in org1 with org2's workflow
+        project_data = ProjectData(name="Test Project", workflow_id=org2_workflow.id)
+        command = ProjectCreateCommand(project_data=project_data, organization_id=org1.id)
+
+        with pytest.raises(ValueError, match="belongs to different organization"):
+            test_repo.projects.create(command)
+
+    def test_update_project_workflow_id(self, test_repo: Repository) -> None:
+        """Test updating project's workflow."""
+        from project_management_crud_example.domain_models import WorkflowCreateCommand, WorkflowData
+
+        # Create organization with project
+        org = create_test_org_with_workflow_via_repo(test_repo)
+        project = create_test_project_via_repo(test_repo, org.id, "Test Project")
+
+        # Get initial workflow
+        initial_workflow_id = project.workflow_id
+
+        # Create new workflow
+        workflow_data = WorkflowData(name="New Workflow", statuses=["BACKLOG", "TODO", "DONE"])
+        new_workflow = test_repo.workflows.create(
+            WorkflowCreateCommand(workflow_data=workflow_data, organization_id=org.id)
+        )
+
+        # Update project workflow
+        update_command = ProjectUpdateCommand(workflow_id=new_workflow.id)
+        updated_project = test_repo.projects.update(project.id, update_command)
+
+        # Verify workflow changed
+        assert updated_project is not None
+        assert updated_project.workflow_id == new_workflow.id
+        assert updated_project.workflow_id != initial_workflow_id
+
+    def test_update_project_workflow_to_nonexistent_fails(self, test_repo: Repository) -> None:
+        """Test that updating project to non-existent workflow fails."""
+        import pytest
+
+        org = create_test_org_with_workflow_via_repo(test_repo)
+        project = create_test_project_via_repo(test_repo, org.id, "Test Project")
+
+        # Try to update to non-existent workflow
+        update_command = ProjectUpdateCommand(workflow_id="non-existent-workflow-id")
+
+        with pytest.raises(ValueError, match="Workflow not found"):
+            test_repo.projects.update(project.id, update_command)
+
+    def test_update_project_workflow_to_different_org_fails(self, test_repo: Repository) -> None:
+        """Test that updating project to workflow from different org fails."""
+        import pytest
+
+        from project_management_crud_example.domain_models import WorkflowCreateCommand, WorkflowData
+
+        # Create two organizations
+        org1 = create_test_org_with_workflow_via_repo(test_repo, "Org 1")
+        org2 = create_test_org_with_workflow_via_repo(test_repo, "Org 2")
+
+        # Create project in org1
+        project = create_test_project_via_repo(test_repo, org1.id, "Test Project")
+
+        # Create workflow in org2
+        workflow_data = WorkflowData(name="Org2 Workflow", statuses=["TODO", "DONE"])
+        org2_workflow = test_repo.workflows.create(
+            WorkflowCreateCommand(workflow_data=workflow_data, organization_id=org2.id)
+        )
+
+        # Try to update org1 project to org2 workflow
+        update_command = ProjectUpdateCommand(workflow_id=org2_workflow.id)
+
+        with pytest.raises(ValueError, match="belongs to different organization"):
+            test_repo.projects.update(project.id, update_command)
+
+    def test_project_workflow_id_persists_across_retrieval(self, test_repo: Repository) -> None:
+        """Test that workflow_id persists when project is retrieved."""
+        from project_management_crud_example.domain_models import WorkflowCreateCommand, WorkflowData
+
+        # Create organization and custom workflow
+        org = create_test_org_with_workflow_via_repo(test_repo)
+        workflow_data = WorkflowData(name="Custom Workflow", statuses=["TODO", "IN_PROGRESS", "DONE"])
+        custom_workflow = test_repo.workflows.create(
+            WorkflowCreateCommand(workflow_data=workflow_data, organization_id=org.id)
+        )
+
+        # Create project with custom workflow
+        project_data = ProjectData(name="Test Project", workflow_id=custom_workflow.id)
+        command = ProjectCreateCommand(project_data=project_data, organization_id=org.id)
+        created_project = test_repo.projects.create(command)
+
+        # Retrieve project
+        retrieved_project = test_repo.projects.get_by_id(created_project.id)
+
+        # Verify workflow_id persists
+        assert retrieved_project is not None
+        assert retrieved_project.workflow_id == custom_workflow.id

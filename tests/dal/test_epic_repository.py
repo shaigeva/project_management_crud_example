@@ -19,6 +19,7 @@ from tests.conftest import test_repo  # noqa: F401
 from tests.dal.helpers import (
     create_test_epic_via_repo,
     create_test_org_via_repo,
+    create_test_org_with_workflow_via_repo,
     create_test_project_via_repo,
     create_test_user_via_repo,
 )
@@ -334,7 +335,7 @@ class TestEpicTicketAssociations:
     def test_add_ticket_to_epic(self, test_repo: Repository) -> None:
         """Test adding a ticket to an epic."""
         # Create organization, project, epic, user, and ticket
-        org = create_test_org_via_repo(test_repo, "Test Org")
+        org = create_test_org_with_workflow_via_repo(test_repo, "Test Org")
         project = create_test_project_via_repo(test_repo, org.id, "Test Project")
         epic = create_test_epic_via_repo(test_repo, org.id, "Test Epic")
         reporter = create_test_user_via_repo(test_repo, org.id, "reporter", role=UserRole.ADMIN)
@@ -355,7 +356,7 @@ class TestEpicTicketAssociations:
 
     def test_add_ticket_to_epic_idempotent(self, test_repo: Repository) -> None:
         """Test adding same ticket twice is idempotent."""
-        org = create_test_org_via_repo(test_repo, "Test Org")
+        org = create_test_org_with_workflow_via_repo(test_repo, "Test Org")
         project = create_test_project_via_repo(test_repo, org.id, "Test Project")
         epic = create_test_epic_via_repo(test_repo, org.id, "Test Epic")
         reporter = create_test_user_via_repo(test_repo, org.id, "reporter", role=UserRole.ADMIN)
@@ -378,7 +379,7 @@ class TestEpicTicketAssociations:
 
     def test_add_ticket_to_nonexistent_epic(self, test_repo: Repository) -> None:
         """Test adding ticket to non-existent epic returns False."""
-        org = create_test_org_via_repo(test_repo, "Test Org")
+        org = create_test_org_with_workflow_via_repo(test_repo, "Test Org")
         project = create_test_project_via_repo(test_repo, org.id, "Test Project")
         reporter = create_test_user_via_repo(test_repo, org.id, "reporter", role=UserRole.ADMIN)
 
@@ -399,7 +400,7 @@ class TestEpicTicketAssociations:
 
     def test_remove_ticket_from_epic(self, test_repo: Repository) -> None:
         """Test removing a ticket from an epic."""
-        org = create_test_org_via_repo(test_repo, "Test Org")
+        org = create_test_org_with_workflow_via_repo(test_repo, "Test Org")
         project = create_test_project_via_repo(test_repo, org.id, "Test Project")
         epic = create_test_epic_via_repo(test_repo, org.id, "Test Epic")
         reporter = create_test_user_via_repo(test_repo, org.id, "reporter", role=UserRole.ADMIN)
@@ -427,7 +428,7 @@ class TestEpicTicketAssociations:
 
     def test_remove_ticket_from_epic_idempotent(self, test_repo: Repository) -> None:
         """Test removing ticket that's not in epic succeeds (idempotent)."""
-        org = create_test_org_via_repo(test_repo, "Test Org")
+        org = create_test_org_with_workflow_via_repo(test_repo, "Test Org")
         project = create_test_project_via_repo(test_repo, org.id, "Test Project")
         epic = create_test_epic_via_repo(test_repo, org.id, "Test Epic")
         reporter = create_test_user_via_repo(test_repo, org.id, "reporter", role=UserRole.ADMIN)
@@ -442,7 +443,7 @@ class TestEpicTicketAssociations:
 
     def test_remove_ticket_doesnt_delete_ticket(self, test_repo: Repository) -> None:
         """Test removing ticket from epic doesn't delete the ticket itself."""
-        org = create_test_org_via_repo(test_repo, "Test Org")
+        org = create_test_org_with_workflow_via_repo(test_repo, "Test Org")
         project = create_test_project_via_repo(test_repo, org.id, "Test Project")
         epic = create_test_epic_via_repo(test_repo, org.id, "Test Epic")
         reporter = create_test_user_via_repo(test_repo, org.id, "reporter", role=UserRole.ADMIN)
@@ -476,7 +477,7 @@ class TestEpicTicketAssociations:
 
     def test_add_multiple_tickets_to_epic(self, test_repo: Repository) -> None:
         """Test adding multiple tickets to an epic."""
-        org = create_test_org_via_repo(test_repo, "Test Org")
+        org = create_test_org_with_workflow_via_repo(test_repo, "Test Org")
         project = create_test_project_via_repo(test_repo, org.id, "Test Project")
         epic = create_test_epic_via_repo(test_repo, org.id, "Test Epic")
         reporter = create_test_user_via_repo(test_repo, org.id, "reporter", role=UserRole.ADMIN)
@@ -498,7 +499,7 @@ class TestEpicTicketAssociations:
 
     def test_tickets_from_multiple_projects_in_epic(self, test_repo: Repository) -> None:
         """Test epic can contain tickets from multiple projects."""
-        org = create_test_org_via_repo(test_repo, "Test Org")
+        org = create_test_org_with_workflow_via_repo(test_repo, "Test Org")
         project1 = create_test_project_via_repo(test_repo, org.id, "Backend")
         project2 = create_test_project_via_repo(test_repo, org.id, "Frontend")
         epic = create_test_epic_via_repo(test_repo, org.id, "Feature Epic")
@@ -527,7 +528,7 @@ class TestEpicTicketAssociations:
 
     def test_delete_epic_removes_ticket_associations(self, test_repo: Repository) -> None:
         """Test deleting epic removes ticket associations but not tickets."""
-        org = create_test_org_via_repo(test_repo, "Test Org")
+        org = create_test_org_with_workflow_via_repo(test_repo, "Test Org")
         project = create_test_project_via_repo(test_repo, org.id, "Test Project")
         epic = create_test_epic_via_repo(test_repo, org.id, "Test Epic")
         reporter = create_test_user_via_repo(test_repo, org.id, "reporter", role=UserRole.ADMIN)

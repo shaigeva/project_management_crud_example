@@ -70,6 +70,7 @@ def orm_project_to_domain_project(
         name=orm_project.name,  # type: ignore[arg-type]
         description=orm_project.description,  # type: ignore[arg-type]
         organization_id=str(orm_project.organization_id),
+        workflow_id=str(orm_project.workflow_id),
         is_active=orm_project.is_active,  # type: ignore[arg-type]
         is_archived=orm_project.is_archived,  # type: ignore[arg-type]
         archived_at=orm_project.archived_at,  # type: ignore[arg-type]

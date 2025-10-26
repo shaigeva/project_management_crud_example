@@ -28,6 +28,9 @@ from project_management_crud_example.domain_models import (
 def create_test_org_via_repo(test_repo: Repository, name: str = "Test Org") -> Organization:
     """Create test organization via repository.
 
+    Note: Does NOT create default workflow automatically. Use create_test_org_with_workflow_via_repo
+    if you need a default workflow for projects.
+
     Args:
         test_repo: Repository instance
         name: Organization name (default: "Test Org")
@@ -37,6 +40,27 @@ def create_test_org_via_repo(test_repo: Repository, name: str = "Test Org") -> O
     """
     org_data = OrganizationData(name=name)
     return test_repo.organizations.create(OrganizationCreateCommand(organization_data=org_data))
+
+
+def create_test_org_with_workflow_via_repo(test_repo: Repository, name: str = "Test Org") -> Organization:
+    """Create test organization with default workflow via repository.
+
+    This is a convenience helper for tests that need to create projects (which require workflows).
+
+    Args:
+        test_repo: Repository instance
+        name: Organization name (default: "Test Org")
+
+    Returns:
+        Created Organization domain model (with default workflow created)
+    """
+    org_data = OrganizationData(name=name)
+    org = test_repo.organizations.create(OrganizationCreateCommand(organization_data=org_data))
+
+    # Create default workflow for the organization (required for projects)
+    test_repo.workflows.create_default_workflow(org.id)
+
+    return org
 
 
 def create_test_project_via_repo(

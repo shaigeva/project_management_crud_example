@@ -60,7 +60,7 @@ Ensure each organization has a default workflow.
 ---
 
 ## Task 4: Project-workflow integration
-**Status**: ⏳ Pending
+**Status**: ✅ Complete
 **Implements**: REQ-PROJ-011
 **Dependencies**: Task 1, Task 3
 

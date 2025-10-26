@@ -180,6 +180,7 @@ class TestStripSensitiveFields:
             name="Test Project",
             description="Test description",
             organization_id="org-123",
+            workflow_id="workflow-123",
             is_active=True,
             is_archived=False,
             archived_at=None,
@@ -203,6 +204,7 @@ class TestStripSensitiveFields:
             name="Test Project",
             description=None,  # Explicitly None
             organization_id="org-123",
+            workflow_id="workflow-123",
             is_active=True,
             is_archived=False,
             archived_at=None,
@@ -225,6 +227,7 @@ class TestStripSensitiveFields:
             name="Test Project",
             description="Test description",
             organization_id="org-123",
+            workflow_id="workflow-123",
             is_active=True,
             is_archived=False,
             archived_at=None,

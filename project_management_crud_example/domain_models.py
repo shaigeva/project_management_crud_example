@@ -173,6 +173,9 @@ class ProjectData(BaseModel):
         description="Project name",
     )
     description: Optional[str] = Field(None, max_length=1000, description="Project description")
+    workflow_id: Optional[str] = Field(
+        None, description="Workflow ID for this project (defaults to org's default workflow)"
+    )
 
 
 class Project(ProjectData, AuditableEntity):
@@ -184,6 +187,7 @@ class Project(ProjectData, AuditableEntity):
 
     id: str = Field(..., description="Project ID")
     organization_id: str = Field(..., description="Organization ID this project belongs to")
+    workflow_id: str = Field(..., description="Workflow ID for this project")  # Override to make required
     is_active: bool = Field(True, description="Whether project is active")
     is_archived: bool = Field(False, description="Whether project is archived")
     archived_at: Optional[datetime] = Field(None, description="Timestamp when project was archived")
@@ -209,6 +213,7 @@ class ProjectUpdateCommand(AuditableCommand):
 
     name: Optional[str] = Field(None, min_length=1, max_length=255, description="Project name")
     description: Optional[str] = Field(None, max_length=1000, description="Project description")
+    workflow_id: Optional[str] = Field(None, description="Workflow ID for this project")
     is_active: Optional[bool] = Field(None, description="Whether project is active")
 
 

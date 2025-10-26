@@ -13,7 +13,10 @@ from project_management_crud_example.domain_models import (
     UserUpdateCommand,
 )
 from tests.conftest import test_repo  # noqa: F401
-from tests.dal.helpers import create_test_org_via_repo, create_test_project_via_repo
+from tests.dal.helpers import (
+    create_test_org_with_workflow_via_repo,
+    create_test_project_via_repo,
+)
 
 
 class TestUserOperations:
@@ -376,7 +379,7 @@ class TestUserOperations:
     def test_delete_user_with_created_tickets_fails(self, test_repo: Repository) -> None:
         """Test that deleting user who created tickets raises IntegrityError."""
         # Create organization
-        org = create_test_org_via_repo(test_repo)
+        org = create_test_org_with_workflow_via_repo(test_repo)
 
         # Create user
         user_data = UserData(username="creator", email="creator@example.com", full_name="Creator User")
