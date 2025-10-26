@@ -37,7 +37,8 @@
       "WebFetch(domain:pypi.org)",
       "WebFetch(domain:lyz-code.github.io)",
       "WebFetch(domain:medium.com)",
-      "WebFetch(domain:zepworks.com)"
+      "WebFetch(domain:zepworks.com)",
+      "Bash(for file in /Users/shai/proj/shaig/learn/ai_framework_posts/project_management_crud_example/project_management_crud_example/routers/{user,epic,organization,project,ticket,auth}_api.py)"
     ],
     "deny": [],
     "ask": [],
