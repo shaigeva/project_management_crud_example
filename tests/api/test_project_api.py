@@ -2,7 +2,8 @@
 
 from fastapi.testclient import TestClient
 
-from tests.conftest import client  # noqa: F401
+from project_management_crud_example.dal.sqlite.repository import Repository
+from tests.conftest import client, test_repo  # noqa: F401
 from tests.fixtures.auth_fixtures import (  # noqa: F401
     org_admin_token,
     project_manager_token,
@@ -1127,3 +1128,214 @@ class TestProjectWorkflows:
             headers=auth_headers(token),
         )
         assert final_get.status_code == 404
+
+
+class TestProjectActivityLogging:
+    """Test activity log creation for all project operations."""
+
+    def test_create_project_logs_activity(
+        self, client: TestClient, test_repo: Repository, org_admin_token: tuple[str, str]
+    ) -> None:
+        """Test that creating a project creates an activity log entry."""
+        token, org_id = org_admin_token
+
+        # Create a project
+        project_data = {"name": "Logged Project", "description": "Test logging"}
+        response = client.post(
+            "/api/projects",
+            json=project_data,
+            headers=auth_headers(token),
+        )
+        assert response.status_code == 201
+        project_id = response.json()["id"]
+
+        # Check activity log was created
+        logs = test_repo.activity_logs.list(entity_type="project", entity_id=project_id)
+
+        assert len(logs) == 1
+        log = logs[0]
+        assert log.entity_type == "project"
+        assert log.entity_id == project_id
+        assert log.action.value == "project_created"
+        assert log.organization_id == org_id
+
+        # Verify changes structure
+        assert "created" in log.changes
+        assert log.changes["created"]["name"] == "Logged Project"
+        assert log.changes["created"]["description"] == "Test logging"
+
+    def test_update_project_logs_activity(
+        self, client: TestClient, test_repo: Repository, org_admin_token: tuple[str, str]
+    ) -> None:
+        """Test that updating a project creates an activity log entry."""
+        token, org_id = org_admin_token
+
+        # Create a project
+        project_id = create_test_project(client, token, "Original Name", "Original desc")
+
+        # Update the project
+        update_data = {"name": "Updated Name", "description": "Updated desc"}
+        response = client.put(
+            f"/api/projects/{project_id}",
+            json=update_data,
+            headers=auth_headers(token),
+        )
+        assert response.status_code == 200
+
+        # Check activity log for update
+        logs = test_repo.activity_logs.list(entity_type="project", entity_id=project_id)
+
+        # Should have 2 logs: create and update
+        assert len(logs) == 2
+
+        # Check update log (second one)
+        update_log = logs[1]
+        assert update_log.action.value == "project_updated"
+        assert "name" in update_log.changes
+        assert update_log.changes["name"]["old_value"] == "Original Name"
+        assert update_log.changes["name"]["new_value"] == "Updated Name"
+        assert "description" in update_log.changes
+        assert update_log.changes["description"]["old_value"] == "Original desc"
+        assert update_log.changes["description"]["new_value"] == "Updated desc"
+
+    def test_archive_project_logs_activity(
+        self, client: TestClient, test_repo: Repository, org_admin_token: tuple[str, str]
+    ) -> None:
+        """Test that archiving a project creates an activity log entry."""
+        token, org_id = org_admin_token
+
+        # Create a project
+        project_id = create_test_project(client, token, "To Archive")
+
+        # Archive the project
+        response = client.patch(
+            f"/api/projects/{project_id}/archive",
+            headers=auth_headers(token),
+        )
+        assert response.status_code == 200
+
+        # Check activity log
+        logs = test_repo.activity_logs.list(entity_type="project", entity_id=project_id)
+
+        # Should have 2 logs: create and archive
+        assert len(logs) == 2
+
+        # Check archive log
+        archive_log = logs[1]
+        assert archive_log.action.value == "project_archived"
+        assert "is_archived" in archive_log.changes
+        assert archive_log.changes["is_archived"]["old_value"] is False
+        assert archive_log.changes["is_archived"]["new_value"] is True
+
+    def test_unarchive_project_logs_activity(
+        self, client: TestClient, test_repo: Repository, org_admin_token: tuple[str, str]
+    ) -> None:
+        """Test that unarchiving a project creates an activity log entry."""
+        token, org_id = org_admin_token
+
+        # Create and archive a project
+        project_id = create_test_project(client, token, "To Unarchive")
+        client.patch(f"/api/projects/{project_id}/archive", headers=auth_headers(token))
+
+        # Unarchive the project
+        response = client.patch(
+            f"/api/projects/{project_id}/unarchive",
+            headers=auth_headers(token),
+        )
+        assert response.status_code == 200
+
+        # Check activity log
+        logs = test_repo.activity_logs.list(entity_type="project", entity_id=project_id)
+
+        # Should have 3 logs: create, archive, unarchive
+        assert len(logs) == 3
+
+        # Check unarchive log
+        unarchive_log = logs[2]
+        assert unarchive_log.action.value == "project_unarchived"
+        assert "is_archived" in unarchive_log.changes
+        assert unarchive_log.changes["is_archived"]["old_value"] is True
+        assert unarchive_log.changes["is_archived"]["new_value"] is False
+
+    def test_delete_project_logs_activity(
+        self, client: TestClient, test_repo: Repository, org_admin_token: tuple[str, str]
+    ) -> None:
+        """Test that deleting a project creates an activity log entry."""
+        token, org_id = org_admin_token
+
+        # Create a project
+        project_id = create_test_project(client, token, "To Delete", "Delete me")
+
+        # Delete the project
+        response = client.delete(
+            f"/api/projects/{project_id}",
+            headers=auth_headers(token),
+        )
+        assert response.status_code == 204
+
+        # Check activity log - should persist even after deletion
+        logs = test_repo.activity_logs.list(entity_type="project", entity_id=project_id)
+
+        # Should have 2 logs: create and delete
+        assert len(logs) == 2
+
+        # Check delete log
+        delete_log = logs[1]
+        assert delete_log.action.value == "project_deleted"
+        assert "deleted" in delete_log.changes
+        assert delete_log.changes["deleted"]["name"] == "To Delete"
+        assert delete_log.changes["deleted"]["description"] == "Delete me"
+
+    def test_activity_log_captures_actor(
+        self, client: TestClient, test_repo: Repository, org_admin_token: tuple[str, str]
+    ) -> None:
+        """Test that activity logs capture the actor who performed the action."""
+        token, org_id = org_admin_token
+
+        # Create a project
+        project_data = {"name": "Actor Test Project"}
+        response = client.post(
+            "/api/projects",
+            json=project_data,
+            headers=auth_headers(token),
+        )
+        assert response.status_code == 201
+        project_id = response.json()["id"]
+
+        # Verify actor was captured
+        logs = test_repo.activity_logs.list(entity_type="project", entity_id=project_id)
+
+        assert len(logs) == 1
+        # Verify actor_id exists and is non-empty
+        assert logs[0].actor_id is not None
+        assert len(logs[0].actor_id) > 0
+
+    def test_multiple_operations_create_multiple_logs(
+        self, client: TestClient, test_repo: Repository, org_admin_token: tuple[str, str]
+    ) -> None:
+        """Test that multiple operations on same project create separate log entries."""
+        token, org_id = org_admin_token
+
+        # Create project
+        project_id = create_test_project(client, token, "Multi-Op Project")
+
+        # Update it
+        client.put(
+            f"/api/projects/{project_id}",
+            json={"name": "Updated Project"},
+            headers=auth_headers(token),
+        )
+
+        # Archive it
+        client.patch(f"/api/projects/{project_id}/archive", headers=auth_headers(token))
+
+        # Unarchive it
+        client.patch(f"/api/projects/{project_id}/unarchive", headers=auth_headers(token))
+
+        # Check all logs were created
+        logs = test_repo.activity_logs.list(entity_type="project", entity_id=project_id)
+
+        # Should have 4 logs: create, update, archive, unarchive
+        assert len(logs) == 4
+        actions = [log.action.value for log in logs]
+        assert actions == ["project_created", "project_updated", "project_archived", "project_unarchived"]

@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Project Management CRUD - Architecture Diagram</title>
+    <title>Project Management CRUD - Architecture</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Indie+Flower&family=Caveat:wght@700&display=swap');
+
         * {
             margin: 0;
             padding: 0;
@@ -12,316 +14,362 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Indie Flower', 'Comic Sans MS', cursive;
+            background: #fffef9;
+            background-image:
+                repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.02) 2px, rgba(0,0,0,.02) 4px),
+                repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(0,0,0,.02) 2px, rgba(0,0,0,.02) 4px);
             padding: 40px 20px;
             min-height: 100vh;
         }
 
         .container {
-            max-width: 900px;
+            max-width: 1000px;
             margin: 0 auto;
-            background: white;
-            border-radius: 12px;
-            padding: 40px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
         }
 
         h1 {
             text-align: center;
-            color: #2d3748;
-            margin-bottom: 40px;
-            font-size: 28px;
+            font-family: 'Permanent Marker', cursive;
+            color: #1a1a1a;
+            margin-bottom: 50px;
+            font-size: 36px;
+            text-shadow: 3px 3px 0px rgba(0,0,0,0.1);
         }
 
-        .architecture {
+        .diagram-container {
+            position: relative;
             display: flex;
             flex-direction: column;
             gap: 0;
         }
 
-        .layer {
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 24px;
+        .layers {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
             position: relative;
+        }
+
+        .layer {
             background: white;
+            border: 3px solid #2d3748;
+            border-radius: 12px;
+            padding: 28px;
+            position: relative;
+            margin-bottom: -3px;
         }
 
         .layer-header {
-            font-size: 18px;
+            font-family: 'Caveat', cursive;
+            font-size: 28px;
             font-weight: 700;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             color: #1a202c;
         }
 
         .layer-description {
-            font-size: 14px;
-            color: #4a5568;
-            line-height: 1.6;
+            font-size: 17px;
+            color: #2d3748;
+            line-height: 1.5;
+            font-family: 'Indie Flower', cursive;
         }
 
         .communication {
-            background: #f7fafc;
-            border: 2px dashed #cbd5e0;
-            border-radius: 6px;
-            padding: 12px 16px;
-            margin-top: 12px;
-            font-size: 13px;
+            background: #fef3c7;
+            border: 2px dashed #f59e0b;
+            border-radius: 8px;
+            padding: 14px 18px;
+            margin-top: 14px;
+            font-size: 16px;
             font-weight: 600;
         }
 
         .communication-label {
-            color: #2b6cb0;
+            font-family: 'Caveat', cursive;
+            color: #92400e;
+            font-size: 18px;
             font-weight: 700;
-            margin-right: 4px;
         }
 
-        /* Layer-specific colors */
+        /* Layer-specific styling */
+        .layer.external {
+            background: linear-gradient(135deg, #e0e7ff 0%, #ddd6fe 100%);
+            border-color: #4c1d95;
+            border-radius: 12px;
+        }
+
         .layer.api {
-            background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
-            border-color: #667eea;
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+            border-color: #1e40af;
+            position: relative;
         }
 
-        .layer.domain {
-            background: linear-gradient(135deg, #f093fb15 0%, #f5576c15 100%);
-            border-color: #f093fb;
+        .layer.api .test-badge {
+            background: #86efac;
+            border: 2px solid #166534;
+            color: #14532d;
         }
 
         .layer.repository {
-            background: linear-gradient(135deg, #4facfe15 0%, #00f2fe15 100%);
-            border-color: #4facfe;
-            box-shadow: 0 4px 12px rgba(79, 172, 254, 0.2);
+            background: linear-gradient(135deg, #fef9c3 0%, #fde68a 100%);
+            border-color: #b45309;
+            position: relative;
         }
 
-        .layer.repository .layer-header {
-            color: #0c4a6e;
+        .layer.repository .test-badge {
+            background: #86efac;
+            border: 2px solid #166534;
+            color: #14532d;
         }
 
-        .layer.repository .highlight {
-            background: #fef3c7;
-            padding: 12px;
-            border-left: 4px solid #f59e0b;
-            margin-top: 12px;
-            border-radius: 4px;
+        .layer.data {
+            background: linear-gradient(135deg, #fecaca 0%, #fca5a5 100%);
+            border-color: #991b1b;
+            border-radius: 12px;
         }
 
-        .layer.repository .highlight strong {
-            color: #92400e;
-            display: block;
-            margin-bottom: 4px;
+        /* Test indicators on the side */
+        .test-indicator {
+            position: absolute;
+            right: -280px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
 
-        .layer.converter {
-            background: linear-gradient(135deg, #fa709a15 0%, #fee14015 100%);
-            border-color: #fa709a;
+        .test-indicator.api-test {
+            top: 280px;
         }
 
-        .layer.orm {
-            background: linear-gradient(135deg, #30cfd015 0%, #330ce715 100%);
-            border-color: #30cfd0;
+        .test-indicator.repo-test {
+            top: 520px;
         }
 
-        .layer.database {
-            background: linear-gradient(135deg, #a8edea15 0%, #fed6e315 100%);
-            border-color: #a8edea;
+        .test-arrow {
+            width: 80px;
+            height: 3px;
+            background: #166534;
+            position: relative;
+        }
+
+        .test-arrow::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-top: 8px solid transparent;
+            border-bottom: 8px solid transparent;
+            border-right: 12px solid #166534;
+        }
+
+        .test-label {
+            background: #86efac;
+            border: 3px solid #166534;
+            border-radius: 12px;
+            color: #14532d;
+            padding: 10px 20px;
+            font-family: 'Caveat', cursive;
+            font-size: 22px;
+            font-weight: 700;
+            white-space: nowrap;
         }
 
         .connector {
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 16px 0;
+            padding: 20px 0;
             position: relative;
         }
 
-        .connector::before {
-            content: '';
+        .connector-line {
             position: absolute;
             left: 50%;
             top: 0;
             bottom: 0;
-            width: 3px;
-            background: linear-gradient(180deg, #cbd5e0 0%, #a0aec0 100%);
+            width: 4px;
+            background: #2d3748;
             transform: translateX(-50%);
         }
 
-        .connector::after {
-            content: '▼';
+        .connector-arrow {
             position: absolute;
-            bottom: -8px;
+            bottom: -3px;
             left: 50%;
             transform: translateX(-50%);
-            color: #a0aec0;
-            font-size: 20px;
+            width: 0;
+            height: 0;
+            border-left: 12px solid transparent;
+            border-right: 12px solid transparent;
+            border-top: 16px solid #2d3748;
         }
 
         .connector-label {
             background: white;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: 600;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 20px;
+            font-weight: 700;
             color: #2d3748;
-            border: 2px solid #e2e8f0;
+            border: 3px solid #2d3748;
             z-index: 1;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            font-family: 'Caveat', cursive;
         }
 
+
         .key-points {
-            margin-top: 40px;
-            padding: 24px;
-            background: #f7fafc;
-            border-radius: 8px;
-            border-left: 4px solid #667eea;
+            margin-top: 50px;
+            padding: 30px;
+            background: #fffbeb;
+            border: 3px solid #92400e;
+            border-radius: 12px;
         }
 
         .key-points h2 {
-            color: #2d3748;
-            margin-bottom: 16px;
-            font-size: 20px;
+            font-family: 'Permanent Marker', cursive;
+            color: #78350f;
+            margin-bottom: 20px;
+            font-size: 28px;
+            text-align: center;
         }
 
         .key-points ul {
             list-style: none;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 16px;
         }
 
         .key-points li {
-            padding-left: 24px;
+            padding-left: 32px;
             position: relative;
-            color: #4a5568;
-            line-height: 1.6;
+            color: #451a03;
+            line-height: 1.7;
+            font-size: 17px;
         }
 
         .key-points li::before {
-            content: '✓';
+            content: '→';
             position: absolute;
             left: 0;
-            color: #48bb78;
+            color: #ea580c;
             font-weight: bold;
+            font-size: 24px;
         }
 
         .key-points strong {
-            color: #2d3748;
+            color: #78350f;
+            font-size: 19px;
         }
 
         @media (max-width: 768px) {
-            .container {
-                padding: 24px;
+            h1 {
+                font-size: 28px;
             }
 
-            h1 {
-                font-size: 22px;
+            .test-indicator {
+                display: none;
             }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Project Management CRUD - Architectural Layers</h1>
+        <h1>Architecture Overview</h1>
 
-        <div class="architecture">
-            <div class="layer api">
-                <div class="layer-header">API Layer (FastAPI)</div>
-                <div class="layer-description">
-                    RESTful HTTP endpoints with request/response validation
-                </div>
-                <div class="communication">
-                    <span class="communication-label">Communicates:</span>
-                    Receives/returns Domain Models (immutable)
-                </div>
-            </div>
-
-            <div class="connector">
-                <div class="connector-label">Domain Models (immutable Pydantic)</div>
-            </div>
-
-            <div class="layer domain">
-                <div class="layer-header">Domain Layer</div>
-                <div class="layer-description">
-                    Business entities, validation rules, command objects<br>
-                    (User, Project, Epic, Task - all immutable)
-                </div>
-                <div class="communication">
-                    <span class="communication-label">Communicates:</span>
-                    Immutable Pydantic models
-                </div>
-            </div>
-
-            <div class="connector">
-                <div class="connector-label">Domain Models IN/OUT (immutable)</div>
-            </div>
-
-            <div class="layer repository">
-                <div class="layer-header">Repository Layer (DAL)</div>
-                <div class="layer-description">
-                    CRUD operations and data access abstraction
-                </div>
-                <div class="highlight">
-                    <strong>⚠️ ONLY communicates via immutable Domain Models</strong>
-                    <div style="font-size: 13px; color: #78350f; margin-top: 4px;">
-                        IN: CreateCommand, UpdateCommand, filters<br>
-                        OUT: Domain entities (User, Project, etc.) or None
+        <div class="diagram-container">
+            <div class="layers">
+                <div class="layer external">
+                    <div class="layer-header">External Client</div>
+                    <div class="layer-description">
+                        Browser, Mobile App, CLI, Other Services
                     </div>
                 </div>
-            </div>
 
-            <div class="connector">
-                <div class="connector-label">Delegates to Converters</div>
-            </div>
-
-            <div class="layer converter">
-                <div class="layer-header">Converter Layer (DAL)</div>
-                <div class="layer-description">
-                    Explicit type-safe transformations between ORM ↔ Domain<br>
-                    No implicit conversions, clear boundary enforcement
+                <div class="connector">
+                    <div class="connector-line"></div>
+                    <div class="connector-arrow"></div>
+                    <div class="connector-label">HTTP (JSON)</div>
                 </div>
-            </div>
 
-            <div class="connector">
-                <div class="connector-label">ORM Models (mutable SQLAlchemy)</div>
-            </div>
-
-            <div class="layer orm">
-                <div class="layer-header">ORM Layer (SQLAlchemy)</div>
-                <div class="layer-description">
-                    Database table definitions, column mappings, relationships
+                <div class="layer api">
+                    <div class="layer-header">API Layer</div>
+                    <div class="layer-description">
+                        RESTful endpoints, validation, serialization<br>
+                        (FastAPI)
+                    </div>
+                    <div class="communication">
+                        <span class="communication-label">Communicates:</span>
+                        Immutable Domain Models (Pydantic)
+                    </div>
                 </div>
-            </div>
 
-            <div class="connector">
-                <div class="connector-label">SQL via SQLAlchemy</div>
-            </div>
+                <div class="connector">
+                    <div class="connector-line"></div>
+                    <div class="connector-arrow"></div>
+                    <div class="connector-label">Domain Models (simple data structures only!)</div>
+                </div>
 
-            <div class="layer database">
-                <div class="layer-header">Database Layer (SQLite)</div>
-                <div class="layer-description">
-                    Connection and session management, schema creation
+                <div class="layer repository">
+                    <div class="layer-header">Repository Layer</div>
+                    <div class="layer-description">
+                        CRUD operations, data access abstraction<br>
+                        <strong>IN/OUT: Immutable Domain Models ONLY</strong>
+                    </div>
+                    <div class="communication">
+                        <span class="communication-label">Uses internally:</span>
+                        ORM objects (SQLAlchemy)
+                    </div>
+                </div>
+
+                <div class="connector">
+                    <div class="connector-line"></div>
+                    <div class="connector-arrow"></div>
+                    <div class="connector-label">ORM Objects (live db connection)</div>
+                </div>
+
+                <div class="layer data">
+                    <div class="layer-header">Data Layer</div>
+                    <div class="layer-description">
+                        Database (SQLite)<br>
+                        ORM models + Converters
+                    </div>
+                </div>
+
+                <!-- Test indicators pointing to connectors -->
+                <div class="test-indicator api-test">
+                    <div class="test-arrow"></div>
+                    <div class="test-label">🧪 HTTP/API Tests<br><small style="font-size: 16px;">tests/api/</small></div>
+                </div>
+
+                <div class="test-indicator repo-test">
+                    <div class="test-arrow"></div>
+                    <div class="test-label">🧪 Repository Tests<br><small style="font-size: 16px;">tests/dal/</small></div>
                 </div>
             </div>
         </div>
 
         <div class="key-points">
-            <h2>Key Communication Patterns</h2>
+            <h2>Key Boundaries</h2>
             <ul>
                 <li>
-                    <strong>Domain Models are IMMUTABLE</strong> (Pydantic with frozen=True)
-                    guaranteeing data integrity across layers
+                    <strong>External ↔ API:</strong> HTTP with JSON payloads
                 </li>
                 <li>
-                    <strong>Repository Layer Boundary:</strong> IN: Domain models (commands, filters) |
-                    OUT: Domain models or None — NEVER exposes ORM models
+                    <strong>API ↔ Repository:</strong> Immutable Domain Models (User, Project, etc.)
+                    — Commands for input, Entities for output
                 </li>
                 <li>
-                    <strong>Explicit Conversions:</strong> Converter layer explicitly transforms
-                    ORM ↔ Domain with clear, type-safe boundaries
+                    <strong>Repository ↔ Data:</strong> ORM Objects (SQLAlchemy)
+                    — Explicit conversions via Converter layer
                 </li>
                 <li>
-                    <strong>Data Flow:</strong> API validates HTTP → Domain Model → Repository
-                    converts to ORM → DB → ORM back to Domain Model → API serializes to HTTP
+                    <strong>Testing Strategy:</strong> Two main layers - HTTP/API tests for end-to-end behavior,
+                    Repository tests for data persistence (independent of HTTP)
                 </li>
             </ul>
         </div>

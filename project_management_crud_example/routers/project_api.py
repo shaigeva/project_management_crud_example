@@ -11,6 +11,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from project_management_crud_example.dal.sqlite.repository import Repository
 from project_management_crud_example.dependencies import get_current_user, get_repository
 from project_management_crud_example.domain_models import (
+    ActionType,
+    ActivityLogCreateCommand,
     Project,
     ProjectCreateCommand,
     ProjectData,
@@ -22,6 +24,40 @@ from project_management_crud_example.domain_models import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
+
+
+def _log_project_activity(
+    repo: Repository,
+    project: Project,
+    action: ActionType,
+    actor_id: str,
+    changes: dict,
+) -> None:
+    """Create activity log entry for project operation.
+
+    Args:
+        repo: Repository instance
+        project: Project that was operated on
+        action: Type of action performed
+        actor_id: User who performed the action
+        changes: Dict describing what changed
+
+    Note: Failures to log are caught and logged but don't fail the operation.
+    """
+    try:
+        command = ActivityLogCreateCommand(
+            entity_type="project",
+            entity_id=project.id,
+            action=action,
+            actor_id=actor_id,
+            organization_id=project.organization_id,
+            changes=changes,
+        )
+        repo.activity_logs.create(command)
+        logger.debug(f"Activity logged: {action.value} for project {project.id}")
+    except Exception as e:
+        # Don't fail the operation if logging fails
+        logger.error(f"Failed to log project activity: {e}", exc_info=True)
 
 
 @router.post("", response_model=Project, status_code=status.HTTP_201_CREATED)
@@ -78,6 +114,22 @@ async def create_project(
 
     project = repo.projects.create(command)
     logger.info(f"Project created: {project.id}")
+
+    # Log activity
+    _log_project_activity(
+        repo=repo,
+        project=project,
+        action=ActionType.PROJECT_CREATED,
+        actor_id=current_user.id,
+        changes={
+            "created": {
+                "name": project.name,
+                "description": project.description,
+                "organization_id": project.organization_id,
+            }
+        },
+    )
+
     return project
 
 
@@ -239,12 +291,38 @@ async def update_project(
                 detail="Access denied: project belongs to different organization",
             )
 
+    # Capture old values before update
+    old_values = {
+        "name": project.name,
+        "description": project.description,
+        "is_active": project.is_active,
+    }
+
     updated_project = repo.projects.update(project_id, update_data)
     if not updated_project:
         # Should not happen since we verified existence, but defensive check
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found",
+        )
+
+    # Build changes dict with only modified fields
+    changes = {}
+    if update_data.name is not None and old_values["name"] != updated_project.name:
+        changes["name"] = {"old_value": old_values["name"], "new_value": updated_project.name}
+    if update_data.description is not None and old_values["description"] != updated_project.description:
+        changes["description"] = {"old_value": old_values["description"], "new_value": updated_project.description}
+    if update_data.is_active is not None and old_values["is_active"] != updated_project.is_active:
+        changes["is_active"] = {"old_value": old_values["is_active"], "new_value": updated_project.is_active}
+
+    # Log activity if there were actual changes
+    if changes:
+        _log_project_activity(
+            repo=repo,
+            project=updated_project,
+            action=ActionType.PROJECT_UPDATED,
+            actor_id=current_user.id,
+            changes=changes,
         )
 
     logger.info(f"Project updated: {project_id}")
@@ -301,6 +379,22 @@ async def delete_project(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied: project belongs to different organization",
             )
+
+    # Log activity before deletion (capture snapshot)
+    _log_project_activity(
+        repo=repo,
+        project=project,
+        action=ActionType.PROJECT_DELETED,
+        actor_id=current_user.id,
+        changes={
+            "deleted": {
+                "name": project.name,
+                "description": project.description,
+                "is_active": project.is_active,
+                "is_archived": project.is_archived,
+            }
+        },
+    )
 
     success = repo.projects.delete(project_id)
     if not success:
@@ -375,6 +469,20 @@ async def archive_project(
             detail="Project not found",
         )
 
+    # Log activity
+    _log_project_activity(
+        repo=repo,
+        project=archived_project,
+        action=ActionType.PROJECT_ARCHIVED,
+        actor_id=current_user.id,
+        changes={
+            "is_archived": {
+                "old_value": False,
+                "new_value": True,
+            }
+        },
+    )
+
     logger.info(f"Project archived: {project_id}")
     return archived_project
 
@@ -442,6 +550,20 @@ async def unarchive_project(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found",
         )
+
+    # Log activity
+    _log_project_activity(
+        repo=repo,
+        project=unarchived_project,
+        action=ActionType.PROJECT_UNARCHIVED,
+        actor_id=current_user.id,
+        changes={
+            "is_archived": {
+                "old_value": True,
+                "new_value": False,
+            }
+        },
+    )
 
     logger.info(f"Project unarchived: {project_id}")
     return unarchived_project

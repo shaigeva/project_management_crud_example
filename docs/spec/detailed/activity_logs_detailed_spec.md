@@ -1,6 +1,6 @@
 # Activity Logs & Audit Trails: Detailed Specification
 
-**Status**: 🟡 1/7 requirements implemented (14%)
+**Status**: 🟡 2/7 requirements implemented (29%)
 **Parent**: [Main Spec](../main_spec.md#feature-activity-logs--audit-trails)
 **Last Updated**: 2025-01-26
 
@@ -56,7 +56,7 @@ Every ticket change creates an activity log entry that users can retrieve and ve
 ---
 
 ## REQ-ACTIVITY-002: Log project changes
-**Status**: 🔴 Not Implemented
+**Status**: ✅ Implemented
 **Type**: Product Behavior
 
 ### Scenario

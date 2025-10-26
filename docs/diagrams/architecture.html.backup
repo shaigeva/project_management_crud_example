@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Management CRUD - Architecture Diagram</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        h1 {
+            text-align: center;
+            color: #2d3748;
+            margin-bottom: 40px;
+            font-size: 28px;
+        }
+
+        .architecture {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+
+        .layer {
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 24px;
+            position: relative;
+            background: white;
+        }
+
+        .layer-header {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: #1a202c;
+        }
+
+        .layer-description {
+            font-size: 14px;
+            color: #4a5568;
+            line-height: 1.6;
+        }
+
+        .communication {
+            background: #f7fafc;
+            border: 2px dashed #cbd5e0;
+            border-radius: 6px;
+            padding: 12px 16px;
+            margin-top: 12px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .communication-label {
+            color: #2b6cb0;
+            font-weight: 700;
+            margin-right: 4px;
+        }
+
+        /* Layer-specific colors */
+        .layer.api {
+            background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+            border-color: #667eea;
+        }
+
+        .layer.domain {
+            background: linear-gradient(135deg, #f093fb15 0%, #f5576c15 100%);
+            border-color: #f093fb;
+        }
+
+        .layer.repository {
+            background: linear-gradient(135deg, #4facfe15 0%, #00f2fe15 100%);
+            border-color: #4facfe;
+            box-shadow: 0 4px 12px rgba(79, 172, 254, 0.2);
+        }
+
+        .layer.repository .layer-header {
+            color: #0c4a6e;
+        }
+
+        .layer.repository .highlight {
+            background: #fef3c7;
+            padding: 12px;
+            border-left: 4px solid #f59e0b;
+            margin-top: 12px;
+            border-radius: 4px;
+        }
+
+        .layer.repository .highlight strong {
+            color: #92400e;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .layer.converter {
+            background: linear-gradient(135deg, #fa709a15 0%, #fee14015 100%);
+            border-color: #fa709a;
+        }
+
+        .layer.orm {
+            background: linear-gradient(135deg, #30cfd015 0%, #330ce715 100%);
+            border-color: #30cfd0;
+        }
+
+        .layer.database {
+            background: linear-gradient(135deg, #a8edea15 0%, #fed6e315 100%);
+            border-color: #a8edea;
+        }
+
+        .connector {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px 0;
+            position: relative;
+        }
+
+        .connector::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: linear-gradient(180deg, #cbd5e0 0%, #a0aec0 100%);
+            transform: translateX(-50%);
+        }
+
+        .connector::after {
+            content: '▼';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #a0aec0;
+            font-size: 20px;
+        }
+
+        .connector-label {
+            background: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #2d3748;
+            border: 2px solid #e2e8f0;
+            z-index: 1;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .key-points {
+            margin-top: 40px;
+            padding: 24px;
+            background: #f7fafc;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .key-points h2 {
+            color: #2d3748;
+            margin-bottom: 16px;
+            font-size: 20px;
+        }
+
+        .key-points ul {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .key-points li {
+            padding-left: 24px;
+            position: relative;
+            color: #4a5568;
+            line-height: 1.6;
+        }
+
+        .key-points li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: #48bb78;
+            font-weight: bold;
+        }
+
+        .key-points strong {
+            color: #2d3748;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 24px;
+            }
+
+            h1 {
+                font-size: 22px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Project Management CRUD - Architectural Layers</h1>
+
+        <div class="architecture">
+            <div class="layer api">
+                <div class="layer-header">API Layer (FastAPI)</div>
+                <div class="layer-description">
+                    RESTful HTTP endpoints with request/response validation
+                </div>
+                <div class="communication">
+                    <span class="communication-label">Communicates:</span>
+                    Receives/returns Domain Models (immutable)
+                </div>
+            </div>
+
+            <div class="connector">
+                <div class="connector-label">Domain Models (immutable Pydantic)</div>
+            </div>
+
+            <div class="layer domain">
+                <div class="layer-header">Domain Layer</div>
+                <div class="layer-description">
+                    Business entities, validation rules, command objects<br>
+                    (User, Project, Epic, Task - all immutable)
+                </div>
+                <div class="communication">
+                    <span class="communication-label">Communicates:</span>
+                    Immutable Pydantic models
+                </div>
+            </div>
+
+            <div class="connector">
+                <div class="connector-label">Domain Models IN/OUT (immutable)</div>
+            </div>
+
+            <div class="layer repository">
+                <div class="layer-header">Repository Layer (DAL)</div>
+                <div class="layer-description">
+                    CRUD operations and data access abstraction
+                </div>
+                <div class="highlight">
+                    <strong>⚠️ ONLY communicates via immutable Domain Models</strong>
+                    <div style="font-size: 13px; color: #78350f; margin-top: 4px;">
+                        IN: CreateCommand, UpdateCommand, filters<br>
+                        OUT: Domain entities (User, Project, etc.) or None
+                    </div>
+                </div>
+            </div>
+
+            <div class="connector">
+                <div class="connector-label">Delegates to Converters</div>
+            </div>
+
+            <div class="layer converter">
+                <div class="layer-header">Converter Layer (DAL)</div>
+                <div class="layer-description">
+                    Explicit type-safe transformations between ORM ↔ Domain<br>
+                    No implicit conversions, clear boundary enforcement
+                </div>
+            </div>
+
+            <div class="connector">
+                <div class="connector-label">ORM Models (mutable SQLAlchemy)</div>
+            </div>
+
+            <div class="layer orm">
+                <div class="layer-header">ORM Layer (SQLAlchemy)</div>
+                <div class="layer-description">
+                    Database table definitions, column mappings, relationships
+                </div>
+            </div>
+
+            <div class="connector">
+                <div class="connector-label">SQL via SQLAlchemy</div>
+            </div>
+
+            <div class="layer database">
+                <div class="layer-header">Database Layer (SQLite)</div>
+                <div class="layer-description">
+                    Connection and session management, schema creation
+                </div>
+            </div>
+        </div>
+
+        <div class="key-points">
+            <h2>Key Communication Patterns</h2>
+            <ul>
+                <li>
+                    <strong>Domain Models are IMMUTABLE</strong> (Pydantic with frozen=True)
+                    guaranteeing data integrity across layers
+                </li>
+                <li>
+                    <strong>Repository Layer Boundary:</strong> IN: Domain models (commands, filters) |
+                    OUT: Domain models or None — NEVER exposes ORM models
+                </li>
+                <li>
+                    <strong>Explicit Conversions:</strong> Converter layer explicitly transforms
+                    ORM ↔ Domain with clear, type-safe boundaries
+                </li>
+                <li>
+                    <strong>Data Flow:</strong> API validates HTTP → Domain Model → Repository
+                    converts to ORM → DB → ORM back to Domain Model → API serializes to HTTP
+                </li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
