@@ -1,6 +1,6 @@
 # Activity Logs & Audit Trails: Detailed Specification
 
-**Status**: 🔴 0/7 requirements implemented (0%)
+**Status**: 🟡 1/7 requirements implemented (14%)
 **Parent**: [Main Spec](../main_spec.md#feature-activity-logs--audit-trails)
 **Last Updated**: 2025-01-26
 
@@ -17,7 +17,7 @@ This spec defines the **externally observable behavior** of activity logging, fo
 ---
 
 ## REQ-ACTIVITY-001: Log all ticket changes
-**Status**: 🔴 Not Implemented
+**Status**: ✅ Implemented
 **Type**: Product Behavior
 
 ### Scenario

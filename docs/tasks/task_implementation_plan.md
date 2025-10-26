@@ -1,271 +1,256 @@
-# Task Implementation Plan: Activity log data structures and repository
+# Task Implementation Plan: Add activity logging to ticket operations
 
 **Task Status**: 🔄 In Progress
 **Date**: 2025-01-26
-**Implements Requirements**: Foundation for all REQ-ACTIVITY-001 through REQ-ACTIVITY-007
+**Implements Requirements**: REQ-ACTIVITY-001
 
 ## Behaviors to Implement
 
-This task creates the foundational infrastructure for activity logging. It does NOT implement the actual logging (that comes in Tasks 2-4), nor the API endpoints (Task 5). This task focuses on:
+### From REQ-ACTIVITY-001: Log all ticket changes
 
-1. Data structures to represent activity logs
-2. Database schema for storing activity logs
-3. Repository methods to create and query activity logs
-4. Complete repository testing
+**Observable Behavior**:
+- When tickets are created, updated, deleted, status changed, assigned, or moved
+- Activity log entries are created capturing the change
+- Logs include: actor (who), entity (what), action (type), changes (details), timestamp (when)
 
-### Foundation for REQ-ACTIVITY-001, 002, 003: Log entity changes
-
-**Observable Behavior** (will be tested in Tasks 2-4):
-- When entities are modified, activity log entries are created
-- Each log entry captures: what changed, who did it, when it happened
-
-**This Task's Contribution**:
-- Provide ActivityLog domain model
-- Provide ActivityLogCreateCommand for creating logs
-- Provide repository methods to persist logs
-
-### Foundation for REQ-ACTIVITY-004: Retrieve activity log for entity
-
-**Observable Behavior** (will be tested in Task 5):
-- GET /activity_logs?entity_type=ticket&entity_id=123 returns logs for that entity
-- Logs ordered by timestamp
-
-**This Task's Contribution**:
-- Repository method: `list(entity_type=..., entity_id=...)`
-- Returns logs in chronological order
-
-### Foundation for REQ-ACTIVITY-005: Filter activity logs
-
-**Observable Behavior** (will be tested in Task 5):
-- Query parameters filter logs by: entity_type, entity_id, actor_id, action, date range, organization_id
-- Multiple filters combine with AND logic
-
-**This Task's Contribution**:
-- Repository method: `list()` with all filter parameters
-- Complex filtering logic in repository
-
-### Foundation for REQ-ACTIVITY-006: Logs respect permissions
-
-**Observable Behavior** (will be tested in Task 5):
-- Users only see logs for entities they can access
-- Organization-scoped by default
-
-**This Task's Contribution**:
-- Organization_id field in logs
-- Repository can filter by organization
-
-### Foundation for REQ-ACTIVITY-007: Logs are immutable
-
-**Observable Behavior** (will be tested in Task 5):
-- No PUT/DELETE endpoints for activity logs
-
-**This Task's Contribution**:
-- Repository has create() and list() methods only
-- No update() or delete() methods
+**Acceptance Criteria** (from spec):
+- Creating ticket generates log with action="ticket_created"
+- Updating ticket fields generates log with action="ticket_updated" (includes old/new values)
+- Changing status generates log with action="ticket_status_changed"
+- Assigning ticket generates log with action="ticket_assigned"
+- Moving ticket generates log with action="ticket_moved"
+- Deleting ticket generates log with action="ticket_deleted"
 
 ## Implementation Plan
 
-### Domain Layer Changes
+### Ticket API Changes
 
-- [ ] Add ActionType enum in domain_models.py
-  - Values: ticket_created, ticket_updated, ticket_status_changed, ticket_assigned, ticket_moved, ticket_deleted
-  - Plus: project_created, project_updated, project_archived, project_unarchived, project_deleted
-  - Plus: user_created, user_updated, user_role_changed, user_activated, user_deactivated, user_password_changed, user_deleted
+**File**: `project_management_crud_example/routers/ticket_api.py`
 
-- [ ] Add ActivityLog model in domain_models.py
-  - Fields: id (str), entity_type (str), entity_id (str), action (ActionType), actor_id (str), organization_id (str), timestamp (datetime), changes (dict), metadata (Optional[dict])
+For each endpoint, after successful operation:
+1. Get ticket organization_id (from project)
+2. Create ActivityLogCreateCommand with appropriate action
+3. Call `repo.activity_logs.create(command)`
 
-- [ ] Add ActivityLogCreateCommand in domain_models.py
-  - Fields: entity_type, entity_id, action, actor_id, organization_id, changes, metadata (optional)
-  - Timestamp auto-set by repository
+**Endpoints to instrument:**
 
-### Repository Layer Changes
+- [ ] POST /api/tickets - ticket_created
+  - After ticket creation, log with changes={"created": {full ticket data}}
 
-- [ ] Add ActivityLogORM in orm_data_models.py
-  - Table: activity_logs
-  - Columns: id (String 36, PK), entity_type (String 50), entity_id (String 36), action (String 50), actor_id (String 36), organization_id (String 36), timestamp (DateTime), changes (Text), metadata (Text nullable)
-  - Indexes: entity_type+entity_id, organization_id, actor_id, timestamp
+- [ ] PUT /api/tickets/{id} - ticket_updated
+  - Before update, get old ticket
+  - After update, log with changes={field: {old_value, new_value}} for each changed field
 
-- [ ] Add converters in converters.py
-  - `orm_activity_log_to_domain_activity_log(orm_activity_log: ActivityLogORM) -> ActivityLog`
-  - `orm_activity_logs_to_domain_activity_logs(orm_activity_logs: List[ActivityLogORM]) -> List[ActivityLog]`
-  - Handle JSON deserialization for changes and metadata fields
+- [ ] PUT /api/tickets/{id}/status - ticket_status_changed
+  - Before status change, get old status
+  - After change, log with changes={"status": {old_value, new_value}}
 
-- [ ] Add Repository.ActivityLogs nested class in repository.py
-  - `create(command: ActivityLogCreateCommand) -> ActivityLog` - Create new log entry
-  - `get_by_id(log_id: str) -> Optional[ActivityLog]` - Get single log by ID
-  - `list(entity_type, entity_id, actor_id, action, from_date, to_date, organization_id, order) -> List[ActivityLog]` - List with filters
+- [ ] PUT /api/tickets/{id}/assignee - ticket_assigned
+  - Before assignment, get old assignee
+  - After change, log with changes={"assignee_id": {old_value, new_value}}
 
-- [ ] Update Repository.__init__ to instantiate self.activity_logs
+- [ ] PUT /api/tickets/{id}/project - ticket_moved
+  - Before move, get old project_id
+  - After move, log with changes={"project_id": {old_value, new_value}}
 
-### Database Layer Changes
+- [ ] DELETE /api/tickets/{id} - ticket_deleted
+  - Before deletion, capture ticket snapshot
+  - After deletion, log with changes={"deleted": {ticket snapshot}}
 
-- [ ] Update database.py to include ActivityLogORM in metadata for table creation
+### Helper Function
 
-### Other Changes
+Create helper function in ticket_api.py:
 
-- [ ] JSON serialization: Use json.dumps/loads for changes and metadata (SQLite has no native JSON)
+```python
+def _log_ticket_activity(
+    repo: Repository,
+    ticket: Ticket,
+    action: ActionType,
+    actor_id: str,
+    changes: dict,
+) -> None:
+    """Create activity log entry for ticket operation."""
+    # Get organization from project
+    project = repo.projects.get_by_id(ticket.project_id)
+    if not project:
+        return  # Shouldn't happen, but defensive
+
+    command = ActivityLogCreateCommand(
+        entity_type="ticket",
+        entity_id=ticket.id,
+        action=action,
+        actor_id=actor_id,
+        organization_id=project.organization_id,
+        changes=changes,
+    )
+    repo.activity_logs.create(command)
+```
+
+### Imports to Add
+
+Need to import:
+```python
+from project_management_crud_example.domain_models import (
+    ActionType,
+    ActivityLogCreateCommand,
+    # ... existing imports
+)
+```
 
 ## Test Planning
 
-### 2. Repository Layer Tests
+### API Tests
 
-**File**: tests/dal/test_activity_log_repository.py
+**File**: `tests/api/test_ticket_api.py`
 
-**Tests for create() method** (3 tests):
-- `test_create_activity_log` - Basic creation with all fields
-- `test_create_activity_log_with_metadata` - Metadata preserved
-- `test_create_activity_log_without_metadata` - Works without metadata
+**New test class: TestTicketActivityLogging**
 
-**Tests for get_by_id() method** (2 tests):
-- `test_get_activity_log_by_id` - Retrieve by ID works
-- `test_get_activity_log_by_id_not_found` - Returns None for missing
+Tests verify that activity logs are created:
 
-**Tests for list() - basic** (4 tests):
-- `test_list_all_activity_logs` - Lists all when no filters
-- `test_list_activity_logs_empty` - Returns [] when empty
-- `test_list_activity_logs_ordered_ascending` - Default oldest first
-- `test_list_activity_logs_ordered_descending` - order="desc" newest first
+1. `test_create_ticket_creates_activity_log`
+   - Create ticket
+   - Query activity logs for that ticket
+   - Verify log exists with action=ticket_created
+   - Verify changes contains created data
 
-**Tests for list() - entity filters** (3 tests):
-- `test_list_filter_by_entity_type` - Filter by ticket/project/user
-- `test_list_filter_by_entity_id` - Filter by specific ID
-- `test_list_filter_by_entity_type_and_id` - Combined filter
+2. `test_update_ticket_creates_activity_log`
+   - Create ticket
+   - Update ticket fields (title, description)
+   - Query activity logs
+   - Verify log with action=ticket_updated
+   - Verify changes contains old/new values for updated fields
 
-**Tests for list() - actor filter** (1 test):
-- `test_list_filter_by_actor_id` - Filter by who did it
+3. `test_change_ticket_status_creates_activity_log`
+   - Create ticket (status=TODO)
+   - Change status to IN_PROGRESS
+   - Query logs
+   - Verify log with action=ticket_status_changed
+   - Verify changes shows status transition
 
-**Tests for list() - action filter** (1 test):
-- `test_list_filter_by_action` - Filter by action type
+4. `test_assign_ticket_creates_activity_log`
+   - Create ticket (no assignee)
+   - Assign to user
+   - Query logs
+   - Verify log with action=ticket_assigned
+   - Verify changes shows assignee change
 
-**Tests for list() - date filters** (3 tests):
-- `test_list_filter_by_from_date` - Logs after date
-- `test_list_filter_by_to_date` - Logs before date
-- `test_list_filter_by_date_range` - Logs within range
+5. `test_move_ticket_creates_activity_log`
+   - Create ticket in project A
+   - Move to project B
+   - Query logs
+   - Verify log with action=ticket_moved
+   - Verify changes shows project_id change
 
-**Tests for list() - organization filter** (1 test):
-- `test_list_filter_by_organization_id` - Org scoping
+6. `test_delete_ticket_creates_activity_log`
+   - Create ticket
+   - Delete ticket
+   - Query logs (ticket deleted, but logs remain)
+   - Verify log with action=ticket_deleted
+   - Verify changes contains ticket snapshot
 
-**Tests for list() - combined** (1 test):
-- `test_list_multiple_filters_combined` - AND logic for filters
+7. `test_activity_log_captures_actor`
+   - Create ticket as user A
+   - Verify log has actor_id = user A's ID
 
-**Tests for changes field** (2 tests):
-- `test_activity_log_changes_preserved` - Complex dict preserved
-- `test_activity_log_changes_with_null_values` - Null values work
+8. `test_multiple_operations_create_multiple_logs`
+   - Create ticket
+   - Update it
+   - Change status
+   - Query logs
+   - Verify 3 logs exist in chronological order
 
-**Total: ~21 repository tests**
+**Repository tests**: Not needed - repository already tested in Task 1
 
-### 3. Converter Tests
+**Estimated**: 8 new API tests
 
-**File**: tests/dal/test_converters.py
+## Implementation Notes
 
-**Activity log converter tests** (3 tests):
-- `test_orm_activity_log_to_domain` - Basic conversion
-- `test_orm_activity_log_with_null_metadata` - Handles None metadata
-- `test_orm_activity_logs_list_conversion` - List converter
+### Changes Object Structure
 
-### Repository Helper Function
-
-**File**: tests/dal/helpers.py
-
-Add:
-```python
-def create_test_activity_log_via_repo(
-    test_repo: Repository,
-    entity_type: str = "ticket",
-    entity_id: str = "test-entity-id",
-    action: ActionType = ActionType.TICKET_CREATED,
-    actor_id: str = "test-user-id",
-    organization_id: str = "test-org-id",
-    changes: Optional[dict] = None,
-    metadata: Optional[dict] = None,
-) -> ActivityLog
+**For creation:**
+```json
+{
+  "created": {
+    "title": "New Ticket",
+    "description": "Description",
+    "status": "TODO",
+    "priority": "HIGH",
+    "project_id": "proj_123",
+    "reporter_id": "user_456"
+  }
+}
 ```
 
-## Technical Notes
-
-### JSON Storage
-
-SQLite doesn't have native JSON. Use Text columns with json.dumps/loads:
-
-```python
-# Repository create
-import json
-orm_log.changes = json.dumps(command.changes)
-
-# Converter
-changes=json.loads(orm_log.changes)
+**For updates:**
+```json
+{
+  "title": {"old_value": "Old", "new_value": "New"},
+  "description": {"old_value": "Old desc", "new_value": "New desc"}
+}
 ```
 
-### Indexes
-
-Add for query performance:
-```python
-Index('idx_activity_logs_entity', 'entity_type', 'entity_id')
-Index('idx_activity_logs_organization', 'organization_id')
-Index('idx_activity_logs_actor', 'actor_id')
-Index('idx_activity_logs_timestamp', 'timestamp')
+**For status change:**
+```json
+{
+  "status": {"old_value": "TODO", "new_value": "IN_PROGRESS"}
+}
 ```
 
-### Action Types (Enum)
-
-```python
-class ActionType(str, Enum):
-    # Tickets
-    TICKET_CREATED = "ticket_created"
-    TICKET_UPDATED = "ticket_updated"
-    TICKET_STATUS_CHANGED = "ticket_status_changed"
-    TICKET_ASSIGNED = "ticket_assigned"
-    TICKET_MOVED = "ticket_moved"
-    TICKET_DELETED = "ticket_deleted"
-
-    # Projects
-    PROJECT_CREATED = "project_created"
-    PROJECT_UPDATED = "project_updated"
-    PROJECT_ARCHIVED = "project_archived"
-    PROJECT_UNARCHIVED = "project_unarchived"
-    PROJECT_DELETED = "project_deleted"
-
-    # Users
-    USER_CREATED = "user_created"
-    USER_UPDATED = "user_updated"
-    USER_ROLE_CHANGED = "user_role_changed"
-    USER_ACTIVATED = "user_activated"
-    USER_DEACTIVATED = "user_deactivated"
-    USER_PASSWORD_CHANGED = "user_password_changed"
-    USER_DELETED = "user_deleted"
+**For assignment:**
+```json
+{
+  "assignee_id": {"old_value": null, "new_value": "user_789"}
+}
 ```
 
-### Changes Structure Examples
+**For move:**
+```json
+{
+  "project_id": {"old_value": "proj_A", "new_value": "proj_B"}
+}
+```
 
-**Create**: Single-level with created data
-**Update**: Field-level old/new values
-**Delete**: Snapshot of deleted entity
+**For deletion:**
+```json
+{
+  "deleted": {
+    "id": "ticket_123",
+    "title": "Deleted Ticket",
+    "status": "TODO"
+  }
+}
+```
 
-## Implementation Checklist
+### Error Handling
 
-Domain Layer:
-- [ ] ActionType enum
-- [ ] ActivityLog model
-- [ ] ActivityLogCreateCommand
+- If activity log creation fails, should we fail the operation?
+- Decision: Log the error but don't fail the operation
+- Activity logging is important but shouldn't break user operations
+- Use try-except around log creation
 
-ORM Layer:
-- [ ] ActivityLogORM with indexes
-- [ ] Update database.py
+### Testing via API
 
-Converter Layer:
-- [ ] Converters with JSON handling
+Since we're instrumenting API endpoints:
+- Create operations via API
+- Query activity logs via repository (API endpoint comes in Task 5)
+- Verify logs were created with correct data
 
-Repository Layer:
-- [ ] ActivityLogs nested class
-- [ ] create(), get_by_id(), list() methods
-- [ ] Update Repository.__init__
+## Checklist
+
+Implementation:
+- [ ] Add imports (ActionType, ActivityLogCreateCommand)
+- [ ] Create _log_ticket_activity helper function
+- [ ] Instrument POST /tickets (create)
+- [ ] Instrument PUT /tickets/{id} (update)
+- [ ] Instrument PUT /tickets/{id}/status (status change)
+- [ ] Instrument PUT /tickets/{id}/assignee (assign)
+- [ ] Instrument PUT /tickets/{id}/project (move)
+- [ ] Instrument DELETE /tickets/{id} (delete)
 
 Testing:
-- [ ] ~21 repository tests
-- [ ] 3 converter tests
-- [ ] Repository helper function
-- [ ] Run validations
+- [ ] Write 8 API tests for activity logging
+- [ ] Run validations until zero errors
 
 Status Updates:
-- [ ] Mark task ✅ in current_task_list.md
+- [ ] Update REQ-ACTIVITY-001 status: 🔴 → ✅
+- [ ] Update Task 2 status: 🔄 → ✅

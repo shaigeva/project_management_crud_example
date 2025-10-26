@@ -7,7 +7,9 @@ filtering, and all specialized update operations for tickets.
 import pytest
 from fastapi.testclient import TestClient
 
-from tests.conftest import client  # noqa: F401
+from project_management_crud_example.dal.sqlite.repository import Repository
+from project_management_crud_example.domain_models import ActionType
+from tests.conftest import client, test_repo  # noqa: F401
 from tests.fixtures.auth_fixtures import super_admin_token  # noqa: F401
 from tests.fixtures.data_fixtures import organization, second_organization  # noqa: F401
 from tests.helpers import auth_headers, create_write_user
@@ -971,3 +973,373 @@ class TestTicketWorkflows:
         # 9. Verify deletion
         final_get = client.get(f"/api/tickets/{ticket_id}", headers=headers)
         assert final_get.status_code == 404
+
+
+class TestTicketActivityLogging:
+    """Test that ticket operations create activity log entries."""
+
+    def test_create_ticket_creates_activity_log(
+        self,
+        client: TestClient,
+        test_repo: Repository,
+        shared_org_admin_token: tuple[str, str],
+    ) -> None:
+        """Test that creating a ticket creates an activity log entry."""
+        token, org_id = shared_org_admin_token
+        headers = auth_headers(token)
+
+        # Create project first
+        project_response = client.post(
+            "/api/projects",
+            json={"name": "Test Project"},
+            params={"organization_id": org_id},
+            headers=headers,
+        )
+        project_id = project_response.json()["id"]
+
+        # Create ticket
+        ticket_response = client.post(
+            "/api/tickets",
+            json={"title": "Test Ticket", "description": "Test description"},
+            params={"project_id": project_id},
+            headers=headers,
+        )
+        assert ticket_response.status_code == 201
+        ticket_id = ticket_response.json()["id"]
+
+        # Query activity logs for this ticket
+        logs = test_repo.activity_logs.list(entity_type="ticket", entity_id=ticket_id)
+
+        # Verify log was created
+        assert len(logs) == 1
+        log = logs[0]
+        assert log.action == ActionType.TICKET_CREATED
+        assert log.entity_type == "ticket"
+        assert log.entity_id == ticket_id
+        assert "created" in log.changes
+        assert log.changes["created"]["title"] == "Test Ticket"
+        assert log.changes["created"]["description"] == "Test description"
+
+    def test_update_ticket_creates_activity_log(
+        self,
+        client: TestClient,
+        test_repo: Repository,
+        shared_org_admin_token: tuple[str, str],
+    ) -> None:
+        """Test that updating a ticket creates an activity log entry."""
+        token, org_id = shared_org_admin_token
+        headers = auth_headers(token)
+
+        # Create project and ticket
+        project_response = client.post(
+            "/api/projects",
+            json={"name": "Test Project"},
+            params={"organization_id": org_id},
+            headers=headers,
+        )
+        project_id = project_response.json()["id"]
+
+        ticket_response = client.post(
+            "/api/tickets",
+            json={"title": "Original Title", "description": "Original description"},
+            params={"project_id": project_id},
+            headers=headers,
+        )
+        ticket_id = ticket_response.json()["id"]
+
+        # Update ticket
+        update_response = client.put(
+            f"/api/tickets/{ticket_id}",
+            json={"title": "Updated Title", "description": "Updated description"},
+            headers=headers,
+        )
+        assert update_response.status_code == 200
+
+        # Query activity logs for this ticket
+        logs = test_repo.activity_logs.list(entity_type="ticket", entity_id=ticket_id, action=ActionType.TICKET_UPDATED)
+
+        # Verify update log was created
+        assert len(logs) == 1
+        log = logs[0]
+        assert log.action == ActionType.TICKET_UPDATED
+        assert "title" in log.changes
+        assert log.changes["title"]["old_value"] == "Original Title"
+        assert log.changes["title"]["new_value"] == "Updated Title"
+        assert "description" in log.changes
+        assert log.changes["description"]["old_value"] == "Original description"
+        assert log.changes["description"]["new_value"] == "Updated description"
+
+    def test_change_ticket_status_creates_activity_log(
+        self,
+        client: TestClient,
+        test_repo: Repository,
+        shared_org_admin_token: tuple[str, str],
+    ) -> None:
+        """Test that changing ticket status creates an activity log entry."""
+        token, org_id = shared_org_admin_token
+        headers = auth_headers(token)
+
+        # Create project and ticket
+        project_response = client.post(
+            "/api/projects",
+            json={"name": "Test Project"},
+            params={"organization_id": org_id},
+            headers=headers,
+        )
+        project_id = project_response.json()["id"]
+
+        ticket_response = client.post(
+            "/api/tickets",
+            json={"title": "Status Test"},
+            params={"project_id": project_id},
+            headers=headers,
+        )
+        ticket_id = ticket_response.json()["id"]
+
+        # Change status
+        status_response = client.put(
+            f"/api/tickets/{ticket_id}/status",
+            json={"status": "IN_PROGRESS"},
+            headers=headers,
+        )
+        assert status_response.status_code == 200
+
+        # Query activity logs for status change
+        logs = test_repo.activity_logs.list(
+            entity_type="ticket", entity_id=ticket_id, action=ActionType.TICKET_STATUS_CHANGED
+        )
+
+        # Verify status change log was created
+        assert len(logs) == 1
+        log = logs[0]
+        assert log.action == ActionType.TICKET_STATUS_CHANGED
+        assert "status" in log.changes
+        assert log.changes["status"]["old_value"] == "TODO"
+        assert log.changes["status"]["new_value"] == "IN_PROGRESS"
+
+    def test_assign_ticket_creates_activity_log(
+        self,
+        client: TestClient,
+        test_repo: Repository,
+        shared_org_admin_token: tuple[str, str],
+    ) -> None:
+        """Test that assigning a ticket creates an activity log entry."""
+        token, org_id = shared_org_admin_token
+        headers = auth_headers(token)
+
+        # Create project and ticket
+        project_response = client.post(
+            "/api/projects",
+            json={"name": "Test Project"},
+            params={"organization_id": org_id},
+            headers=headers,
+        )
+        project_id = project_response.json()["id"]
+
+        ticket_response = client.post(
+            "/api/tickets",
+            json={"title": "Assign Test"},
+            params={"project_id": project_id},
+            headers=headers,
+        )
+        ticket_id = ticket_response.json()["id"]
+
+        # Create a user to assign
+        assignee_id, _ = create_write_user(client, token, org_id, username="assignee")
+
+        # Assign ticket
+        assign_response = client.put(
+            f"/api/tickets/{ticket_id}/assignee",
+            json={"assignee_id": assignee_id},
+            headers=headers,
+        )
+        assert assign_response.status_code == 200
+
+        # Query activity logs for assignment
+        logs = test_repo.activity_logs.list(
+            entity_type="ticket", entity_id=ticket_id, action=ActionType.TICKET_ASSIGNED
+        )
+
+        # Verify assignment log was created
+        assert len(logs) == 1
+        log = logs[0]
+        assert log.action == ActionType.TICKET_ASSIGNED
+        assert "assignee_id" in log.changes
+        assert log.changes["assignee_id"]["old_value"] is None
+        assert log.changes["assignee_id"]["new_value"] == assignee_id
+
+    def test_move_ticket_creates_activity_log(
+        self,
+        client: TestClient,
+        test_repo: Repository,
+        shared_org_admin_token: tuple[str, str],
+    ) -> None:
+        """Test that moving a ticket to different project creates an activity log entry."""
+        token, org_id = shared_org_admin_token
+        headers = auth_headers(token)
+
+        # Create two projects
+        project1_response = client.post(
+            "/api/projects",
+            json={"name": "Project 1"},
+            params={"organization_id": org_id},
+            headers=headers,
+        )
+        project1_id = project1_response.json()["id"]
+
+        project2_response = client.post(
+            "/api/projects",
+            json={"name": "Project 2"},
+            params={"organization_id": org_id},
+            headers=headers,
+        )
+        project2_id = project2_response.json()["id"]
+
+        # Create ticket in project 1
+        ticket_response = client.post(
+            "/api/tickets",
+            json={"title": "Move Test"},
+            params={"project_id": project1_id},
+            headers=headers,
+        )
+        ticket_id = ticket_response.json()["id"]
+
+        # Move ticket to project 2
+        move_response = client.put(
+            f"/api/tickets/{ticket_id}/project",
+            json={"project_id": project2_id},
+            headers=headers,
+        )
+        assert move_response.status_code == 200
+
+        # Query activity logs for move
+        logs = test_repo.activity_logs.list(entity_type="ticket", entity_id=ticket_id, action=ActionType.TICKET_MOVED)
+
+        # Verify move log was created
+        assert len(logs) == 1
+        log = logs[0]
+        assert log.action == ActionType.TICKET_MOVED
+        assert "project_id" in log.changes
+        assert log.changes["project_id"]["old_value"] == project1_id
+        assert log.changes["project_id"]["new_value"] == project2_id
+
+    def test_delete_ticket_creates_activity_log(
+        self,
+        client: TestClient,
+        test_repo: Repository,
+        shared_org_admin_token: tuple[str, str],
+    ) -> None:
+        """Test that deleting a ticket creates an activity log entry."""
+        token, org_id = shared_org_admin_token
+        headers = auth_headers(token)
+
+        # Create project and ticket
+        project_response = client.post(
+            "/api/projects",
+            json={"name": "Test Project"},
+            params={"organization_id": org_id},
+            headers=headers,
+        )
+        project_id = project_response.json()["id"]
+
+        ticket_response = client.post(
+            "/api/tickets",
+            json={"title": "Delete Test"},
+            params={"project_id": project_id},
+            headers=headers,
+        )
+        ticket_id = ticket_response.json()["id"]
+
+        # Delete ticket
+        delete_response = client.delete(f"/api/tickets/{ticket_id}", headers=headers)
+        assert delete_response.status_code == 204
+
+        # Query activity logs for deletion (logs persist after deletion)
+        logs = test_repo.activity_logs.list(entity_type="ticket", entity_id=ticket_id, action=ActionType.TICKET_DELETED)
+
+        # Verify deletion log was created with snapshot
+        assert len(logs) == 1
+        log = logs[0]
+        assert log.action == ActionType.TICKET_DELETED
+        assert "deleted" in log.changes
+        assert log.changes["deleted"]["id"] == ticket_id
+        assert log.changes["deleted"]["title"] == "Delete Test"
+        assert log.changes["deleted"]["status"] == "TODO"
+
+    def test_activity_log_captures_actor(
+        self,
+        client: TestClient,
+        test_repo: Repository,
+        shared_org_admin_token: tuple[str, str],
+    ) -> None:
+        """Test that activity logs capture the actor (user) who performed the action."""
+        token, org_id = shared_org_admin_token
+        headers = auth_headers(token)
+
+        # Create project and ticket
+        project_response = client.post(
+            "/api/projects",
+            json={"name": "Test Project"},
+            params={"organization_id": org_id},
+            headers=headers,
+        )
+        project_id = project_response.json()["id"]
+
+        ticket_response = client.post(
+            "/api/tickets",
+            json={"title": "Actor Test"},
+            params={"project_id": project_id},
+            headers=headers,
+        )
+        ticket_id = ticket_response.json()["id"]
+
+        # Query activity logs
+        logs = test_repo.activity_logs.list(entity_type="ticket", entity_id=ticket_id)
+
+        # Verify actor is captured (should be non-empty string)
+        assert len(logs) == 1
+        assert logs[0].actor_id is not None
+        assert len(logs[0].actor_id) > 0  # Valid UUID string
+
+    def test_multiple_operations_create_multiple_logs(
+        self,
+        client: TestClient,
+        test_repo: Repository,
+        shared_org_admin_token: tuple[str, str],
+    ) -> None:
+        """Test that multiple operations on same ticket create multiple log entries."""
+        token, org_id = shared_org_admin_token
+        headers = auth_headers(token)
+
+        # Create project and ticket
+        project_response = client.post(
+            "/api/projects",
+            json={"name": "Test Project"},
+            params={"organization_id": org_id},
+            headers=headers,
+        )
+        project_id = project_response.json()["id"]
+
+        ticket_response = client.post(
+            "/api/tickets",
+            json={"title": "Multi-op Test"},
+            params={"project_id": project_id},
+            headers=headers,
+        )
+        ticket_id = ticket_response.json()["id"]
+
+        # Perform multiple operations
+        client.put(f"/api/tickets/{ticket_id}", json={"title": "Updated Title"}, headers=headers)
+        client.put(f"/api/tickets/{ticket_id}/status", json={"status": "IN_PROGRESS"}, headers=headers)
+
+        # Query all activity logs for this ticket
+        logs = test_repo.activity_logs.list(entity_type="ticket", entity_id=ticket_id)
+
+        # Verify multiple logs created in chronological order
+        assert len(logs) == 3  # Create, update, status change
+        assert logs[0].action == ActionType.TICKET_CREATED
+        assert logs[1].action == ActionType.TICKET_UPDATED
+        assert logs[2].action == ActionType.TICKET_STATUS_CHANGED
+
+        # Verify chronological order
+        assert logs[0].timestamp <= logs[1].timestamp <= logs[2].timestamp

@@ -14,7 +14,7 @@ Create domain models, ORM models, and repository for activity logs. Implement ba
 ---
 
 ## Task 2: Add activity logging to ticket operations
-**Status**: ⏳ Pending
+**Status**: ✅ Complete
 **Implements**: REQ-ACTIVITY-001
 **Dependencies**: Task 1
 
