@@ -428,6 +428,35 @@ class TestOrganizationWorkflows:
         )
         assert get_other_response.status_code == 403
 
+    def test_organization_creation_creates_default_workflow(self, client: TestClient, super_admin_token: str) -> None:
+        """Test that creating an organization automatically creates a default workflow."""
+        # Create organization
+        org_response = client.post(
+            "/api/organizations",
+            json={"name": "Test Org with Workflow"},
+            headers=auth_headers(super_admin_token),
+        )
+        assert org_response.status_code == 201
+        org_id = org_response.json()["id"]
+
+        # List workflows - should include the default workflow for this org
+        workflows_response = client.get(
+            "/api/workflows",
+            headers=auth_headers(super_admin_token),
+        )
+        assert workflows_response.status_code == 200
+        workflows = workflows_response.json()
+
+        # Find the default workflow for this organization
+        org_workflows = [w for w in workflows if w["organization_id"] == org_id]
+        assert len(org_workflows) == 1, "Organization should have exactly one default workflow"
+
+        default_workflow = org_workflows[0]
+        assert default_workflow["is_default"] is True
+        assert default_workflow["name"] == "Default Workflow"
+        assert default_workflow["description"] == "Standard workflow with TODO, IN_PROGRESS, and DONE statuses"
+        assert default_workflow["statuses"] == ["TODO", "IN_PROGRESS", "DONE"]
+
 
 class TestOrganizationActivityLogging:
     """Tests for organization activity logging."""

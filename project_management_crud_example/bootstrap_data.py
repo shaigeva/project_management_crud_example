@@ -65,3 +65,53 @@ def ensure_super_admin(db: Database) -> tuple[bool, str | None]:
         if created and user:
             return True, user.id
         return False, None
+
+
+def ensure_default_workflows(db: Database) -> int:
+    """Ensure all organizations have default workflows, creating if needed.
+
+    This function checks all organizations and creates default workflows for any
+    that don't have one. This is useful for migrations and ensuring consistency.
+
+    Args:
+        db: Database instance to use
+
+    Returns:
+        Number of default workflows created
+
+    Example:
+        >>> db = Database("app.db")
+        >>> db.create_tables()
+        >>> count = ensure_default_workflows(db)
+        >>> print(f"Created {count} default workflows")
+
+    Note:
+        This is idempotent - it won't create duplicate default workflows.
+    """
+    with db.get_session() as session:
+        # Use fast test hasher in testing mode (workflows don't need it, but repo requires it)
+        password_hasher = TestPasswordHasher() if db.is_testing else PasswordHasher(is_secure=True)
+        repo = Repository(session, password_hasher=password_hasher)
+
+        # Get all organizations
+        organizations = repo.organizations.get_all()
+
+        created_count = 0
+        for org in organizations:
+            # Check if organization already has a default workflow
+            existing_default = repo.workflows.get_default_workflow(org.id)
+            if existing_default:
+                continue
+
+            # Create default workflow for this organization
+            try:
+                repo.workflows.create_default_workflow(org.id)
+                created_count += 1
+            except Exception as e:
+                # Log but continue with other organizations
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.error(f"Failed to create default workflow for organization {org.id}: {e}")
+
+        return created_count

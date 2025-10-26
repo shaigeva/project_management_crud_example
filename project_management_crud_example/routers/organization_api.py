@@ -54,6 +54,17 @@ async def create_organization(
     try:
         organization = repo.organizations.create(command)
 
+        # Create default workflow for the new organization
+        try:
+            default_workflow = repo.workflows.create_default_workflow(organization.id)
+            logger.info(
+                f"Default workflow created for organization: {organization.id} (workflow: {default_workflow.id})"
+            )
+        except Exception as e:
+            # If default workflow creation fails, log but don't fail the organization creation
+            # (this allows the system to remain functional even if workflow creation has issues)
+            logger.error(f"Failed to create default workflow for organization {organization.id}: {e}")
+
         # Log activity - command-based
         log_activity(
             repo=repo,

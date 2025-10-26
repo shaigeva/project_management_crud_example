@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # NOTE: This is for EXAMPLE APPLICATIONS only. In production:
     # - Never auto-bootstrap with constant passwords
     # - Use proper initialization and secrets management
-    from project_management_crud_example.bootstrap_data import ensure_super_admin
+    from project_management_crud_example.bootstrap_data import ensure_default_workflows, ensure_super_admin
 
     created, user_id = ensure_super_admin(db)
     if created:
@@ -56,6 +56,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
     else:
         logger.info("Super Admin already exists")
+
+    # Ensure all organizations have default workflows
+    # This is a migration for existing organizations and a safety check for consistency
+    workflow_count = ensure_default_workflows(db)
+    if workflow_count > 0:
+        logger.info(f"Created {workflow_count} default workflow(s) for existing organizations")
+    else:
+        logger.info("All organizations have default workflows")
 
     yield
     # Cleanup resources on shutdown if needed

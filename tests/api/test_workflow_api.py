@@ -319,21 +319,26 @@ class TestListWorkflows:
 
         assert response.status_code == 200
         data = response.json()
-        assert len(data) == 2
+        # Should have 3: 2 created + 1 default workflow (auto-created with org)
+        assert len(data) == 3
         workflow_names = {w["name"] for w in data}
         assert "Workflow 1" in workflow_names
         assert "Workflow 2" in workflow_names
+        assert "Default Workflow" in workflow_names
 
     def test_list_workflows_empty_organization(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
         """Test listing workflows when organization has no custom workflows."""
         token, _ = org_admin_token
 
-        # List workflows (no custom workflows created yet)
+        # List workflows (should have default workflow auto-created with org)
         response = client.get("/api/workflows", headers=auth_headers(token))
 
         assert response.status_code == 200
         data = response.json()
-        assert len(data) == 0  # No custom workflows yet
+        # Organization has default workflow automatically created
+        assert len(data) == 1
+        assert data[0]["name"] == "Default Workflow"
+        assert data[0]["is_default"] is True
 
     def test_list_workflows_filters_by_organization(
         self, client: TestClient, org_admin_token: tuple[str, str], super_admin_token: str
@@ -364,19 +369,23 @@ class TestListWorkflows:
         workflow2_data = {"name": "Org2 Workflow", "statuses": ["NEW", "CLOSED"]}
         client.post("/api/workflows", json=workflow2_data, headers=auth_headers(token2))
 
-        # Org1 admin should only see org1 workflows
+        # Org1 admin should only see org1 workflows (custom + default)
         response1 = client.get("/api/workflows", headers=auth_headers(token1))
         assert response1.status_code == 200
         data1 = response1.json()
-        assert len(data1) == 1
-        assert data1[0]["name"] == "Org1 Workflow"
+        assert len(data1) == 2  # Custom workflow + default workflow
+        workflow1_names = {w["name"] for w in data1}
+        assert "Org1 Workflow" in workflow1_names
+        assert "Default Workflow" in workflow1_names
 
-        # Org2 admin should only see org2 workflows
+        # Org2 admin should only see org2 workflows (custom + default)
         response2 = client.get("/api/workflows", headers=auth_headers(token2))
         assert response2.status_code == 200
         data2 = response2.json()
-        assert len(data2) == 1
-        assert data2[0]["name"] == "Org2 Workflow"
+        assert len(data2) == 2  # Custom workflow + default workflow
+        workflow2_names = {w["name"] for w in data2}
+        assert "Org2 Workflow" in workflow2_names
+        assert "Default Workflow" in workflow2_names
 
     def test_list_workflows_super_admin_sees_all(
         self, client: TestClient, org_admin_token: tuple[str, str], super_admin_token: str
@@ -696,8 +705,13 @@ class TestDeleteWorkflow:
         list_response = client.get("/api/workflows", headers=auth_headers(token))
         workflows = list_response.json()
 
-        assert len(workflows) == 1
-        assert workflows[0]["name"] == "Workflow 2"
+        # Should have 2: Workflow 2 + Default Workflow
+        assert len(workflows) == 2
+        workflow_names = {w["name"] for w in workflows}
+        assert "Workflow 2" in workflow_names
+        assert "Default Workflow" in workflow_names
+        # Workflow 1 should be gone
+        assert "Workflow 1" not in workflow_names
 
 
 class TestWorkflowCRUDWorkflow:
