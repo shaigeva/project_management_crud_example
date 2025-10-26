@@ -2,7 +2,9 @@
 
 from fastapi.testclient import TestClient
 
-from tests.conftest import client  # noqa: F401
+from project_management_crud_example.dal.sqlite.repository import Repository
+from project_management_crud_example.domain_models import ActionType
+from tests.conftest import client, test_repo  # noqa: F401
 from tests.fixtures.auth_fixtures import (  # noqa: F401
     org_admin_token,
     project_manager_token,
@@ -17,6 +19,7 @@ from tests.helpers import (
     create_test_epic,
     create_test_org,
     create_test_project,
+    create_test_ticket,
 )
 
 
@@ -740,3 +743,173 @@ class TestEpicTicketWorkflows:
         # Verify ticket still exists
         ticket_get = client.get(f"/api/tickets/{ticket_id}", headers=auth_headers(token))
         assert ticket_get.status_code == 200
+
+
+class TestEpicActivityLogging:
+    """Tests for epic activity logging."""
+
+    def test_create_epic_logs_activity(self, client: TestClient, test_repo: Repository, super_admin_token: str) -> None:
+        """Test that creating an epic creates an activity log entry."""
+        org_id = create_test_org(client, super_admin_token)
+        admin_id, password = create_admin_user(client, super_admin_token, org_id, username="admin")
+
+        # Login as admin
+        login_response = client.post("/auth/login", json={"username": "admin", "password": password})
+        admin_token = login_response.json()["access_token"]
+
+        # Create epic
+        epic_data = {"name": "Test Epic", "description": "Test epic for activity logging"}
+        response = client.post("/api/epics", json=epic_data, headers=auth_headers(admin_token))
+        assert response.status_code == 201
+        epic_id = response.json()["id"]
+
+        # Verify activity log was created
+        logs = test_repo.activity_logs.list(entity_type="epic", entity_id=epic_id)
+
+        assert len(logs) == 1
+        log = logs[0]
+        assert log.entity_type == "epic"
+        assert log.entity_id == epic_id
+        assert log.action == ActionType.EPIC_CREATED
+        assert log.actor_id == admin_id
+        assert log.organization_id == org_id
+        assert "command" in log.changes
+        assert log.changes["command"]["epic_data"]["name"] == "Test Epic"
+
+    def test_update_epic_logs_activity(self, client: TestClient, test_repo: Repository, super_admin_token: str) -> None:
+        """Test that updating an epic creates an activity log entry."""
+        org_id = create_test_org(client, super_admin_token)
+        admin_id, password = create_admin_user(client, super_admin_token, org_id, username="admin")
+
+        # Login as admin
+        login_response = client.post("/auth/login", json={"username": "admin", "password": password})
+        admin_token = login_response.json()["access_token"]
+
+        # Create epic
+        epic_id = create_test_epic(client, admin_token, "Test Epic")
+
+        # Clear existing logs
+        test_repo.activity_logs.list(entity_type="epic", entity_id=epic_id)
+
+        # Update epic
+        update_data = {"name": "Updated Epic", "description": "Updated description"}
+        response = client.put(f"/api/epics/{epic_id}", json=update_data, headers=auth_headers(admin_token))
+        assert response.status_code == 200
+
+        # Verify activity log was created for update
+        logs = test_repo.activity_logs.list(entity_type="epic", entity_id=epic_id)
+
+        # Should have 2 logs: create + update
+        assert len(logs) == 2
+        update_log = logs[1]  # Most recent log
+        assert update_log.action == ActionType.EPIC_UPDATED
+        assert update_log.actor_id == admin_id
+        assert update_log.organization_id == org_id
+        assert "command" in update_log.changes
+        assert update_log.changes["command"]["name"] == "Updated Epic"
+
+    def test_delete_epic_logs_activity(self, client: TestClient, test_repo: Repository, super_admin_token: str) -> None:
+        """Test that deleting an epic creates an activity log entry with snapshot."""
+        org_id = create_test_org(client, super_admin_token)
+        admin_id, password = create_admin_user(client, super_admin_token, org_id, username="admin")
+
+        # Login as admin
+        login_response = client.post("/auth/login", json={"username": "admin", "password": password})
+        admin_token = login_response.json()["access_token"]
+
+        # Create epic
+        epic_id = create_test_epic(client, admin_token, "Test Epic")
+
+        # Delete epic
+        response = client.delete(f"/api/epics/{epic_id}", headers=auth_headers(admin_token))
+        assert response.status_code == 204
+
+        # Verify activity log was created for delete
+        logs = test_repo.activity_logs.list(entity_type="epic", entity_id=epic_id)
+
+        # Should have 2 logs: create + delete
+        assert len(logs) == 2
+        delete_log = logs[1]  # Most recent log
+        assert delete_log.action == ActionType.EPIC_DELETED
+        assert delete_log.actor_id == admin_id
+        assert delete_log.organization_id == org_id
+        assert "command" in delete_log.changes
+        assert "snapshot" in delete_log.changes
+        # Verify snapshot contains epic data
+        assert delete_log.changes["snapshot"]["id"] == epic_id
+        assert delete_log.changes["snapshot"]["name"] == "Test Epic"
+
+    def test_add_ticket_to_epic_logs_activity(
+        self, client: TestClient, test_repo: Repository, super_admin_token: str
+    ) -> None:
+        """Test that adding a ticket to an epic creates an activity log entry."""
+        org_id = create_test_org(client, super_admin_token)
+        admin_id, password = create_admin_user(client, super_admin_token, org_id, username="admin")
+
+        # Login as admin
+        login_response = client.post("/auth/login", json={"username": "admin", "password": password})
+        admin_token = login_response.json()["access_token"]
+
+        # Create project, epic, and ticket
+        project_id = create_test_project(client, admin_token, "Test Project")
+        epic_id = create_test_epic(client, admin_token, "Test Epic")
+        ticket_id = create_test_ticket(
+            client, admin_token, project_id, admin_id, title="Test Ticket", description="Test"
+        )
+
+        # Add ticket to epic
+        response = client.post(
+            f"/api/epics/{epic_id}/tickets", params={"ticket_id": ticket_id}, headers=auth_headers(admin_token)
+        )
+        assert response.status_code == 200
+
+        # Verify activity log was created for ticket addition
+        logs = test_repo.activity_logs.list(entity_type="epic", entity_id=epic_id)
+
+        # Should have 2 logs: create + ticket_added
+        assert len(logs) == 2
+        add_log = logs[1]  # Most recent log
+        assert add_log.action == ActionType.EPIC_TICKET_ADDED
+        assert add_log.actor_id == admin_id
+        assert add_log.organization_id == org_id
+        assert "command" in add_log.changes
+        assert add_log.changes["command"]["epic_id"] == epic_id
+        assert add_log.changes["command"]["ticket_id"] == ticket_id
+
+    def test_remove_ticket_from_epic_logs_activity(
+        self, client: TestClient, test_repo: Repository, super_admin_token: str
+    ) -> None:
+        """Test that removing a ticket from an epic creates an activity log entry."""
+        org_id = create_test_org(client, super_admin_token)
+        admin_id, password = create_admin_user(client, super_admin_token, org_id, username="admin")
+
+        # Login as admin
+        login_response = client.post("/auth/login", json={"username": "admin", "password": password})
+        admin_token = login_response.json()["access_token"]
+
+        # Create project, epic, and ticket
+        project_id = create_test_project(client, admin_token, "Test Project")
+        epic_id = create_test_epic(client, admin_token, "Test Epic")
+        ticket_id = create_test_ticket(
+            client, admin_token, project_id, admin_id, title="Test Ticket", description="Test"
+        )
+
+        # Add ticket to epic
+        client.post(f"/api/epics/{epic_id}/tickets", params={"ticket_id": ticket_id}, headers=auth_headers(admin_token))
+
+        # Remove ticket from epic
+        response = client.delete(f"/api/epics/{epic_id}/tickets/{ticket_id}", headers=auth_headers(admin_token))
+        assert response.status_code == 204
+
+        # Verify activity log was created for ticket removal
+        logs = test_repo.activity_logs.list(entity_type="epic", entity_id=epic_id)
+
+        # Should have 3 logs: create + ticket_added + ticket_removed
+        assert len(logs) == 3
+        remove_log = logs[2]  # Most recent log
+        assert remove_log.action == ActionType.EPIC_TICKET_REMOVED
+        assert remove_log.actor_id == admin_id
+        assert remove_log.organization_id == org_id
+        assert "command" in remove_log.changes
+        assert remove_log.changes["command"]["epic_id"] == epic_id
+        assert remove_log.changes["command"]["ticket_id"] == ticket_id

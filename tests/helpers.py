@@ -220,3 +220,32 @@ def create_test_epic(client: TestClient, token: str, name: str = "Test Epic", de
         epic_data["description"] = description
     response = client.post("/api/epics", json=epic_data, headers=headers)
     return response.json()["id"]
+
+
+def create_test_ticket(
+    client: TestClient,
+    token: str,
+    project_id: str,
+    reporter_id: str,
+    title: str = "Test Ticket",
+    description: str = "Test ticket description",
+    priority: str = "MEDIUM",
+) -> str:
+    """Create a ticket via API and return its ID.
+
+    Args:
+        client: FastAPI TestClient
+        token: Authentication token
+        project_id: Project ID for the ticket
+        reporter_id: User ID of the ticket reporter
+        title: Ticket title (default: "Test Ticket")
+        description: Ticket description (default: "Test ticket description")
+        priority: Ticket priority (default: "MEDIUM")
+
+    Returns:
+        Ticket ID
+    """
+    headers = auth_headers(token)
+    ticket_data = {"title": title, "description": description, "priority": priority}
+    response = client.post(f"/api/tickets?project_id={project_id}", json=ticket_data, headers=headers)
+    return response.json()["id"]

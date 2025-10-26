@@ -61,6 +61,13 @@ class ActionType(str, Enum):
     USER_PASSWORD_CHANGED = "user_password_changed"
     USER_DELETED = "user_deleted"
 
+    # Epic actions
+    EPIC_CREATED = "epic_created"
+    EPIC_UPDATED = "epic_updated"
+    EPIC_DELETED = "epic_deleted"
+    EPIC_TICKET_ADDED = "epic_ticket_added"
+    EPIC_TICKET_REMOVED = "epic_ticket_removed"
+
 
 class StubEntityData(BaseModel):
     """Base data structure for stub entity - template for creating real entities."""
@@ -237,18 +244,53 @@ class Epic(EpicData):
     updated_at: datetime = Field(..., description="Last update timestamp")
 
 
-class EpicCreateCommand(BaseModel):
+class EpicCreateCommand(AuditableCommand):
     """Command model for creating a new epic."""
+
+    _entity_type: ClassVar[str] = "epic"
+    _action_type: ClassVar[ActionType] = ActionType.EPIC_CREATED
 
     epic_data: EpicData
     organization_id: str = Field(..., description="Organization ID this epic belongs to")
 
 
-class EpicUpdateCommand(BaseModel):
+class EpicUpdateCommand(AuditableCommand):
     """Command model for updating an existing epic."""
+
+    _entity_type: ClassVar[str] = "epic"
+    _action_type: ClassVar[ActionType] = ActionType.EPIC_UPDATED
 
     name: Optional[str] = Field(None, min_length=1, max_length=255, description="Epic name")
     description: Optional[str] = Field(None, max_length=1000, description="Epic description")
+
+
+class EpicDeleteCommand(AuditableCommand):
+    """Command model for deleting an epic."""
+
+    _entity_type: ClassVar[str] = "epic"
+    _action_type: ClassVar[ActionType] = ActionType.EPIC_DELETED
+
+    epic_id: str = Field(..., description="ID of epic to delete")
+
+
+class EpicTicketAddCommand(AuditableCommand):
+    """Command model for adding a ticket to an epic."""
+
+    _entity_type: ClassVar[str] = "epic"
+    _action_type: ClassVar[ActionType] = ActionType.EPIC_TICKET_ADDED
+
+    epic_id: str = Field(..., description="ID of epic")
+    ticket_id: str = Field(..., description="ID of ticket to add")
+
+
+class EpicTicketRemoveCommand(AuditableCommand):
+    """Command model for removing a ticket from an epic."""
+
+    _entity_type: ClassVar[str] = "epic"
+    _action_type: ClassVar[ActionType] = ActionType.EPIC_TICKET_REMOVED
+
+    epic_id: str = Field(..., description="ID of epic")
+    ticket_id: str = Field(..., description="ID of ticket to remove")
 
 
 # Ticket Models

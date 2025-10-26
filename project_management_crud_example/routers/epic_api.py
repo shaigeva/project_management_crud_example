@@ -14,11 +14,16 @@ from project_management_crud_example.domain_models import (
     Epic,
     EpicCreateCommand,
     EpicData,
+    EpicDeleteCommand,
+    EpicTicketAddCommand,
+    EpicTicketRemoveCommand,
     EpicUpdateCommand,
     Ticket,
     User,
     UserRole,
 )
+from project_management_crud_example.utils.activity_log_helpers import log_activity
+from project_management_crud_example.utils.debug_helpers import log_diff_debug
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +77,15 @@ async def create_epic(
     # Create epic
     command = EpicCreateCommand(epic_data=epic_data, organization_id=organization_id)
     epic = repo.epics.create(command)
+
+    # Log activity - command-based
+    log_activity(
+        repo=repo,
+        command=command,
+        entity_id=epic.id,
+        actor_id=current_user.id,
+        organization_id=organization_id,
+    )
 
     logger.info(f"Epic created: {epic.id}")
     return epic
@@ -213,6 +227,9 @@ async def update_epic(
                 detail="Access denied: epic belongs to different organization",
             )
 
+    # Capture old state for debug logging
+    old_epic = epic
+
     # Update epic
     updated_epic = repo.epics.update(epic_id, update_data)
     if not updated_epic:
@@ -221,6 +238,18 @@ async def update_epic(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Epic not found",
         )
+
+    # Debug logging: show what changed
+    log_diff_debug(old_epic, updated_epic, "epic", "update_epic")
+
+    # Log activity - command-based
+    log_activity(
+        repo=repo,
+        command=update_data,
+        entity_id=epic_id,
+        actor_id=current_user.id,
+        organization_id=updated_epic.organization_id,
+    )
 
     logger.info(f"Epic updated: {epic_id}")
     return updated_epic
@@ -284,6 +313,20 @@ async def delete_epic(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Epic not found",
         )
+
+    # Debug logging: show what was deleted
+    log_diff_debug(epic, None, "epic", "delete_epic")
+
+    # Log activity - command-based with snapshot
+    delete_cmd = EpicDeleteCommand(epic_id=epic_id)
+    log_activity(
+        repo=repo,
+        command=delete_cmd,
+        entity_id=epic_id,
+        actor_id=current_user.id,
+        organization_id=epic.organization_id,
+        snapshot=epic.model_dump(mode="json", exclude_none=True),
+    )
 
     logger.info(f"Epic deleted: {epic_id}")
 
@@ -384,6 +427,16 @@ async def add_ticket_to_epic(
             detail="Epic or ticket not found",
         )
 
+    # Log activity - command-based
+    add_cmd = EpicTicketAddCommand(epic_id=epic_id, ticket_id=ticket_id)
+    log_activity(
+        repo=repo,
+        command=add_cmd,
+        entity_id=epic_id,
+        actor_id=current_user.id,
+        organization_id=epic.organization_id,
+    )
+
     logger.info(f"Ticket {ticket_id} added to epic {epic_id}")
     return {"message": "Ticket added to epic successfully"}
 
@@ -479,6 +532,16 @@ async def remove_ticket_from_epic(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Epic or ticket not found",
         )
+
+    # Log activity - command-based
+    remove_cmd = EpicTicketRemoveCommand(epic_id=epic_id, ticket_id=ticket_id)
+    log_activity(
+        repo=repo,
+        command=remove_cmd,
+        entity_id=epic_id,
+        actor_id=current_user.id,
+        organization_id=epic.organization_id,
+    )
 
     logger.info(f"Ticket {ticket_id} removed from epic {epic_id}")
 
