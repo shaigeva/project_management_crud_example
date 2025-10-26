@@ -2,6 +2,39 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+---
+
+# ⛔ ABSOLUTE RULE: NEVER COMMIT WITHOUT USER APPROVAL ⛔
+
+**YOU MUST NEVER, EVER COMMIT CODE WITHOUT EXPLICITLY ASKING THE USER FOR APPROVAL FIRST.**
+
+**Correct sequence:**
+1. ✅ Complete implementation and validations
+2. ✅ Show summary to user
+3. ✅ **ASK**: "Ready to commit these changes?"
+4. ✅ **WAIT** for user to say "yes" or "commit" or "go ahead"
+5. ✅ **ONLY THEN** run git commit
+
+**Wrong sequence:**
+1. ✅ Complete implementation
+2. ✅ Show summary
+3. ❌ **IMMEDIATELY COMMIT** ← **THIS IS FORBIDDEN**
+
+**If you find yourself about to run `git commit`:**
+- **STOP IMMEDIATELY**
+- Ask yourself: "Did the user explicitly approve this commit in their last message?"
+- If the answer is NO → **ASK FOR APPROVAL**
+- If the answer is YES → Proceed with commit
+
+**This rule applies to:**
+- ✅ ALL implementation commits (code, tests)
+- ✅ ALL specification commits (docs/spec/)
+- ✅ ALL task list commits (docs/tasks/)
+- ✅ ALL documentation commits
+- ✅ EVERYTHING - no exceptions
+
+---
+
 ## Project Overview
 
 The project follows the specification in the `docs/spec/` directory, where the central spec is `docs/spec/main_spec.md`.
@@ -85,8 +118,11 @@ When you create a task list or plan:
 2. Run validations until all pass (zero errors/warnings)
 3. Update task and requirement statuses
 4. **Show summary** of what was implemented
-5. **Ask user for approval to commit**
-6. **After user approves**: Commit the changes
+5. ⛔ **STOP - ASK user for approval to commit** ⛔
+   - Say: "Ready to commit these changes?"
+   - WAIT for user response
+   - Do NOT proceed to step 6 without explicit approval
+6. **After user approves**: ONLY THEN commit the changes
 
 **Key rules:**
 - Get behavior requirements from SPEC files, not task list
@@ -97,8 +133,10 @@ When you create a task list or plan:
 
 **🚨 APPROVAL RULES 🚨**
 - **NEVER start implementation without user saying "implement" or "go ahead" or "proceed"**
-- **NEVER commit implementation without asking user first**
-- **ALWAYS: complete task → show summary → ask approval → THEN commit**
+- **NEVER COMMIT WITHOUT ASKING USER FIRST** ⛔
+- **ALWAYS: complete task → show summary → ASK "Ready to commit?" → WAIT for approval → THEN commit**
+- **NEVER assume you can commit just because you showed a summary**
+- **The user MUST explicitly say "yes" or "commit" or "go ahead" AFTER seeing the summary**
 
 #### Phase 3: Completion & Archival
 When ALL tasks are done:
