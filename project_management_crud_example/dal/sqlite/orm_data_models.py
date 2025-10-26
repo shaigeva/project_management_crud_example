@@ -141,6 +141,21 @@ class TicketORM(Base):
         return f"<Ticket(id='{self.id}', title='{self.title}', status='{self.status}', project_id='{self.project_id}')>"
 
 
+class EpicTicketORM(Base):
+    """SQLAlchemy ORM model for epic-ticket associations (many-to-many)."""
+
+    __tablename__ = "epic_tickets"
+
+    epic_id = Column(String(36), ForeignKey("epics.id"), primary_key=True)
+    ticket_id = Column(String(36), ForeignKey("tickets.id"), primary_key=True)
+
+    # Timestamp for when the association was created
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    def __repr__(self) -> str:
+        return f"<EpicTicket(epic_id='{self.epic_id}', ticket_id='{self.ticket_id}')>"
+
+
 class UserORM(Base):
     """SQLAlchemy ORM model for users."""
 

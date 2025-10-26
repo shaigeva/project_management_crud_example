@@ -1,0 +1,82 @@
+PROJECT MANAGEMENT CRUD - ARCHITECTURAL LAYERS
+=================================================
+
+┌─────────────────────────────────────────────────────────────────┐
+│                     API Layer (FastAPI)                         │
+│                                                                 │
+│  RESTful HTTP endpoints, request/response validation           │
+├─────────────────────────────────────────────────────────────────┤
+│  Communication: Receives/returns Domain Models (immutable)      │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+                         │ Domain Models (immutable Pydantic)
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     Domain Layer                                │
+│                                                                 │
+│  Business entities, validation rules, command objects           │
+│  (User, Project, Epic, Task - all immutable)                    │
+├─────────────────────────────────────────────────────────────────┤
+│  Communication: Immutable Pydantic models                       │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+                         │ Domain Models IN/OUT (immutable)
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  Repository Layer (DAL)                         │
+│                                                                 │
+│  CRUD operations, data access abstraction                       │
+│  ⚠️  ONLY communicates via immutable Domain Models ⚠️           │
+├─────────────────────────────────────────────────────────────────┤
+│  IN:  Domain Models (CreateCommand, UpdateCommand, filters)     │
+│  OUT: Domain Models (User, Project, etc.) or None               │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+                         │ Delegates to Converters
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  Converter Layer (DAL)                          │
+│                                                                 │
+│  Explicit type-safe transformations between ORM ↔ Domain        │
+│  No implicit conversions, clear boundary enforcement            │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+                         │ ORM Models (mutable SQLAlchemy)
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   ORM Layer (SQLAlchemy)                        │
+│                                                                 │
+│  Database table definitions, column mappings, relationships     │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+                         │ SQL via SQLAlchemy
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  Database Layer (SQLite)                        │
+│                                                                 │
+│  Connection/session management, schema creation                 │
+└─────────────────────────────────────────────────────────────────┘
+
+
+KEY COMMUNICATION PATTERNS
+===========================
+
+1. Domain Models are IMMUTABLE (Pydantic with frozen=True)
+   - Guarantees data integrity across layers
+   - Prevents accidental modifications
+
+2. Repository Layer Boundary
+   - IN:  Domain models (CreateCommand, UpdateCommand, query params)
+   - OUT: Domain models (User, Project, etc.) or None
+   - NEVER exposes ORM models outside DAL
+
+3. Explicit Conversions
+   - Converter layer explicitly transforms ORM ↔ Domain
+   - No implicit model_validate() calls
+   - Clear, type-safe boundaries
+
+4. Data Flow Pattern
+   - API receives HTTP → validates to Domain Model
+   - Repository receives Domain Model → converts to ORM → DB operation
+   - Repository converts ORM result → Domain Model → returns
+   - API serializes Domain Model → HTTP response

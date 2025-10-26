@@ -11,9 +11,17 @@ from project_management_crud_example.domain_models import (
     EpicCreateCommand,
     EpicData,
     EpicUpdateCommand,
+    TicketCreateCommand,
+    TicketData,
+    UserRole,
 )
 from tests.conftest import test_repo  # noqa: F401
-from tests.dal.helpers import create_test_epic_via_repo, create_test_org_via_repo
+from tests.dal.helpers import (
+    create_test_epic_via_repo,
+    create_test_org_via_repo,
+    create_test_project_via_repo,
+    create_test_user_via_repo,
+)
 
 
 class TestEpicRepositoryCreate:
@@ -318,3 +326,227 @@ class TestEpicRepositoryWorkflows:
         assert all(e.organization_id == org2.id for e in org2_epics)
         assert {e.name for e in org1_epics} == {"Org1 Backend", "Org1 Frontend"}
         assert {e.name for e in org2_epics} == {"Org2 Mobile"}
+
+
+class TestEpicTicketAssociations:
+    """Test epic-ticket relationship operations."""
+
+    def test_add_ticket_to_epic(self, test_repo: Repository) -> None:
+        """Test adding a ticket to an epic."""
+        # Create organization, project, epic, user, and ticket
+        org = create_test_org_via_repo(test_repo, "Test Org")
+        project = create_test_project_via_repo(test_repo, org.id, "Test Project")
+        epic = create_test_epic_via_repo(test_repo, org.id, "Test Epic")
+        reporter = create_test_user_via_repo(test_repo, org.id, "reporter", role=UserRole.ADMIN)
+
+        ticket_data = TicketData(title="Test Ticket", description="Test")
+        ticket_command = TicketCreateCommand(ticket_data=ticket_data, project_id=project.id)
+        ticket = test_repo.tickets.create(ticket_command, reporter.id)
+
+        # Add ticket to epic
+        result = test_repo.epics.add_ticket_to_epic(epic.id, ticket.id)
+        assert result is True
+
+        # Verify ticket is in epic
+        tickets = test_repo.epics.get_tickets_in_epic(epic.id)
+        assert tickets is not None
+        assert len(tickets) == 1
+        assert tickets[0].id == ticket.id
+
+    def test_add_ticket_to_epic_idempotent(self, test_repo: Repository) -> None:
+        """Test adding same ticket twice is idempotent."""
+        org = create_test_org_via_repo(test_repo, "Test Org")
+        project = create_test_project_via_repo(test_repo, org.id, "Test Project")
+        epic = create_test_epic_via_repo(test_repo, org.id, "Test Epic")
+        reporter = create_test_user_via_repo(test_repo, org.id, "reporter", role=UserRole.ADMIN)
+
+        ticket_data = TicketData(title="Test Ticket", description="Test")
+        ticket_command = TicketCreateCommand(ticket_data=ticket_data, project_id=project.id)
+        ticket = test_repo.tickets.create(ticket_command, reporter.id)
+
+        # Add ticket twice
+        result1 = test_repo.epics.add_ticket_to_epic(epic.id, ticket.id)
+        result2 = test_repo.epics.add_ticket_to_epic(epic.id, ticket.id)
+
+        assert result1 is True
+        assert result2 is True  # Idempotent
+
+        # Verify only one association exists
+        tickets = test_repo.epics.get_tickets_in_epic(epic.id)
+        assert tickets is not None
+        assert len(tickets) == 1
+
+    def test_add_ticket_to_nonexistent_epic(self, test_repo: Repository) -> None:
+        """Test adding ticket to non-existent epic returns False."""
+        org = create_test_org_via_repo(test_repo, "Test Org")
+        project = create_test_project_via_repo(test_repo, org.id, "Test Project")
+        reporter = create_test_user_via_repo(test_repo, org.id, "reporter", role=UserRole.ADMIN)
+
+        ticket_data = TicketData(title="Test Ticket", description="Test")
+        ticket_command = TicketCreateCommand(ticket_data=ticket_data, project_id=project.id)
+        ticket = test_repo.tickets.create(ticket_command, reporter.id)
+
+        result = test_repo.epics.add_ticket_to_epic("nonexistent-epic", ticket.id)
+        assert result is False
+
+    def test_add_nonexistent_ticket_to_epic(self, test_repo: Repository) -> None:
+        """Test adding non-existent ticket to epic returns False."""
+        org = create_test_org_via_repo(test_repo, "Test Org")
+        epic = create_test_epic_via_repo(test_repo, org.id, "Test Epic")
+
+        result = test_repo.epics.add_ticket_to_epic(epic.id, "nonexistent-ticket")
+        assert result is False
+
+    def test_remove_ticket_from_epic(self, test_repo: Repository) -> None:
+        """Test removing a ticket from an epic."""
+        org = create_test_org_via_repo(test_repo, "Test Org")
+        project = create_test_project_via_repo(test_repo, org.id, "Test Project")
+        epic = create_test_epic_via_repo(test_repo, org.id, "Test Epic")
+        reporter = create_test_user_via_repo(test_repo, org.id, "reporter", role=UserRole.ADMIN)
+
+        ticket_data = TicketData(title="Test Ticket", description="Test")
+        ticket_command = TicketCreateCommand(ticket_data=ticket_data, project_id=project.id)
+        ticket = test_repo.tickets.create(ticket_command, reporter.id)
+
+        # Add ticket to epic
+        test_repo.epics.add_ticket_to_epic(epic.id, ticket.id)
+
+        # Verify ticket is in epic
+        tickets_before = test_repo.epics.get_tickets_in_epic(epic.id)
+        assert tickets_before is not None
+        assert len(tickets_before) == 1
+
+        # Remove ticket from epic
+        result = test_repo.epics.remove_ticket_from_epic(epic.id, ticket.id)
+        assert result is True
+
+        # Verify ticket is no longer in epic
+        tickets_after = test_repo.epics.get_tickets_in_epic(epic.id)
+        assert tickets_after is not None
+        assert len(tickets_after) == 0
+
+    def test_remove_ticket_from_epic_idempotent(self, test_repo: Repository) -> None:
+        """Test removing ticket that's not in epic succeeds (idempotent)."""
+        org = create_test_org_via_repo(test_repo, "Test Org")
+        project = create_test_project_via_repo(test_repo, org.id, "Test Project")
+        epic = create_test_epic_via_repo(test_repo, org.id, "Test Epic")
+        reporter = create_test_user_via_repo(test_repo, org.id, "reporter", role=UserRole.ADMIN)
+
+        ticket_data = TicketData(title="Test Ticket", description="Test")
+        ticket_command = TicketCreateCommand(ticket_data=ticket_data, project_id=project.id)
+        ticket = test_repo.tickets.create(ticket_command, reporter.id)
+
+        # Remove ticket that was never added (idempotent)
+        result = test_repo.epics.remove_ticket_from_epic(epic.id, ticket.id)
+        assert result is True
+
+    def test_remove_ticket_doesnt_delete_ticket(self, test_repo: Repository) -> None:
+        """Test removing ticket from epic doesn't delete the ticket itself."""
+        org = create_test_org_via_repo(test_repo, "Test Org")
+        project = create_test_project_via_repo(test_repo, org.id, "Test Project")
+        epic = create_test_epic_via_repo(test_repo, org.id, "Test Epic")
+        reporter = create_test_user_via_repo(test_repo, org.id, "reporter", role=UserRole.ADMIN)
+
+        ticket_data = TicketData(title="Test Ticket", description="Test")
+        ticket_command = TicketCreateCommand(ticket_data=ticket_data, project_id=project.id)
+        ticket = test_repo.tickets.create(ticket_command, reporter.id)
+
+        # Add and remove ticket from epic
+        test_repo.epics.add_ticket_to_epic(epic.id, ticket.id)
+        test_repo.epics.remove_ticket_from_epic(epic.id, ticket.id)
+
+        # Verify ticket still exists
+        existing_ticket = test_repo.tickets.get_by_id(ticket.id)
+        assert existing_ticket is not None
+        assert existing_ticket.id == ticket.id
+
+    def test_get_tickets_in_epic_empty(self, test_repo: Repository) -> None:
+        """Test getting tickets from empty epic returns empty list."""
+        org = create_test_org_via_repo(test_repo, "Test Org")
+        epic = create_test_epic_via_repo(test_repo, org.id, "Test Epic")
+
+        tickets = test_repo.epics.get_tickets_in_epic(epic.id)
+        assert tickets is not None
+        assert len(tickets) == 0
+
+    def test_get_tickets_in_nonexistent_epic(self, test_repo: Repository) -> None:
+        """Test getting tickets from non-existent epic returns None."""
+        tickets = test_repo.epics.get_tickets_in_epic("nonexistent-epic")
+        assert tickets is None
+
+    def test_add_multiple_tickets_to_epic(self, test_repo: Repository) -> None:
+        """Test adding multiple tickets to an epic."""
+        org = create_test_org_via_repo(test_repo, "Test Org")
+        project = create_test_project_via_repo(test_repo, org.id, "Test Project")
+        epic = create_test_epic_via_repo(test_repo, org.id, "Test Epic")
+        reporter = create_test_user_via_repo(test_repo, org.id, "reporter", role=UserRole.ADMIN)
+
+        # Create multiple tickets
+        tickets = []
+        for i in range(3):
+            ticket_data = TicketData(title=f"Ticket {i}", description="Test")
+            ticket_command = TicketCreateCommand(ticket_data=ticket_data, project_id=project.id)
+            ticket = test_repo.tickets.create(ticket_command, reporter.id)
+            tickets.append(ticket)
+            test_repo.epics.add_ticket_to_epic(epic.id, ticket.id)
+
+        # Verify all tickets are in epic
+        epic_tickets = test_repo.epics.get_tickets_in_epic(epic.id)
+        assert epic_tickets is not None
+        assert len(epic_tickets) == 3
+        assert {t.id for t in epic_tickets} == {t.id for t in tickets}
+
+    def test_tickets_from_multiple_projects_in_epic(self, test_repo: Repository) -> None:
+        """Test epic can contain tickets from multiple projects."""
+        org = create_test_org_via_repo(test_repo, "Test Org")
+        project1 = create_test_project_via_repo(test_repo, org.id, "Backend")
+        project2 = create_test_project_via_repo(test_repo, org.id, "Frontend")
+        epic = create_test_epic_via_repo(test_repo, org.id, "Feature Epic")
+        reporter = create_test_user_via_repo(test_repo, org.id, "reporter", role=UserRole.ADMIN)
+
+        # Create ticket in project1
+        ticket1_data = TicketData(title="Backend Ticket", description="Test")
+        ticket1_command = TicketCreateCommand(ticket_data=ticket1_data, project_id=project1.id)
+        ticket1 = test_repo.tickets.create(ticket1_command, reporter.id)
+
+        # Create ticket in project2
+        ticket2_data = TicketData(title="Frontend Ticket", description="Test")
+        ticket2_command = TicketCreateCommand(ticket_data=ticket2_data, project_id=project2.id)
+        ticket2 = test_repo.tickets.create(ticket2_command, reporter.id)
+
+        # Add both tickets to epic
+        test_repo.epics.add_ticket_to_epic(epic.id, ticket1.id)
+        test_repo.epics.add_ticket_to_epic(epic.id, ticket2.id)
+
+        # Verify both tickets are in epic
+        epic_tickets = test_repo.epics.get_tickets_in_epic(epic.id)
+        assert epic_tickets is not None
+        assert len(epic_tickets) == 2
+        assert {t.id for t in epic_tickets} == {ticket1.id, ticket2.id}
+        assert {t.project_id for t in epic_tickets} == {project1.id, project2.id}
+
+    def test_delete_epic_removes_ticket_associations(self, test_repo: Repository) -> None:
+        """Test deleting epic removes ticket associations but not tickets."""
+        org = create_test_org_via_repo(test_repo, "Test Org")
+        project = create_test_project_via_repo(test_repo, org.id, "Test Project")
+        epic = create_test_epic_via_repo(test_repo, org.id, "Test Epic")
+        reporter = create_test_user_via_repo(test_repo, org.id, "reporter", role=UserRole.ADMIN)
+
+        ticket_data = TicketData(title="Test Ticket", description="Test")
+        ticket_command = TicketCreateCommand(ticket_data=ticket_data, project_id=project.id)
+        ticket = test_repo.tickets.create(ticket_command, reporter.id)
+
+        # Add ticket to epic
+        test_repo.epics.add_ticket_to_epic(epic.id, ticket.id)
+
+        # Delete epic
+        test_repo.epics.delete(epic.id)
+
+        # Verify epic is deleted
+        deleted_epic = test_repo.epics.get_by_id(epic.id)
+        assert deleted_epic is None
+
+        # Verify ticket still exists
+        existing_ticket = test_repo.tickets.get_by_id(ticket.id)
+        assert existing_ticket is not None
+        assert existing_ticket.id == ticket.id

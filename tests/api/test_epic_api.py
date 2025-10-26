@@ -10,7 +10,14 @@ from tests.fixtures.auth_fixtures import (  # noqa: F401
     super_admin_token,
     write_user_token,
 )
-from tests.helpers import auth_headers, create_admin_user, create_project_manager, create_test_epic, create_test_org
+from tests.helpers import (
+    auth_headers,
+    create_admin_user,
+    create_project_manager,
+    create_test_epic,
+    create_test_org,
+    create_test_project,
+)
 
 
 class TestCreateEpic:
@@ -293,3 +300,443 @@ class TestEpicWorkflows:
         # 6. Verify deletion
         final_get = client.get(f"/api/epics/{epic_id}", headers=auth_headers(token))
         assert final_get.status_code == 404
+
+
+class TestAddTicketToEpic:
+    """Tests for POST /api/epics/{epic_id}/tickets endpoint."""
+
+    def test_add_ticket_to_epic_as_admin(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
+        """Test adding a ticket to an epic as Admin."""
+        token, org_id = org_admin_token
+
+        # Create project, epic, and ticket
+        project_id = create_test_project(client, token, "Test Project")
+        epic_id = create_test_epic(client, token, "Test Epic")
+
+        # Create ticket
+        ticket_response = client.post(
+            "/api/tickets",
+            json={"title": "Test Ticket", "description": "Test"},
+            params={"project_id": project_id},
+            headers=auth_headers(token),
+        )
+        assert ticket_response.status_code == 201
+        ticket_id = ticket_response.json()["id"]
+
+        # Add ticket to epic
+        response = client.post(
+            f"/api/epics/{epic_id}/tickets", params={"ticket_id": ticket_id}, headers=auth_headers(token)
+        )
+
+        assert response.status_code == 200
+        assert response.json()["message"] == "Ticket added to epic successfully"
+
+    def test_add_ticket_to_epic_as_project_manager(
+        self, client: TestClient, project_manager_token: tuple[str, str]
+    ) -> None:
+        """Test adding ticket to epic as Project Manager."""
+        token, org_id = project_manager_token
+
+        project_id = create_test_project(client, token, "PM Project")
+        epic_id = create_test_epic(client, token, "PM Epic")
+
+        ticket_response = client.post(
+            "/api/tickets",
+            json={"title": "PM Ticket", "description": "Test"},
+            params={"project_id": project_id},
+            headers=auth_headers(token),
+        )
+        ticket_id = ticket_response.json()["id"]
+
+        response = client.post(
+            f"/api/epics/{epic_id}/tickets", params={"ticket_id": ticket_id}, headers=auth_headers(token)
+        )
+
+        assert response.status_code == 200
+
+    def test_add_ticket_to_epic_as_write_user_fails(
+        self, client: TestClient, write_user_token: tuple[str, str], org_admin_token: tuple[str, str]
+    ) -> None:
+        """Test Write Access user cannot add tickets to epic."""
+        admin_token, org_id = org_admin_token
+        write_token, _ = write_user_token
+
+        project_id = create_test_project(client, admin_token, "Project")
+        epic_id = create_test_epic(client, admin_token, "Epic")
+
+        ticket_response = client.post(
+            "/api/tickets",
+            json={"title": "Ticket", "description": "Test"},
+            params={"project_id": project_id},
+            headers=auth_headers(admin_token),
+        )
+        ticket_id = ticket_response.json()["id"]
+
+        response = client.post(
+            f"/api/epics/{epic_id}/tickets", params={"ticket_id": ticket_id}, headers=auth_headers(write_token)
+        )
+
+        assert response.status_code == 403
+        assert "Insufficient permissions" in response.json()["detail"]
+
+    def test_add_ticket_to_epic_idempotent(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
+        """Test adding same ticket twice is idempotent."""
+        token, org_id = org_admin_token
+
+        project_id = create_test_project(client, token, "Project")
+        epic_id = create_test_epic(client, token, "Epic")
+
+        ticket_response = client.post(
+            "/api/tickets",
+            json={"title": "Ticket", "description": "Test"},
+            params={"project_id": project_id},
+            headers=auth_headers(token),
+        )
+        ticket_id = ticket_response.json()["id"]
+
+        # Add ticket twice
+        response1 = client.post(
+            f"/api/epics/{epic_id}/tickets", params={"ticket_id": ticket_id}, headers=auth_headers(token)
+        )
+        response2 = client.post(
+            f"/api/epics/{epic_id}/tickets", params={"ticket_id": ticket_id}, headers=auth_headers(token)
+        )
+
+        assert response1.status_code == 200
+        assert response2.status_code == 200
+
+    def test_add_ticket_to_nonexistent_epic(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
+        """Test adding ticket to non-existent epic returns 404."""
+        token, org_id = org_admin_token
+
+        project_id = create_test_project(client, token, "Project")
+        ticket_response = client.post(
+            "/api/tickets",
+            json={"title": "Ticket", "description": "Test"},
+            params={"project_id": project_id},
+            headers=auth_headers(token),
+        )
+        ticket_id = ticket_response.json()["id"]
+
+        response = client.post(
+            "/api/epics/nonexistent/tickets", params={"ticket_id": ticket_id}, headers=auth_headers(token)
+        )
+
+        assert response.status_code == 404
+
+    def test_add_nonexistent_ticket_to_epic(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
+        """Test adding non-existent ticket to epic returns 404."""
+        token, org_id = org_admin_token
+
+        epic_id = create_test_epic(client, token, "Epic")
+
+        response = client.post(
+            f"/api/epics/{epic_id}/tickets", params={"ticket_id": "nonexistent"}, headers=auth_headers(token)
+        )
+
+        assert response.status_code == 404
+
+    def test_add_cross_organization_ticket_to_epic(
+        self, client: TestClient, super_admin_token: str, org_admin_token: tuple[str, str]
+    ) -> None:
+        """Test cannot add ticket from different organization to epic."""
+        # Create two organizations
+        org1_id = create_test_org(client, super_admin_token, "Org 1")
+        org2_id = create_test_org(client, super_admin_token, "Org 2")
+
+        # Create admin users for each org
+        admin1_id, admin1_pass = create_admin_user(client, super_admin_token, org1_id, username="admin1")
+        admin2_id, admin2_pass = create_admin_user(client, super_admin_token, org2_id, username="admin2")
+
+        # Login as both admins
+        login1 = client.post("/auth/login", json={"username": "admin1", "password": admin1_pass})
+        token1 = login1.json()["access_token"]
+
+        login2 = client.post("/auth/login", json={"username": "admin2", "password": admin2_pass})
+        token2 = login2.json()["access_token"]
+
+        # Create epic in org1
+        epic_id = create_test_epic(client, token1, "Org1 Epic")
+
+        # Create project and ticket in org2
+        project_id = create_test_project(client, token2, "Org2 Project")
+        ticket_response = client.post(
+            "/api/tickets",
+            json={"title": "Org2 Ticket", "description": "Test"},
+            params={"project_id": project_id},
+            headers=auth_headers(token2),
+        )
+        ticket_id = ticket_response.json()["id"]
+
+        # Try to add org2 ticket to org1 epic
+        response = client.post(
+            f"/api/epics/{epic_id}/tickets", params={"ticket_id": ticket_id}, headers=auth_headers(token1)
+        )
+
+        assert response.status_code == 403
+        assert "different organization" in response.json()["detail"]
+
+
+class TestRemoveTicketFromEpic:
+    """Tests for DELETE /api/epics/{epic_id}/tickets/{ticket_id} endpoint."""
+
+    def test_remove_ticket_from_epic_as_admin(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
+        """Test removing ticket from epic as Admin."""
+        token, org_id = org_admin_token
+
+        project_id = create_test_project(client, token, "Project")
+        epic_id = create_test_epic(client, token, "Epic")
+
+        ticket_response = client.post(
+            "/api/tickets",
+            json={"title": "Ticket", "description": "Test"},
+            params={"project_id": project_id},
+            headers=auth_headers(token),
+        )
+        ticket_id = ticket_response.json()["id"]
+
+        # Add ticket to epic
+        client.post(f"/api/epics/{epic_id}/tickets", params={"ticket_id": ticket_id}, headers=auth_headers(token))
+
+        # Remove ticket from epic
+        response = client.delete(f"/api/epics/{epic_id}/tickets/{ticket_id}", headers=auth_headers(token))
+
+        assert response.status_code == 204
+
+    def test_remove_ticket_from_epic_as_project_manager(
+        self, client: TestClient, project_manager_token: tuple[str, str]
+    ) -> None:
+        """Test removing ticket from epic as Project Manager."""
+        token, org_id = project_manager_token
+
+        project_id = create_test_project(client, token, "Project")
+        epic_id = create_test_epic(client, token, "Epic")
+
+        ticket_response = client.post(
+            "/api/tickets",
+            json={"title": "Ticket", "description": "Test"},
+            params={"project_id": project_id},
+            headers=auth_headers(token),
+        )
+        ticket_id = ticket_response.json()["id"]
+
+        client.post(f"/api/epics/{epic_id}/tickets", params={"ticket_id": ticket_id}, headers=auth_headers(token))
+
+        response = client.delete(f"/api/epics/{epic_id}/tickets/{ticket_id}", headers=auth_headers(token))
+
+        assert response.status_code == 204
+
+    def test_remove_ticket_from_epic_as_write_user_fails(
+        self, client: TestClient, write_user_token: tuple[str, str], org_admin_token: tuple[str, str]
+    ) -> None:
+        """Test Write Access user cannot remove tickets from epic."""
+        admin_token, org_id = org_admin_token
+        write_token, _ = write_user_token
+
+        project_id = create_test_project(client, admin_token, "Project")
+        epic_id = create_test_epic(client, admin_token, "Epic")
+
+        ticket_response = client.post(
+            "/api/tickets",
+            json={"title": "Ticket", "description": "Test"},
+            params={"project_id": project_id},
+            headers=auth_headers(admin_token),
+        )
+        ticket_id = ticket_response.json()["id"]
+
+        client.post(f"/api/epics/{epic_id}/tickets", params={"ticket_id": ticket_id}, headers=auth_headers(admin_token))
+
+        response = client.delete(f"/api/epics/{epic_id}/tickets/{ticket_id}", headers=auth_headers(write_token))
+
+        assert response.status_code == 403
+
+    def test_remove_ticket_idempotent(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
+        """Test removing ticket not in epic succeeds (idempotent)."""
+        token, org_id = org_admin_token
+
+        project_id = create_test_project(client, token, "Project")
+        epic_id = create_test_epic(client, token, "Epic")
+
+        ticket_response = client.post(
+            "/api/tickets",
+            json={"title": "Ticket", "description": "Test"},
+            params={"project_id": project_id},
+            headers=auth_headers(token),
+        )
+        ticket_id = ticket_response.json()["id"]
+
+        # Remove without adding (idempotent)
+        response = client.delete(f"/api/epics/{epic_id}/tickets/{ticket_id}", headers=auth_headers(token))
+
+        assert response.status_code == 204
+
+    def test_remove_ticket_doesnt_delete_ticket(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
+        """Test removing ticket from epic doesn't delete the ticket."""
+        token, org_id = org_admin_token
+
+        project_id = create_test_project(client, token, "Project")
+        epic_id = create_test_epic(client, token, "Epic")
+
+        ticket_response = client.post(
+            "/api/tickets",
+            json={"title": "Ticket", "description": "Test"},
+            params={"project_id": project_id},
+            headers=auth_headers(token),
+        )
+        ticket_id = ticket_response.json()["id"]
+
+        client.post(f"/api/epics/{epic_id}/tickets", params={"ticket_id": ticket_id}, headers=auth_headers(token))
+        client.delete(f"/api/epics/{epic_id}/tickets/{ticket_id}", headers=auth_headers(token))
+
+        # Verify ticket still exists
+        ticket_get = client.get(f"/api/tickets/{ticket_id}", headers=auth_headers(token))
+        assert ticket_get.status_code == 200
+
+
+class TestGetEpicTickets:
+    """Tests for GET /api/epics/{epic_id}/tickets endpoint."""
+
+    def test_get_epic_tickets(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
+        """Test getting all tickets in an epic."""
+        token, org_id = org_admin_token
+
+        project_id = create_test_project(client, token, "Project")
+        epic_id = create_test_epic(client, token, "Epic")
+
+        # Create and add multiple tickets
+        ticket_ids = []
+        for i in range(3):
+            ticket_response = client.post(
+                "/api/tickets",
+                json={"title": f"Ticket {i}", "description": "Test"},
+                params={"project_id": project_id},
+                headers=auth_headers(token),
+            )
+            ticket_id = ticket_response.json()["id"]
+            ticket_ids.append(ticket_id)
+            client.post(f"/api/epics/{epic_id}/tickets", params={"ticket_id": ticket_id}, headers=auth_headers(token))
+
+        # Get tickets in epic
+        response = client.get(f"/api/epics/{epic_id}/tickets", headers=auth_headers(token))
+
+        assert response.status_code == 200
+        tickets = response.json()
+        assert len(tickets) == 3
+        assert {t["id"] for t in tickets} == set(ticket_ids)
+
+    def test_get_epic_tickets_empty(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
+        """Test getting tickets from empty epic returns empty list."""
+        token, org_id = org_admin_token
+
+        epic_id = create_test_epic(client, token, "Empty Epic")
+
+        response = client.get(f"/api/epics/{epic_id}/tickets", headers=auth_headers(token))
+
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_get_epic_tickets_nonexistent_epic(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
+        """Test getting tickets from non-existent epic returns 404."""
+        token, org_id = org_admin_token
+
+        response = client.get("/api/epics/nonexistent/tickets", headers=auth_headers(token))
+
+        assert response.status_code == 404
+
+    def test_get_epic_tickets_from_multiple_projects(
+        self, client: TestClient, org_admin_token: tuple[str, str]
+    ) -> None:
+        """Test epic can contain tickets from multiple projects."""
+        token, org_id = org_admin_token
+
+        project1_id = create_test_project(client, token, "Backend")
+        project2_id = create_test_project(client, token, "Frontend")
+        epic_id = create_test_epic(client, token, "Feature Epic")
+
+        # Create ticket in project1
+        ticket1_response = client.post(
+            "/api/tickets",
+            json={"title": "Backend Ticket", "description": "Test"},
+            params={"project_id": project1_id},
+            headers=auth_headers(token),
+        )
+        ticket1_id = ticket1_response.json()["id"]
+
+        # Create ticket in project2
+        ticket2_response = client.post(
+            "/api/tickets",
+            json={"title": "Frontend Ticket", "description": "Test"},
+            params={"project_id": project2_id},
+            headers=auth_headers(token),
+        )
+        ticket2_id = ticket2_response.json()["id"]
+
+        # Add both to epic
+        client.post(f"/api/epics/{epic_id}/tickets", params={"ticket_id": ticket1_id}, headers=auth_headers(token))
+        client.post(f"/api/epics/{epic_id}/tickets", params={"ticket_id": ticket2_id}, headers=auth_headers(token))
+
+        # Get tickets
+        response = client.get(f"/api/epics/{epic_id}/tickets", headers=auth_headers(token))
+
+        assert response.status_code == 200
+        tickets = response.json()
+        assert len(tickets) == 2
+        assert {t["project_id"] for t in tickets} == {project1_id, project2_id}
+
+    def test_get_epic_tickets_cross_organization_fails(self, client: TestClient, super_admin_token: str) -> None:
+        """Test cannot get epic tickets from different organization."""
+        # Create two organizations
+        org1_id = create_test_org(client, super_admin_token, "Org 1")
+        org2_id = create_test_org(client, super_admin_token, "Org 2")
+
+        admin1_id, admin1_pass = create_admin_user(client, super_admin_token, org1_id, username="admin1")
+        admin2_id, admin2_pass = create_admin_user(client, super_admin_token, org2_id, username="admin2")
+
+        login1 = client.post("/auth/login", json={"username": "admin1", "password": admin1_pass})
+        token1 = login1.json()["access_token"]
+
+        login2 = client.post("/auth/login", json={"username": "admin2", "password": admin2_pass})
+        token2 = login2.json()["access_token"]
+
+        # Create epic in org1
+        epic_id = create_test_epic(client, token1, "Org1 Epic")
+
+        # Try to get epic tickets from org2
+        response = client.get(f"/api/epics/{epic_id}/tickets", headers=auth_headers(token2))
+
+        assert response.status_code == 403
+
+
+class TestEpicTicketWorkflows:
+    """Test complete epic-ticket workflows."""
+
+    def test_delete_epic_removes_associations_but_not_tickets(
+        self, client: TestClient, org_admin_token: tuple[str, str]
+    ) -> None:
+        """Test deleting epic removes associations but tickets remain."""
+        token, org_id = org_admin_token
+
+        project_id = create_test_project(client, token, "Project")
+        epic_id = create_test_epic(client, token, "Epic")
+
+        ticket_response = client.post(
+            "/api/tickets",
+            json={"title": "Ticket", "description": "Test"},
+            params={"project_id": project_id},
+            headers=auth_headers(token),
+        )
+        ticket_id = ticket_response.json()["id"]
+
+        # Add ticket to epic
+        client.post(f"/api/epics/{epic_id}/tickets", params={"ticket_id": ticket_id}, headers=auth_headers(token))
+
+        # Delete epic
+        client.delete(f"/api/epics/{epic_id}", headers=auth_headers(token))
+
+        # Verify epic is deleted
+        epic_get = client.get(f"/api/epics/{epic_id}", headers=auth_headers(token))
+        assert epic_get.status_code == 404
+
+        # Verify ticket still exists
+        ticket_get = client.get(f"/api/tickets/{ticket_id}", headers=auth_headers(token))
+        assert ticket_get.status_code == 200

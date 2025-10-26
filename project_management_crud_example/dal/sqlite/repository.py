@@ -52,7 +52,7 @@ from .converters import (
     orm_user_to_domain_user,
     orm_user_to_user_auth_data,
 )
-from .orm_data_models import EpicORM, OrganizationORM, ProjectORM, StubEntityORM, TicketORM, UserORM
+from .orm_data_models import EpicORM, EpicTicketORM, OrganizationORM, ProjectORM, StubEntityORM, TicketORM, UserORM
 
 logger = logging.getLogger(__name__)
 
@@ -812,6 +812,8 @@ class Repository:
         def delete(self, epic_id: str) -> bool:
             """Delete an epic by ID.
 
+            Note: This also deletes all epic-ticket associations for this epic.
+
             Args:
                 epic_id: ID of epic to delete
 
@@ -826,10 +828,134 @@ class Repository:
                 logger.debug(f"Epic not found for deletion: {epic_id}")
                 return False
 
+            # Delete epic-ticket associations first (CASCADE would handle this, but being explicit)
+            self.session.query(EpicTicketORM).filter(
+                EpicTicketORM.epic_id == epic_id  # type: ignore[operator]
+            ).delete()
+
             self.session.delete(orm_epic)
             self.session.commit()
             logger.debug(f"Epic deleted: {epic_id}")
             return True
+
+        def add_ticket_to_epic(self, epic_id: str, ticket_id: str) -> bool:
+            """Add a ticket to an epic (idempotent).
+
+            Args:
+                epic_id: ID of epic
+                ticket_id: ID of ticket to add
+
+            Returns:
+                True if association created or already exists, False if epic or ticket not found
+            """
+            logger.debug(f"Adding ticket {ticket_id} to epic {epic_id}")
+
+            # Verify epic exists
+            epic = self.session.query(EpicORM).filter(EpicORM.id == epic_id).first()  # type: ignore[operator]
+            if not epic:
+                logger.debug(f"Epic not found: {epic_id}")
+                return False
+
+            # Verify ticket exists
+            ticket = self.session.query(TicketORM).filter(TicketORM.id == ticket_id).first()  # type: ignore[operator]
+            if not ticket:
+                logger.debug(f"Ticket not found: {ticket_id}")
+                return False
+
+            # Check if association already exists (idempotent)
+            existing = (
+                self.session.query(EpicTicketORM)
+                .filter(
+                    EpicTicketORM.epic_id == epic_id,  # type: ignore[operator]
+                    EpicTicketORM.ticket_id == ticket_id,  # type: ignore[operator]
+                )
+                .first()
+            )
+
+            if existing:
+                logger.debug(f"Ticket {ticket_id} already in epic {epic_id} (idempotent)")
+                return True
+
+            # Create association
+            association = EpicTicketORM(epic_id=epic_id, ticket_id=ticket_id)
+            self.session.add(association)
+            self.session.commit()
+            logger.debug(f"Ticket {ticket_id} added to epic {epic_id}")
+            return True
+
+        def remove_ticket_from_epic(self, epic_id: str, ticket_id: str) -> bool:
+            """Remove a ticket from an epic (idempotent).
+
+            Note: This only removes the association, not the ticket itself.
+
+            Args:
+                epic_id: ID of epic
+                ticket_id: ID of ticket to remove
+
+            Returns:
+                True if association removed or didn't exist, False if epic or ticket not found
+            """
+            logger.debug(f"Removing ticket {ticket_id} from epic {epic_id}")
+
+            # Verify epic exists
+            epic = self.session.query(EpicORM).filter(EpicORM.id == epic_id).first()  # type: ignore[operator]
+            if not epic:
+                logger.debug(f"Epic not found: {epic_id}")
+                return False
+
+            # Verify ticket exists
+            ticket = self.session.query(TicketORM).filter(TicketORM.id == ticket_id).first()  # type: ignore[operator]
+            if not ticket:
+                logger.debug(f"Ticket not found: {ticket_id}")
+                return False
+
+            # Delete association (idempotent - succeeds even if association doesn't exist)
+            deleted_count = (
+                self.session.query(EpicTicketORM)
+                .filter(
+                    EpicTicketORM.epic_id == epic_id,  # type: ignore[operator]
+                    EpicTicketORM.ticket_id == ticket_id,  # type: ignore[operator]
+                )
+                .delete()
+            )
+
+            self.session.commit()
+
+            if deleted_count > 0:
+                logger.debug(f"Ticket {ticket_id} removed from epic {epic_id}")
+            else:
+                logger.debug(f"Ticket {ticket_id} was not in epic {epic_id} (idempotent)")
+
+            return True
+
+        def get_tickets_in_epic(self, epic_id: str) -> Optional[List[Ticket]]:
+            """Get all tickets associated with an epic.
+
+            Args:
+                epic_id: ID of epic
+
+            Returns:
+                List of Ticket domain models if epic exists, None if epic not found
+            """
+            logger.debug(f"Getting tickets for epic: {epic_id}")
+
+            # Verify epic exists
+            epic = self.session.query(EpicORM).filter(EpicORM.id == epic_id).first()  # type: ignore[operator]
+            if not epic:
+                logger.debug(f"Epic not found: {epic_id}")
+                return None
+
+            # Query tickets via the association table
+            orm_tickets = (
+                self.session.query(TicketORM)
+                .join(EpicTicketORM, TicketORM.id == EpicTicketORM.ticket_id)
+                .filter(EpicTicketORM.epic_id == epic_id)  # type: ignore[operator]
+                .order_by(TicketORM.created_at)  # type: ignore[union-attr]
+                .all()
+            )
+
+            logger.debug(f"Found {len(orm_tickets)} tickets in epic {epic_id}")
+            return [orm_ticket_to_domain_ticket(ticket) for ticket in orm_tickets]
 
     class Tickets:
         """Ticket-related data access operations."""
