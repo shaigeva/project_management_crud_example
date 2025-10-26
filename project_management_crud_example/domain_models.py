@@ -126,6 +126,46 @@ class ProjectUpdateCommand(BaseModel):
     is_active: Optional[bool] = Field(None, description="Whether project is active")
 
 
+# Epic Models
+
+
+class EpicData(BaseModel):
+    """Base epic data structure."""
+
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=255,
+        description="Epic name",
+    )
+    description: Optional[str] = Field(None, max_length=1000, description="Epic description")
+
+
+class Epic(EpicData):
+    """Complete epic model with metadata."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str = Field(..., description="Epic ID")
+    organization_id: str = Field(..., description="Organization ID this epic belongs to")
+    created_at: datetime = Field(..., description="Creation timestamp")
+    updated_at: datetime = Field(..., description="Last update timestamp")
+
+
+class EpicCreateCommand(BaseModel):
+    """Command model for creating a new epic."""
+
+    epic_data: EpicData
+    organization_id: str = Field(..., description="Organization ID this epic belongs to")
+
+
+class EpicUpdateCommand(BaseModel):
+    """Command model for updating an existing epic."""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=255, description="Epic name")
+    description: Optional[str] = Field(None, max_length=1000, description="Epic description")
+
+
 # Ticket Models
 
 

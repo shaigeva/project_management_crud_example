@@ -6,6 +6,9 @@ via repository methods, reducing boilerplate in repository test files.
 
 from project_management_crud_example.dal.sqlite.repository import Repository
 from project_management_crud_example.domain_models import (
+    Epic,
+    EpicCreateCommand,
+    EpicData,
     Organization,
     OrganizationCreateCommand,
     OrganizationData,
@@ -80,3 +83,21 @@ def create_test_user_via_repo(
     user_data = UserData(username=username, email=email, full_name=full_name)
     command = UserCreateCommand(user_data=user_data, password=password, organization_id=org_id, role=role)
     return test_repo.users.create(command)
+
+
+def create_test_epic_via_repo(
+    test_repo: Repository, org_id: str, name: str = "Test Epic", description: str | None = None
+) -> Epic:
+    """Create test epic via repository.
+
+    Args:
+        test_repo: Repository instance
+        org_id: Organization ID for the epic
+        name: Epic name (default: "Test Epic")
+        description: Optional epic description
+
+    Returns:
+        Created Epic domain model
+    """
+    epic_data = EpicData(name=name, description=description)
+    return test_repo.epics.create(EpicCreateCommand(epic_data=epic_data, organization_id=org_id))

@@ -189,7 +189,7 @@ Tickets are the core work items. They have a predefined set of fields (V1), belo
 ---
 
 ## Feature: Epics
-**Status**: 🔴 0/10 requirements implemented (0%)
+**Status**: 🟡 7/10 requirements implemented (70%)
 **Detail Spec**: [detailed/epics_detailed_spec.md](detailed/epics_detailed_spec.md)
 **Purpose**: Group related tickets across multiple projects
 **Version**: V1
@@ -198,16 +198,18 @@ Tickets are the core work items. They have a predefined set of fields (V1), belo
 Epics provide a way to group related tickets that may span multiple projects. An epic represents a larger initiative or feature that comprises multiple tickets.
 
 ### High-Level Requirements
-- 🔴 REQ-EPIC-001: Create epic within organization
-- 🔴 REQ-EPIC-002: Retrieve epic by ID
-- 🔴 REQ-EPIC-003: List epics in organization
-- 🔴 REQ-EPIC-004: Update epic details
-- 🔴 REQ-EPIC-005: Delete epic
+- ✅ REQ-EPIC-001: Create epic within organization
+- ✅ REQ-EPIC-002: Retrieve epic by ID
+- ✅ REQ-EPIC-003: List epics in organization
+- ✅ REQ-EPIC-004: Update epic details
+- ✅ REQ-EPIC-005: Delete epic
 - 🔴 REQ-EPIC-006: Add ticket to epic
 - 🔴 REQ-EPIC-007: Remove ticket from epic
 - 🔴 REQ-EPIC-008: List tickets in epic (from multiple projects)
-- 🔴 REQ-EPIC-009: Epics are organization-scoped
-- 🔴 REQ-EPIC-010: Handle validation and not-found errors
+- ✅ REQ-EPIC-009: Epics are organization-scoped
+- ✅ REQ-EPIC-010: Handle validation and not-found errors
+
+**Notes**: Core CRUD operations implemented with role-based authorization (Admin, PM can create/update; Admin can delete). Organization scoping enforced. Ticket-to-epic relationships (REQ-EPIC-006 through REQ-EPIC-008) pending Task 2 implementation.
 
 ---
 

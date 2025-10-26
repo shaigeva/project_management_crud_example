@@ -200,3 +200,23 @@ def create_test_project(
         project_data["description"] = description
     response = client.post("/api/projects", json=project_data, headers=headers)
     return response.json()["id"]
+
+
+def create_test_epic(client: TestClient, token: str, name: str = "Test Epic", description: str | None = None) -> str:
+    """Create an epic via API and return its ID.
+
+    Args:
+        client: FastAPI TestClient
+        token: Authentication token
+        name: Epic name (default: "Test Epic")
+        description: Optional epic description (default: None)
+
+    Returns:
+        Epic ID
+    """
+    headers = auth_headers(token)
+    epic_data = {"name": name}
+    if description is not None:
+        epic_data["description"] = description
+    response = client.post("/api/epics", json=epic_data, headers=headers)
+    return response.json()["id"]

@@ -77,6 +77,20 @@ def orm_project_to_domain_project(
     )
 
 
+def orm_epic_to_domain_epic(
+    orm_epic: orm_data_models.EpicORM,
+) -> domain_models.Epic:
+    """Convert an ORM Epic model to a domain Epic model."""
+    return domain_models.Epic(
+        id=str(orm_epic.id),
+        name=orm_epic.name,  # type: ignore[arg-type]
+        description=orm_epic.description,  # type: ignore[arg-type]
+        organization_id=str(orm_epic.organization_id),
+        created_at=orm_epic.created_at,  # type: ignore[arg-type]
+        updated_at=orm_epic.updated_at,  # type: ignore[arg-type]
+    )
+
+
 def orm_ticket_to_domain_ticket(
     orm_ticket: orm_data_models.TicketORM,
 ) -> domain_models.Ticket:

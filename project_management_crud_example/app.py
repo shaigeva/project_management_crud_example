@@ -17,6 +17,7 @@ from project_management_crud_example.dependencies import get_database
 from project_management_crud_example.exceptions import AuthHTTPException
 from project_management_crud_example.routers import (
     auth_api,
+    epic_api,
     health,
     organization_api,
     project_api,
@@ -82,6 +83,7 @@ app.include_router(auth_api.router)
 app.include_router(user_api.router)
 app.include_router(organization_api.router)
 app.include_router(project_api.router)
+app.include_router(epic_api.router)
 app.include_router(ticket_api.router)
 app.include_router(stub_entity_api.router)
 app.include_router(health.router)

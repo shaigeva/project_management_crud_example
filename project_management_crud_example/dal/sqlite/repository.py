@@ -18,6 +18,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from project_management_crud_example.domain_models import (
+    Epic,
+    EpicCreateCommand,
+    EpicUpdateCommand,
     Organization,
     OrganizationCreateCommand,
     OrganizationUpdateCommand,
@@ -40,6 +43,7 @@ from project_management_crud_example.domain_models import (
 from project_management_crud_example.utils.password import PasswordHasher, TestPasswordHasher
 
 from .converters import (
+    orm_epic_to_domain_epic,
     orm_organization_to_domain_organization,
     orm_project_to_domain_project,
     orm_stub_entities_to_business_stub_entities,
@@ -48,7 +52,7 @@ from .converters import (
     orm_user_to_domain_user,
     orm_user_to_user_auth_data,
 )
-from .orm_data_models import OrganizationORM, ProjectORM, StubEntityORM, TicketORM, UserORM
+from .orm_data_models import EpicORM, OrganizationORM, ProjectORM, StubEntityORM, TicketORM, UserORM
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +83,7 @@ class Repository:
 
         self.organizations = self.Organizations(session)
         self.projects = self.Projects(session)
+        self.epics = self.Epics(session)
         self.tickets = self.Tickets(session)
         self.users = self.Users(session, password_hasher)
         self.stub_entities = self.StubEntities(session)
@@ -713,6 +718,118 @@ class Repository:
             self.session.refresh(orm_project)
             logger.debug(f"Project unarchived: {project_id}")
             return orm_project_to_domain_project(orm_project)
+
+    class Epics:
+        """Epic-related data access operations."""
+
+        def __init__(self, session: Session) -> None:
+            self.session = session
+
+        def create(self, epic_create_command: EpicCreateCommand) -> Epic:
+            """Create a new epic.
+
+            Args:
+                epic_create_command: Command containing epic data and organization_id
+
+            Returns:
+                Created Epic domain model
+            """
+            epic_data = epic_create_command.epic_data
+            logger.debug(f"Creating new epic: {epic_data.name} for organization: {epic_create_command.organization_id}")
+
+            orm_epic = EpicORM(
+                name=epic_data.name,
+                description=epic_data.description,
+                organization_id=epic_create_command.organization_id,
+            )
+
+            self.session.add(orm_epic)
+            self.session.commit()
+            self.session.refresh(orm_epic)
+            logger.debug(f"Epic created with ID: {orm_epic.id}")
+            return orm_epic_to_domain_epic(orm_epic)
+
+        def get_by_id(self, epic_id: str) -> Optional[Epic]:
+            """Get a specific epic by ID."""
+            logger.debug(f"Retrieving epic by ID: {epic_id}")
+            orm_epic = (
+                self.session.query(EpicORM).filter(EpicORM.id == epic_id).first()  # type: ignore[operator]
+            )
+            if orm_epic is None:
+                logger.debug(f"Epic not found: {epic_id}")
+                return None
+            logger.debug(f"Epic found: {epic_id}")
+            return orm_epic_to_domain_epic(orm_epic)
+
+        def get_by_organization_id(self, organization_id: str) -> List[Epic]:
+            """Get all epics for a specific organization."""
+            logger.debug(f"Retrieving epics for organization: {organization_id}")
+            orm_epics = (
+                self.session.query(EpicORM)
+                .filter(EpicORM.organization_id == organization_id)  # type: ignore[operator]
+                .order_by(EpicORM.created_at)  # type: ignore[union-attr]
+                .all()
+            )
+            return [orm_epic_to_domain_epic(epic) for epic in orm_epics]
+
+        def get_all(self) -> List[Epic]:
+            """Get all epics from the database, ordered by creation date."""
+            orm_epics = (
+                self.session.query(EpicORM).order_by(EpicORM.created_at).all()  # type: ignore[union-attr]
+            )
+            return [orm_epic_to_domain_epic(epic) for epic in orm_epics]
+
+        def update(self, epic_id: str, update_command: EpicUpdateCommand) -> Optional[Epic]:
+            """Update an existing epic.
+
+            Args:
+                epic_id: ID of epic to update
+                update_command: Command containing fields to update
+
+            Returns:
+                Updated Epic if found, None otherwise
+            """
+            logger.debug(f"Updating epic: {epic_id}")
+            orm_epic = (
+                self.session.query(EpicORM).filter(EpicORM.id == epic_id).first()  # type: ignore[operator]
+            )
+
+            if orm_epic is None:
+                logger.debug(f"Epic not found for update: {epic_id}")
+                return None
+
+            # Update only provided fields
+            if update_command.name is not None:
+                orm_epic.name = update_command.name  # type: ignore[assignment]
+            if update_command.description is not None:
+                orm_epic.description = update_command.description  # type: ignore[assignment]
+
+            self.session.commit()
+            self.session.refresh(orm_epic)
+            logger.debug(f"Epic updated: {epic_id}")
+            return orm_epic_to_domain_epic(orm_epic)
+
+        def delete(self, epic_id: str) -> bool:
+            """Delete an epic by ID.
+
+            Args:
+                epic_id: ID of epic to delete
+
+            Returns:
+                True if deleted, False if not found
+            """
+            logger.debug(f"Deleting epic: {epic_id}")
+            orm_epic = (
+                self.session.query(EpicORM).filter(EpicORM.id == epic_id).first()  # type: ignore[operator]
+            )
+            if not orm_epic:
+                logger.debug(f"Epic not found for deletion: {epic_id}")
+                return False
+
+            self.session.delete(orm_epic)
+            self.session.commit()
+            logger.debug(f"Epic deleted: {epic_id}")
+            return True
 
     class Tickets:
         """Ticket-related data access operations."""

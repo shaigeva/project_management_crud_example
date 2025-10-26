@@ -93,6 +93,28 @@ class ProjectORM(Base):
         return f"<Project(id='{self.id}', name='{self.name}', organization_id='{self.organization_id}')>"
 
 
+class EpicORM(Base):
+    """SQLAlchemy ORM model for epics."""
+
+    __tablename__ = "epics"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    name = Column(String(255), nullable=False)
+    description = Column(String(1000), nullable=True)
+    organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=False, index=True)
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    def __repr__(self) -> str:
+        return f"<Epic(id='{self.id}', name='{self.name}', organization_id='{self.organization_id}')>"
+
+
 class TicketORM(Base):
     """SQLAlchemy ORM model for tickets."""
 
