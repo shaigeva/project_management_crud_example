@@ -754,3 +754,197 @@ class TestWorkflowCRUDWorkflow:
         # 6. Verify deletion
         final_get = client.get(f"/api/workflows/{workflow_id}", headers=auth_headers(token))
         assert final_get.status_code == 404
+
+
+class TestWorkflowConstraints:
+    """Test workflow constraints (REQ-WORKFLOW-005, REQ-WORKFLOW-006)."""
+
+    def test_cannot_delete_default_workflow(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
+        """Test that default workflow cannot be deleted (REQ-WORKFLOW-006)."""
+        token, org_id = org_admin_token
+
+        # Get default workflow for this organization
+        list_response = client.get("/api/workflows", headers=auth_headers(token))
+        workflows = list_response.json()
+
+        default_workflow = next((w for w in workflows if w["is_default"] is True), None)
+        assert default_workflow is not None, "Organization should have a default workflow"
+
+        # Try to delete default workflow - should fail
+        response = client.delete(f"/api/workflows/{default_workflow['id']}", headers=auth_headers(token))
+
+        assert response.status_code == 400
+        error = response.json()
+        assert "Cannot delete default workflow" in error["detail"]
+
+    def test_cannot_delete_workflow_in_use_by_projects(
+        self, client: TestClient, org_admin_token: tuple[str, str]
+    ) -> None:
+        """Test that workflow cannot be deleted if projects use it (REQ-WORKFLOW-005)."""
+        token, org_id = org_admin_token
+
+        # Create custom workflow
+        workflow_data = {"name": "Custom Workflow", "statuses": ["BACKLOG", "DOING", "DONE"]}
+        workflow_response = client.post("/api/workflows", json=workflow_data, headers=auth_headers(token))
+        assert workflow_response.status_code == 201
+        workflow_id = workflow_response.json()["id"]
+
+        # Create project using this workflow
+        project_data = {"name": "Test Project", "workflow_id": workflow_id}
+        project_response = client.post("/api/projects", json=project_data, headers=auth_headers(token))
+        assert project_response.status_code == 201
+
+        # Try to delete workflow - should fail because project uses it
+        response = client.delete(f"/api/workflows/{workflow_id}", headers=auth_headers(token))
+
+        assert response.status_code == 400
+        error = response.json()
+        assert "Cannot delete workflow" in error["detail"]
+        assert "project" in error["detail"].lower()
+
+    def test_can_delete_unused_workflow(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
+        """Test that workflow can be deleted if no projects use it (REQ-WORKFLOW-005)."""
+        token, org_id = org_admin_token
+
+        # Create custom workflow
+        workflow_data = {"name": "Unused Workflow", "statuses": ["TODO", "DONE"]}
+        workflow_response = client.post("/api/workflows", json=workflow_data, headers=auth_headers(token))
+        assert workflow_response.status_code == 201
+        workflow_id = workflow_response.json()["id"]
+
+        # Delete workflow - should succeed because no projects use it
+        response = client.delete(f"/api/workflows/{workflow_id}", headers=auth_headers(token))
+
+        assert response.status_code == 204
+
+        # Verify deletion
+        get_response = client.get(f"/api/workflows/{workflow_id}", headers=auth_headers(token))
+        assert get_response.status_code == 404
+
+    def test_cannot_change_is_default_flag(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
+        """Test that is_default flag cannot be changed via update (REQ-WORKFLOW-006)."""
+        token, org_id = org_admin_token
+
+        # Get default workflow
+        list_response = client.get("/api/workflows", headers=auth_headers(token))
+        workflows = list_response.json()
+        default_workflow = next((w for w in workflows if w["is_default"] is True), None)
+        assert default_workflow is not None
+
+        # Try to update is_default to false - should be ignored
+        update_data = {"is_default": False}
+        response = client.put(f"/api/workflows/{default_workflow['id']}", json=update_data, headers=auth_headers(token))
+
+        assert response.status_code == 200
+        updated = response.json()
+        assert updated["is_default"] is True, "is_default flag should not change"
+
+    def test_cannot_create_second_default_workflow(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
+        """Test that cannot create second default workflow (REQ-WORKFLOW-006)."""
+        token, org_id = org_admin_token
+
+        # Try to create workflow with is_default=true
+        workflow_data = {"name": "Another Default", "statuses": ["TODO", "DONE"], "is_default": True}
+        response = client.post("/api/workflows", json=workflow_data, headers=auth_headers(token))
+
+        # Should either reject or ignore is_default flag (creating as non-default)
+        if response.status_code == 201:
+            # If creation succeeds, is_default should be ignored
+            created = response.json()
+            assert created["is_default"] is False, "Should not allow creating second default workflow"
+        else:
+            # Or it should reject with 400
+            assert response.status_code == 400
+
+
+class TestWorkflowBreakingChanges:
+    """Test workflow updates that would break existing tickets (REQ-WORKFLOW-009)."""
+
+    def test_cannot_remove_status_used_by_tickets(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
+        """Test that cannot remove status if tickets use it (REQ-WORKFLOW-009)."""
+        token, org_id = org_admin_token
+
+        # Create custom workflow
+        workflow_data = {"name": "Dev Workflow", "statuses": ["TODO", "IN_PROGRESS", "REVIEW", "DONE"]}
+        workflow_response = client.post("/api/workflows", json=workflow_data, headers=auth_headers(token))
+        workflow_id = workflow_response.json()["id"]
+
+        # Create project with this workflow
+        project_data = {"name": "Test Project", "workflow_id": workflow_id}
+        project_response = client.post("/api/projects", json=project_data, headers=auth_headers(token))
+        project_id = project_response.json()["id"]
+
+        # Create ticket with status "REVIEW"
+        ticket_data = {"title": "Test Ticket", "status": "REVIEW"}
+        ticket_response = client.post(
+            "/api/tickets", json=ticket_data, params={"project_id": project_id}, headers=auth_headers(token)
+        )
+        assert ticket_response.status_code == 201
+
+        # Try to update workflow removing "REVIEW" status - should fail
+        update_data = {"statuses": ["TODO", "IN_PROGRESS", "DONE"]}  # Removed REVIEW
+        response = client.put(f"/api/workflows/{workflow_id}", json=update_data, headers=auth_headers(token))
+
+        assert response.status_code == 400
+        error = response.json()
+        assert "Cannot update workflow" in error["detail"] or "would make tickets invalid" in error["detail"].lower()
+        assert "REVIEW" in error["detail"]
+
+    def test_can_add_status_to_workflow(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
+        """Test that adding statuses always succeeds (REQ-WORKFLOW-009)."""
+        token, org_id = org_admin_token
+
+        # Create custom workflow
+        workflow_data = {"name": "Simple Workflow", "statuses": ["TODO", "DONE"]}
+        workflow_response = client.post("/api/workflows", json=workflow_data, headers=auth_headers(token))
+        workflow_id = workflow_response.json()["id"]
+
+        # Create project with this workflow
+        project_data = {"name": "Test Project", "workflow_id": workflow_id}
+        project_response = client.post("/api/projects", json=project_data, headers=auth_headers(token))
+        project_id = project_response.json()["id"]
+
+        # Create ticket
+        ticket_data = {"title": "Test Ticket"}
+        ticket_response = client.post(
+            "/api/tickets", json=ticket_data, params={"project_id": project_id}, headers=auth_headers(token)
+        )
+        assert ticket_response.status_code == 201
+
+        # Add new status - should succeed
+        update_data = {"statuses": ["TODO", "IN_PROGRESS", "DONE"]}  # Added IN_PROGRESS
+        response = client.put(f"/api/workflows/{workflow_id}", json=update_data, headers=auth_headers(token))
+
+        assert response.status_code == 200
+        updated = response.json()
+        assert "IN_PROGRESS" in updated["statuses"]
+
+    def test_can_remove_unused_status_from_workflow(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
+        """Test that removing unused status succeeds (REQ-WORKFLOW-009)."""
+        token, org_id = org_admin_token
+
+        # Create custom workflow
+        workflow_data = {"name": "Full Workflow", "statuses": ["TODO", "IN_PROGRESS", "BLOCKED", "DONE"]}
+        workflow_response = client.post("/api/workflows", json=workflow_data, headers=auth_headers(token))
+        workflow_id = workflow_response.json()["id"]
+
+        # Create project with this workflow
+        project_data = {"name": "Test Project", "workflow_id": workflow_id}
+        project_response = client.post("/api/projects", json=project_data, headers=auth_headers(token))
+        project_id = project_response.json()["id"]
+
+        # Create ticket with status "TODO" (not BLOCKED)
+        ticket_data = {"title": "Test Ticket", "status": "TODO"}
+        ticket_response = client.post(
+            "/api/tickets", json=ticket_data, params={"project_id": project_id}, headers=auth_headers(token)
+        )
+        assert ticket_response.status_code == 201
+
+        # Remove unused "BLOCKED" status - should succeed
+        update_data = {"statuses": ["TODO", "IN_PROGRESS", "DONE"]}  # Removed BLOCKED (unused)
+        response = client.put(f"/api/workflows/{workflow_id}", json=update_data, headers=auth_headers(token))
+
+        assert response.status_code == 200
+        updated = response.json()
+        assert "BLOCKED" not in updated["statuses"]
+        assert len(updated["statuses"]) == 3

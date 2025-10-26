@@ -239,13 +239,15 @@ async def update_workflow(
         removed_statuses = old_statuses - new_statuses
 
         if removed_statuses:
-            # Check if any projects use this workflow and have tickets with removed statuses
-            # For now, we'll get all tickets across all projects using this workflow
-            # Note: This requires adding a method to check workflow usage
-            # TODO: Implement check_workflow_status_usage in repository
-            # For Task 2, we'll skip this validation and implement it in Task 5
-            # when we integrate with tickets
-            pass
+            # Check if any tickets are using the statuses being removed
+            invalid_statuses = repo.workflows.check_status_usage(workflow_id, list(removed_statuses))
+            if invalid_statuses:
+                status_list = ", ".join(sorted(invalid_statuses))
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Cannot update workflow: statuses {{{status_list}}} are currently used by tickets. "
+                    f"Please update the tickets first before removing these statuses from the workflow.",
+                )
 
     # Update workflow
     updated_workflow = repo.workflows.update(workflow_id, update_data)
@@ -334,15 +336,12 @@ async def delete_workflow(
         )
 
     # Check if workflow is used by any projects
-    # Note: This requires checking projects table for workflow_id references
-    # TODO: Implement in Task 4 when we add workflow_id to projects
-    # For Task 2, we'll skip this validation
-    # projects_using_workflow = repo.projects.count_by_workflow_id(workflow_id)
-    # if projects_using_workflow > 0:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_400_BAD_REQUEST,
-    #         detail=f"Cannot delete workflow: {projects_using_workflow} project(s) are using it",
-    #     )
+    projects_using_workflow = repo.projects.count_by_workflow_id(workflow_id)
+    if projects_using_workflow > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot delete workflow: {projects_using_workflow} project(s) are using it",
+        )
 
     # Delete workflow
     command = WorkflowDeleteCommand(workflow_id=workflow_id)

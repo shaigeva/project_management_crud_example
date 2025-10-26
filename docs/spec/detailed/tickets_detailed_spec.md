@@ -407,7 +407,7 @@ Changes to tickets are logged for audit trail.
 ---
 
 ## REQ-TICKET-016: Validate status against project workflow
-**Status**: 🔴 Not Implemented
+**Status**: ✅ Implemented
 **Type**: Product Behavior
 
 ### Scenario
@@ -451,7 +451,7 @@ Ticket status values are validated against the project's workflow statuses.
 ---
 
 ## REQ-TICKET-017: Validate workflow when moving tickets between projects
-**Status**: 🔴 Not Implemented
+**Status**: ✅ Implemented
 **Type**: Product Behavior
 
 ### Scenario

@@ -469,6 +469,7 @@ class TicketData(BaseModel):
     )
     description: Optional[str] = Field(None, max_length=2000, description="Ticket description")
     priority: Optional[TicketPriority] = Field(None, description="Ticket priority level")
+    status: Optional[str] = Field(None, min_length=1, description="Ticket status (validated against workflow)")
 
 
 class Ticket(TicketData, AuditableEntity):
@@ -479,7 +480,7 @@ class Ticket(TicketData, AuditableEntity):
     _entity_type: ClassVar[str] = "ticket"
 
     id: str = Field(..., description="Ticket ID")
-    status: TicketStatus = Field(..., description="Ticket status")
+    status: str = Field(..., min_length=1, description="Ticket status (validated against project's workflow)")
     assignee_id: Optional[str] = Field(None, description="ID of user assigned to this ticket")
     reporter_id: str = Field(..., description="ID of user who created this ticket")
     project_id: str = Field(..., description="Project ID this ticket belongs to")
@@ -525,7 +526,7 @@ class TicketStatusChangeCommand(AuditableCommand):
     _action_type: ClassVar[ActionType] = ActionType.TICKET_STATUS_CHANGED
 
     ticket_id: str = Field(..., description="ID of ticket to update")
-    status: TicketStatus = Field(..., description="New status")
+    status: str = Field(..., min_length=1, description="New status (must be valid in project's workflow)")
 
 
 class TicketMoveCommand(AuditableCommand):

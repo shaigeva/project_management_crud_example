@@ -40,7 +40,6 @@ from project_management_crud_example.domain_models import (
     StubEntityUpdateCommand,
     Ticket,
     TicketCreateCommand,
-    TicketStatus,
     TicketUpdateCommand,
     User,
     UserAuthData,
@@ -714,8 +713,35 @@ class Repository:
                         f"Workflow {update_command.workflow_id} belongs to different organization "
                         f"{workflow.organization_id}"
                     )
-                # Note: Validation that existing tickets have valid statuses for new workflow
-                # will be implemented in Task 5 when we integrate ticket status validation
+
+                # Validate existing tickets have valid statuses for new workflow
+                import json
+
+                new_workflow_statuses = json.loads(workflow.statuses)
+
+                # Check if any tickets in this project have statuses not in the new workflow
+                from project_management_crud_example.dal.sqlite.orm_data_models import TicketORM
+
+                tickets = (
+                    self.session.query(TicketORM).filter(TicketORM.project_id == project_id).all()  # type: ignore[operator]
+                )
+
+                invalid_tickets = []
+                for ticket in tickets:
+                    if ticket.status not in new_workflow_statuses:
+                        invalid_tickets.append(ticket.status)
+
+                if invalid_tickets:
+                    unique_statuses = sorted(set(invalid_tickets))
+                    status_list = ", ".join(unique_statuses)
+                    valid_statuses = ", ".join(new_workflow_statuses)
+                    raise ValueError(
+                        f"Cannot change workflow: {len(invalid_tickets)} ticket(s) have statuses "
+                        f"({status_list}) that are not valid in the new workflow. "
+                        f"Valid statuses in target workflow: {valid_statuses}. "
+                        f"Please update ticket statuses first before changing the project's workflow."
+                    )
+
                 orm_project.workflow_id = update_command.workflow_id  # type: ignore[assignment]
             if update_command.is_active is not None:
                 orm_project.is_active = update_command.is_active  # type: ignore[assignment]
@@ -798,6 +824,24 @@ class Repository:
             self.session.refresh(orm_project)
             logger.debug(f"Project unarchived: {project_id}")
             return orm_project_to_domain_project(orm_project)
+
+        def count_by_workflow_id(self, workflow_id: str) -> int:
+            """Count projects using a specific workflow.
+
+            Args:
+                workflow_id: ID of workflow to check
+
+            Returns:
+                Number of projects using this workflow
+            """
+            logger.debug(f"Counting projects using workflow: {workflow_id}")
+            count = (
+                self.session.query(ProjectORM)
+                .filter(ProjectORM.workflow_id == workflow_id)  # type: ignore[operator]
+                .count()
+            )
+            logger.debug(f"Found {count} projects using workflow: {workflow_id}")
+            return count
 
     class Epics:
         """Epic-related data access operations."""
@@ -1052,24 +1096,64 @@ class Repository:
 
             Returns:
                 Created Ticket domain model
+
+            Raises:
+                ValueError: If status is provided but not valid in project's workflow
             """
             ticket_data = ticket_create_command.ticket_data
-            logger.debug(f"Creating new ticket: {ticket_data.title} in project: {ticket_create_command.project_id}")
+            project_id = ticket_create_command.project_id
+            logger.debug(f"Creating new ticket: {ticket_data.title} in project: {project_id}")
+
+            # Get project to determine workflow
+            project_orm = (
+                self.session.query(ProjectORM)
+                .filter(ProjectORM.id == project_id)  # type: ignore[operator]
+                .first()
+            )
+            if not project_orm:
+                raise ValueError(f"Project not found: {project_id}")
+
+            # Get workflow to validate status
+            workflow_orm = (
+                self.session.query(WorkflowORM)
+                .filter(WorkflowORM.id == project_orm.workflow_id)  # type: ignore[operator]
+                .first()
+            )
+            if not workflow_orm:
+                raise ValueError(f"Workflow not found: {project_orm.workflow_id}")
+
+            # Parse workflow statuses from JSON
+            import json
+
+            workflow_statuses = json.loads(workflow_orm.statuses)
+
+            # Determine status: use provided or default to first workflow status
+            if ticket_data.status:
+                status = ticket_data.status
+                # Validate status is in workflow
+                if status not in workflow_statuses:
+                    valid_statuses = ", ".join(workflow_statuses)
+                    raise ValueError(
+                        f"Invalid status '{status}' for project's workflow. Valid statuses: {valid_statuses}"
+                    )
+            else:
+                # Default to first status in workflow
+                status = workflow_statuses[0]
 
             orm_ticket = TicketORM(
                 title=ticket_data.title,
                 description=ticket_data.description,
-                status=TicketStatus.TODO.value,  # Default status
+                status=status,
                 priority=ticket_data.priority.value if ticket_data.priority else None,
                 assignee_id=ticket_create_command.assignee_id,
                 reporter_id=reporter_id,
-                project_id=ticket_create_command.project_id,
+                project_id=project_id,
             )
 
             self.session.add(orm_ticket)
             self.session.commit()
             self.session.refresh(orm_ticket)
-            logger.debug(f"Ticket created with ID: {orm_ticket.id}")
+            logger.debug(f"Ticket created with ID: {orm_ticket.id}, status: {status}")
             return orm_ticket_to_domain_ticket(orm_ticket)
 
         def get_by_id(self, ticket_id: str) -> Optional[Ticket]:
@@ -1101,14 +1185,14 @@ class Repository:
         def get_by_filters(
             self,
             project_id: Optional[str] = None,
-            status: Optional[TicketStatus] = None,
+            status: Optional[str] = None,
             assignee_id: Optional[str] = None,
         ) -> List[Ticket]:
             """Get tickets filtered by various criteria.
 
             Args:
                 project_id: Filter by project ID
-                status: Filter by ticket status
+                status: Filter by ticket status string
                 assignee_id: Filter by assignee user ID
 
             Returns:
@@ -1122,7 +1206,7 @@ class Repository:
             if project_id is not None:
                 query = query.filter(TicketORM.project_id == project_id)  # type: ignore[operator]
             if status is not None:
-                query = query.filter(TicketORM.status == status.value)  # type: ignore[operator]
+                query = query.filter(TicketORM.status == status)  # type: ignore[operator]
             if assignee_id is not None:
                 query = query.filter(TicketORM.assignee_id == assignee_id)  # type: ignore[operator]
 
@@ -1159,24 +1243,54 @@ class Repository:
             logger.debug(f"Ticket updated: {ticket_id}")
             return orm_ticket_to_domain_ticket(orm_ticket)
 
-        def update_status(self, ticket_id: str, status: TicketStatus) -> Optional[Ticket]:
+        def update_status(self, ticket_id: str, status: str) -> Optional[Ticket]:
             """Change ticket status.
 
             Args:
                 ticket_id: ID of ticket to update
-                status: New ticket status
+                status: New ticket status string
 
             Returns:
                 Updated Ticket if found, None otherwise
+
+            Raises:
+                ValueError: If status is not valid in ticket's project's workflow
             """
-            logger.debug(f"Updating ticket status: {ticket_id} to {status.value}")
+            logger.debug(f"Updating ticket status: {ticket_id} to {status}")
             orm_ticket = self.session.query(TicketORM).filter(TicketORM.id == ticket_id).first()  # type: ignore[operator]
 
             if orm_ticket is None:
                 logger.debug(f"Ticket not found for status update: {ticket_id}")
                 return None
 
-            orm_ticket.status = status.value  # type: ignore[assignment]
+            # Get project's workflow to validate status
+            project_orm = (
+                self.session.query(ProjectORM)
+                .filter(ProjectORM.id == orm_ticket.project_id)  # type: ignore[operator]
+                .first()
+            )
+            if not project_orm:
+                raise ValueError(f"Project not found: {orm_ticket.project_id}")
+
+            workflow_orm = (
+                self.session.query(WorkflowORM)
+                .filter(WorkflowORM.id == project_orm.workflow_id)  # type: ignore[operator]
+                .first()
+            )
+            if not workflow_orm:
+                raise ValueError(f"Workflow not found: {project_orm.workflow_id}")
+
+            # Parse workflow statuses from JSON
+            import json
+
+            workflow_statuses = json.loads(workflow_orm.statuses)
+
+            # Validate status is in workflow
+            if status not in workflow_statuses:
+                valid_statuses = ", ".join(workflow_statuses)
+                raise ValueError(f"Invalid status '{status}' for project's workflow. Valid statuses: {valid_statuses}")
+
+            orm_ticket.status = status  # type: ignore[assignment]
             self.session.commit()
             self.session.refresh(orm_ticket)
             logger.debug(f"Ticket status updated: {ticket_id}")
@@ -1191,6 +1305,9 @@ class Repository:
 
             Returns:
                 Updated Ticket if found, None otherwise
+
+            Raises:
+                ValueError: If ticket's current status is not valid in target project's workflow
             """
             logger.debug(f"Moving ticket {ticket_id} to project {project_id}")
             orm_ticket = self.session.query(TicketORM).filter(TicketORM.id == ticket_id).first()  # type: ignore[operator]
@@ -1198,6 +1315,38 @@ class Repository:
             if orm_ticket is None:
                 logger.debug(f"Ticket not found for project update: {ticket_id}")
                 return None
+
+            # Get target project's workflow to validate status compatibility
+            target_project_orm = (
+                self.session.query(ProjectORM)
+                .filter(ProjectORM.id == project_id)  # type: ignore[operator]
+                .first()
+            )
+            if not target_project_orm:
+                raise ValueError(f"Target project not found: {project_id}")
+
+            target_workflow_orm = (
+                self.session.query(WorkflowORM)
+                .filter(WorkflowORM.id == target_project_orm.workflow_id)  # type: ignore[operator]
+                .first()
+            )
+            if not target_workflow_orm:
+                raise ValueError(f"Workflow not found: {target_project_orm.workflow_id}")
+
+            # Parse workflow statuses from JSON
+            import json
+
+            target_workflow_statuses = json.loads(target_workflow_orm.statuses)
+
+            # Validate ticket's current status is in target workflow
+            current_status = orm_ticket.status
+            if current_status not in target_workflow_statuses:
+                valid_statuses = ", ".join(target_workflow_statuses)
+                raise ValueError(
+                    f"Cannot move ticket: current status '{current_status}' is not valid in target project's workflow. "
+                    f"Valid statuses in target workflow: {valid_statuses}. "
+                    f"Please update ticket status first before moving."
+                )
 
             orm_ticket.project_id = project_id  # type: ignore[assignment]
             self.session.commit()
@@ -1733,6 +1882,47 @@ class Repository:
             self.session.commit()
             logger.debug(f"Workflow deleted: {workflow_id}")
             return True
+
+        def check_status_usage(self, workflow_id: str, statuses_to_check: List[str]) -> List[str]:
+            """Check which of the given statuses are currently used by tickets in projects using this workflow.
+
+            Args:
+                workflow_id: ID of workflow being updated
+                statuses_to_check: List of status strings to check for usage
+
+            Returns:
+                List of statuses that are currently in use by tickets
+            """
+            logger.debug(f"Checking status usage for workflow {workflow_id}: {statuses_to_check}")
+
+            # Find all projects using this workflow
+            from project_management_crud_example.dal.sqlite.orm_data_models import ProjectORM, TicketORM
+
+            projects = self.session.query(ProjectORM).filter(ProjectORM.workflow_id == workflow_id).all()  # type: ignore[operator]
+
+            if not projects:
+                logger.debug(f"No projects use workflow {workflow_id}")
+                return []
+
+            project_ids = [str(p.id) for p in projects]
+
+            # Check which statuses are used by tickets in these projects
+            used_statuses = set()
+            for status_to_check in statuses_to_check:
+                # Query tickets in these projects with this status
+                ticket_count = (
+                    self.session.query(TicketORM)
+                    .filter(TicketORM.project_id.in_(project_ids))  # type: ignore[operator, attr-defined]
+                    .filter(TicketORM.status == status_to_check)  # type: ignore[operator]
+                    .count()
+                )
+                if ticket_count > 0:
+                    logger.debug(f"Status '{status_to_check}' is used by {ticket_count} tickets")
+                    used_statuses.add(status_to_check)
+
+            result = list(used_statuses)
+            logger.debug(f"Statuses in use: {result}")
+            return result
 
 
 # Legacy classes kept for backward compatibility with existing tests

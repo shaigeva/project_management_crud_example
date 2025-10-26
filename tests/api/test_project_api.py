@@ -1130,6 +1130,182 @@ class TestProjectWorkflows:
         assert final_get.status_code == 404
 
 
+class TestProjectWorkflowIntegration:
+    """Test project-workflow integration (REQ-PROJ-011)."""
+
+    def test_create_project_with_custom_workflow(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
+        """Test creating project with custom workflow_id (REQ-PROJ-011)."""
+        token, org_id = org_admin_token
+
+        # Create custom workflow
+        workflow_data = {"name": "Dev Workflow", "statuses": ["BACKLOG", "IN_DEV", "DEPLOYED"]}
+        workflow_response = client.post("/api/workflows", json=workflow_data, headers=auth_headers(token))
+        workflow_id = workflow_response.json()["id"]
+
+        # Create project with custom workflow
+        project_data = {"name": "Test Project", "workflow_id": workflow_id}
+        response = client.post("/api/projects", json=project_data, headers=auth_headers(token))
+
+        assert response.status_code == 201
+        project = response.json()
+        assert project["workflow_id"] == workflow_id
+
+        # Verify project uses custom workflow
+        get_response = client.get(f"/api/projects/{project['id']}", headers=auth_headers(token))
+        assert get_response.json()["workflow_id"] == workflow_id
+
+    def test_create_project_without_workflow_uses_default(
+        self, client: TestClient, org_admin_token: tuple[str, str]
+    ) -> None:
+        """Test creating project without workflow_id uses default workflow (REQ-PROJ-011)."""
+        token, org_id = org_admin_token
+
+        # Get default workflow
+        workflows_response = client.get("/api/workflows", headers=auth_headers(token))
+        workflows = workflows_response.json()
+        default_workflow = next((w for w in workflows if w["is_default"] is True), None)
+        assert default_workflow is not None
+
+        # Create project without workflow_id
+        project_data = {"name": "Default Workflow Project"}
+        response = client.post("/api/projects", json=project_data, headers=auth_headers(token))
+
+        assert response.status_code == 201
+        project = response.json()
+        assert project["workflow_id"] == default_workflow["id"]
+
+    def test_update_project_workflow(self, client: TestClient, org_admin_token: tuple[str, str]) -> None:
+        """Test updating project's workflow_id (REQ-PROJ-011)."""
+        token, org_id = org_admin_token
+
+        # Create two workflows
+        workflow1_data = {"name": "Workflow 1", "statuses": ["TODO", "DONE"]}
+        workflow1_response = client.post("/api/workflows", json=workflow1_data, headers=auth_headers(token))
+        workflow1_id = workflow1_response.json()["id"]
+
+        workflow2_data = {"name": "Workflow 2", "statuses": ["TODO", "IN_PROGRESS", "DONE"]}
+        workflow2_response = client.post("/api/workflows", json=workflow2_data, headers=auth_headers(token))
+        workflow2_id = workflow2_response.json()["id"]
+
+        # Create project with workflow1
+        project_data = {"name": "Test Project", "workflow_id": workflow1_id}
+        project_response = client.post("/api/projects", json=project_data, headers=auth_headers(token))
+        project_id = project_response.json()["id"]
+
+        # Update to workflow2
+        update_data = {"workflow_id": workflow2_id}
+        response = client.put(f"/api/projects/{project_id}", json=update_data, headers=auth_headers(token))
+
+        assert response.status_code == 200
+        updated = response.json()
+        assert updated["workflow_id"] == workflow2_id
+
+    def test_cannot_set_workflow_from_different_org(
+        self, client: TestClient, org_admin_token: tuple[str, str], super_admin_token: str
+    ) -> None:
+        """Test that workflow must be in same organization (REQ-PROJ-011)."""
+        token1, org1_id = org_admin_token
+
+        # Create second organization with admin
+        from tests.helpers import create_admin_user
+
+        org2_response = client.post(
+            "/api/organizations", json={"name": "Org 2"}, headers=auth_headers(super_admin_token)
+        )
+        org2_id = org2_response.json()["id"]
+
+        admin2_id, admin2_password = create_admin_user(client, super_admin_token, org2_id, username="admin2")
+        login_response = client.post("/auth/login", json={"username": "admin2", "password": admin2_password})
+        token2 = login_response.json()["access_token"]
+
+        # Create workflow in org2
+        workflow_data = {"name": "Org2 Workflow", "statuses": ["TODO", "DONE"]}
+        workflow_response = client.post("/api/workflows", json=workflow_data, headers=auth_headers(token2))
+        org2_workflow_id = workflow_response.json()["id"]
+
+        # Try to create project in org1 with org2's workflow - should fail
+        project_data = {"name": "Test Project", "workflow_id": org2_workflow_id}
+        response = client.post("/api/projects", json=project_data, headers=auth_headers(token1))
+
+        assert response.status_code == 400
+        error = response.json()
+        assert "different organization" in error["detail"].lower() or "not found" in error["detail"].lower()
+
+    def test_update_project_workflow_validates_ticket_compatibility(
+        self, client: TestClient, org_admin_token: tuple[str, str]
+    ) -> None:
+        """Test updating project workflow validates ticket status compatibility (REQ-PROJ-011)."""
+        token, org_id = org_admin_token
+
+        # Create two workflows with different statuses
+        workflow1_data = {"name": "Workflow 1", "statuses": ["TODO", "CUSTOM_STATUS", "DONE"]}
+        workflow1_response = client.post("/api/workflows", json=workflow1_data, headers=auth_headers(token))
+        workflow1_id = workflow1_response.json()["id"]
+
+        workflow2_data = {"name": "Workflow 2", "statuses": ["TODO", "DONE"]}  # No CUSTOM_STATUS
+        workflow2_response = client.post("/api/workflows", json=workflow2_data, headers=auth_headers(token))
+        workflow2_id = workflow2_response.json()["id"]
+
+        # Create project with workflow1
+        project_data = {"name": "Test Project", "workflow_id": workflow1_id}
+        project_response = client.post("/api/projects", json=project_data, headers=auth_headers(token))
+        project_id = project_response.json()["id"]
+
+        # Create ticket with CUSTOM_STATUS
+        ticket_data = {"title": "Test Ticket", "status": "CUSTOM_STATUS"}
+        ticket_response = client.post(
+            "/api/tickets", json=ticket_data, params={"project_id": project_id}, headers=auth_headers(token)
+        )
+        assert ticket_response.status_code == 201
+
+        # Try to update project to workflow2 - should fail because ticket has CUSTOM_STATUS
+        update_data = {"workflow_id": workflow2_id}
+        response = client.put(f"/api/projects/{project_id}", json=update_data, headers=auth_headers(token))
+
+        assert response.status_code == 400
+        error = response.json()
+        assert (
+            "Cannot change workflow" in error["detail"]
+            or "ticket" in error["detail"].lower()
+            or "status" in error["detail"].lower()
+        )
+
+    def test_update_project_workflow_succeeds_with_compatible_tickets(
+        self, client: TestClient, org_admin_token: tuple[str, str]
+    ) -> None:
+        """Test updating project workflow succeeds when tickets are compatible (REQ-PROJ-011)."""
+        token, org_id = org_admin_token
+
+        # Create two workflows with overlapping statuses
+        workflow1_data = {"name": "Workflow 1", "statuses": ["TODO", "IN_PROGRESS", "DONE"]}
+        workflow1_response = client.post("/api/workflows", json=workflow1_data, headers=auth_headers(token))
+        workflow1_id = workflow1_response.json()["id"]
+
+        workflow2_data = {"name": "Workflow 2", "statuses": ["TODO", "IN_PROGRESS", "DONE", "ARCHIVED"]}
+        workflow2_response = client.post("/api/workflows", json=workflow2_data, headers=auth_headers(token))
+        workflow2_id = workflow2_response.json()["id"]
+
+        # Create project with workflow1
+        project_data = {"name": "Test Project", "workflow_id": workflow1_id}
+        project_response = client.post("/api/projects", json=project_data, headers=auth_headers(token))
+        project_id = project_response.json()["id"]
+
+        # Create ticket with compatible status
+        ticket_data = {"title": "Test Ticket", "status": "IN_PROGRESS"}
+        ticket_response = client.post(
+            "/api/tickets", json=ticket_data, params={"project_id": project_id}, headers=auth_headers(token)
+        )
+        assert ticket_response.status_code == 201
+
+        # Update to workflow2 - should succeed because IN_PROGRESS is in both
+        update_data = {"workflow_id": workflow2_id}
+        response = client.put(f"/api/projects/{project_id}", json=update_data, headers=auth_headers(token))
+
+        assert response.status_code == 200
+        updated = response.json()
+        assert updated["workflow_id"] == workflow2_id
+
+
 class TestProjectActivityLogging:
     """Test activity log creation for all project operations."""
 

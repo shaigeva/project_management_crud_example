@@ -208,7 +208,7 @@ Projects can be archived (soft deleted) and unarchived (restored). Archived proj
 ---
 
 ## REQ-PROJ-011: Projects reference workflows
-**Status**: 🔴 Not Implemented
+**Status**: ✅ Implemented
 **Type**: Product Behavior
 
 ### Scenario

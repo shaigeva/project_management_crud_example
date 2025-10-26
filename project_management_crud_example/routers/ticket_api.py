@@ -8,7 +8,7 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from project_management_crud_example.dal.sqlite.repository import Repository
 from project_management_crud_example.dependencies import get_current_user, get_repository
@@ -20,7 +20,6 @@ from project_management_crud_example.domain_models import (
     TicketData,
     TicketDeleteCommand,
     TicketMoveCommand,
-    TicketStatus,
     TicketStatusChangeCommand,
     TicketUpdateCommand,
     User,
@@ -38,7 +37,7 @@ router = APIRouter(prefix="/api/tickets", tags=["tickets"])
 class TicketStatusUpdate(BaseModel):
     """Request model for updating ticket status."""
 
-    status: TicketStatus
+    status: str = Field(..., min_length=1, description="New status (must be valid in project's workflow)")
 
 
 class TicketProjectUpdate(BaseModel):
@@ -207,7 +206,15 @@ async def create_ticket(
         assignee_id=assignee_id,
     )
 
-    ticket = repo.tickets.create(command, reporter_id=current_user.id)
+    try:
+        ticket = repo.tickets.create(command, reporter_id=current_user.id)
+    except ValueError as e:
+        logger.warning(f"Failed to create ticket: {e}")
+        raise HTTPException(
+            status_code=422,
+            detail=str(e),
+        ) from None
+
     logger.info(f"Ticket created: {ticket.id}")
 
     # Log activity
@@ -256,7 +263,7 @@ async def get_ticket(
 @router.get("", response_model=List[Ticket])
 async def list_tickets(
     project_id: Optional[str] = Query(None, description="Filter by project ID"),  # noqa: B008
-    status: Optional[TicketStatus] = Query(None, description="Filter by status"),  # noqa: B008
+    status: Optional[str] = Query(None, description="Filter by status"),  # noqa: B008
     assignee_id: Optional[str] = Query(None, description="Filter by assignee user ID"),  # noqa: B008
     repo: Repository = Depends(get_repository),  # noqa: B008
     current_user: User = Depends(get_current_user),  # noqa: B008
@@ -440,9 +447,16 @@ async def update_ticket_status(
     # Get project for organization_id
     project = repo.projects.get_by_id(ticket.project_id)
 
-    logger.info(f"Changing ticket status: {ticket_id} to {status_update.status.value} (by user {current_user.id})")
+    logger.info(f"Changing ticket status: {ticket_id} to {status_update.status} (by user {current_user.id})")
 
-    updated_ticket = repo.tickets.update_status(ticket_id, status_update.status)
+    try:
+        updated_ticket = repo.tickets.update_status(ticket_id, status_update.status)
+    except ValueError as e:
+        logger.warning(f"Failed to update ticket status: {e}")
+        raise HTTPException(
+            status_code=422,
+            detail=str(e),
+        ) from None
 
     if not updated_ticket:
         raise HTTPException(
@@ -515,7 +529,14 @@ async def move_ticket_to_project(
         f"Moving ticket {ticket_id} from project {ticket.project_id} to {project_update.project_id} (by user {current_user.id})"
     )
 
-    updated_ticket = repo.tickets.update_project(ticket_id, project_update.project_id)
+    try:
+        updated_ticket = repo.tickets.update_project(ticket_id, project_update.project_id)
+    except ValueError as e:
+        logger.warning(f"Failed to move ticket: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from None
 
     if not updated_ticket:
         raise HTTPException(
