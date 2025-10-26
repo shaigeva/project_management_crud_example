@@ -26,6 +26,7 @@ from project_management_crud_example.routers import (
     stub_entity_api,
     ticket_api,
     user_api,
+    workflow_api,
 )
 
 # Configure logging
@@ -86,6 +87,7 @@ app.include_router(user_api.router)
 app.include_router(organization_api.router)
 app.include_router(project_api.router)
 app.include_router(epic_api.router)
+app.include_router(workflow_api.router)
 app.include_router(ticket_api.router)
 app.include_router(comment_api.router)
 app.include_router(activity_log_api.router)
@@ -94,6 +96,21 @@ app.include_router(health.router)
 
 
 # Exception Handlers
+def _make_json_serializable(obj: object) -> object:
+    """Convert objects to JSON-serializable format."""
+    if isinstance(obj, bytes):
+        return obj.decode("utf-8", errors="replace")
+    elif isinstance(obj, dict):
+        return {k: _make_json_serializable(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [_make_json_serializable(item) for item in obj]
+    elif isinstance(obj, (str, int, float, bool, type(None))):
+        return obj
+    else:
+        # For any other type (like ValueError, Exception, etc.), convert to string
+        return str(obj)
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """Handle validation errors with detailed error information."""
@@ -103,13 +120,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     errors = []
     for error in exc.errors():
         # Ensure all values are JSON serializable
-        json_error = {}
-        for key, value in error.items():
-            if isinstance(value, bytes):
-                # Convert bytes to string representation
-                json_error[key] = value.decode("utf-8", errors="replace")
-            else:
-                json_error[key] = value
+        json_error = _make_json_serializable(error)
         errors.append(json_error)
 
     return JSONResponse(
