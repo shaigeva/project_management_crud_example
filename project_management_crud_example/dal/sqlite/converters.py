@@ -92,6 +92,29 @@ def orm_epic_to_domain_epic(
     )
 
 
+def orm_workflow_to_domain_workflow(
+    orm_workflow: orm_data_models.WorkflowORM,
+) -> domain_models.Workflow:
+    """Convert an ORM Workflow model to a domain Workflow model."""
+    return domain_models.Workflow(
+        id=str(orm_workflow.id),
+        name=orm_workflow.name,  # type: ignore[arg-type]
+        description=orm_workflow.description,  # type: ignore[arg-type]
+        statuses=json.loads(orm_workflow.statuses),  # type: ignore[arg-type]
+        organization_id=str(orm_workflow.organization_id),
+        is_default=orm_workflow.is_default,  # type: ignore[arg-type]
+        created_at=orm_workflow.created_at,  # type: ignore[arg-type]
+        updated_at=orm_workflow.updated_at,  # type: ignore[arg-type]
+    )
+
+
+def orm_workflows_to_domain_workflows(
+    orm_workflows: List[orm_data_models.WorkflowORM],
+) -> List[domain_models.Workflow]:
+    """Convert a list of ORM Workflows to domain Workflows."""
+    return [orm_workflow_to_domain_workflow(orm_workflow) for orm_workflow in orm_workflows]
+
+
 def orm_ticket_to_domain_ticket(
     orm_ticket: orm_data_models.TicketORM,
 ) -> domain_models.Ticket:

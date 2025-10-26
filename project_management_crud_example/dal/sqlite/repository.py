@@ -47,6 +47,9 @@ from project_management_crud_example.domain_models import (
     UserCreateCommand,
     UserRole,
     UserUpdateCommand,
+    Workflow,
+    WorkflowCreateCommand,
+    WorkflowUpdateCommand,
 )
 from project_management_crud_example.utils.password import PasswordHasher, TestPasswordHasher
 
@@ -62,6 +65,8 @@ from .converters import (
     orm_ticket_to_domain_ticket,
     orm_user_to_domain_user,
     orm_user_to_user_auth_data,
+    orm_workflow_to_domain_workflow,
+    orm_workflows_to_domain_workflows,
 )
 from .orm_data_models import (
     ActivityLogORM,
@@ -73,6 +78,7 @@ from .orm_data_models import (
     StubEntityORM,
     TicketORM,
     UserORM,
+    WorkflowORM,
 )
 
 logger = logging.getLogger(__name__)
@@ -105,6 +111,7 @@ class Repository:
         self.organizations = self.Organizations(session)
         self.projects = self.Projects(session)
         self.epics = self.Epics(session)
+        self.workflows = self.Workflows(session)
         self.tickets = self.Tickets(session)
         self.comments = self.Comments(session)
         self.users = self.Users(session, password_hasher)
@@ -1470,6 +1477,211 @@ class Repository:
             self.session.delete(stub_entity)
             self.session.commit()
             logger.debug(f"Stub entity deleted: {stub_entity_id}")
+            return True
+
+    class Workflows:
+        """Workflow-related data access operations."""
+
+        def __init__(self, session: Session) -> None:
+            self.session = session
+
+        def create(self, workflow_create_command: WorkflowCreateCommand) -> Workflow:
+            """Create a new workflow.
+
+            Args:
+                workflow_create_command: Command containing workflow data and organization_id
+
+            Returns:
+                Created Workflow domain model
+
+            Raises:
+                ValueError: If attempting to create a second default workflow for the organization
+            """
+            workflow_data = workflow_create_command.workflow_data
+            organization_id = workflow_create_command.organization_id
+            logger.debug(f"Creating new workflow: {workflow_data.name} for organization {organization_id}")
+
+            # If this is a default workflow, ensure no other default exists for this org
+            # Note: is_default is always False for workflows created through WorkflowCreateCommand
+            # Default workflows are created automatically when organizations are created
+
+            orm_workflow = WorkflowORM(
+                name=workflow_data.name,
+                description=workflow_data.description,
+                statuses=json.dumps(workflow_data.statuses),  # Serialize list to JSON
+                organization_id=organization_id,
+                is_default=False,  # User-created workflows are never default
+            )
+            self.session.add(orm_workflow)
+            self.session.commit()
+            self.session.refresh(orm_workflow)
+            logger.debug(f"Workflow created with ID: {orm_workflow.id}")
+            return orm_workflow_to_domain_workflow(orm_workflow)
+
+        def get_by_id(self, workflow_id: str) -> Optional[Workflow]:
+            """Get a workflow by ID.
+
+            Args:
+                workflow_id: The workflow ID to retrieve
+
+            Returns:
+                Workflow if found, None otherwise
+            """
+            logger.debug(f"Retrieving workflow by ID: {workflow_id}")
+            orm_workflow = self.session.query(WorkflowORM).filter(WorkflowORM.id == workflow_id).first()  # type: ignore[operator]
+            if orm_workflow is None:
+                logger.debug(f"Workflow not found: {workflow_id}")
+                return None
+            logger.debug(f"Workflow found: {workflow_id}")
+            return orm_workflow_to_domain_workflow(orm_workflow)
+
+        def _get_orm_by_id(self, workflow_id: str) -> Optional[WorkflowORM]:
+            """Get a workflow by ID as ORM object (for internal use).
+
+            Args:
+                workflow_id: The workflow ID to retrieve
+
+            Returns:
+                WorkflowORM if found, None otherwise
+            """
+            logger.debug(f"Retrieving ORM workflow by ID: {workflow_id}")
+            return self.session.query(WorkflowORM).filter(WorkflowORM.id == workflow_id).first()  # type: ignore[operator]
+
+        def get_by_organization_id(self, organization_id: str) -> List[Workflow]:
+            """Get all workflows for an organization.
+
+            Args:
+                organization_id: The organization ID
+
+            Returns:
+                List of workflows in the organization (including default)
+            """
+            logger.debug(f"Retrieving workflows for organization: {organization_id}")
+            orm_workflows = (
+                self.session.query(WorkflowORM)
+                .filter(WorkflowORM.organization_id == organization_id)  # type: ignore[operator]
+                .order_by(WorkflowORM.created_at.desc())  # type: ignore[union-attr]
+                .all()
+            )
+            return orm_workflows_to_domain_workflows(orm_workflows)
+
+        def get_all(self) -> List[Workflow]:
+            """Get all workflows (for Super Admin).
+
+            Returns:
+                List of all workflows across all organizations
+            """
+            logger.debug("Retrieving all workflows")
+            orm_workflows = self.session.query(WorkflowORM).order_by(WorkflowORM.created_at.desc()).all()  # type: ignore[union-attr]
+            return orm_workflows_to_domain_workflows(orm_workflows)
+
+        def get_default_workflow(self, organization_id: str) -> Optional[Workflow]:
+            """Get the default workflow for an organization.
+
+            Args:
+                organization_id: The organization ID
+
+            Returns:
+                Default workflow if exists, None otherwise
+            """
+            logger.debug(f"Retrieving default workflow for organization: {organization_id}")
+            orm_workflow = (
+                self.session.query(WorkflowORM)
+                .filter(WorkflowORM.organization_id == organization_id, WorkflowORM.is_default == True)  # type: ignore[operator]  # noqa: E712
+                .first()
+            )
+            if orm_workflow is None:
+                logger.debug(f"No default workflow found for organization: {organization_id}")
+                return None
+            return orm_workflow_to_domain_workflow(orm_workflow)
+
+        def create_default_workflow(self, organization_id: str) -> Workflow:
+            """Create default workflow for an organization.
+
+            This is used during organization creation to set up the default TODO/IN_PROGRESS/DONE workflow.
+
+            Args:
+                organization_id: The organization ID
+
+            Returns:
+                Created default workflow
+
+            Raises:
+                IntegrityError: If default workflow already exists for this organization
+            """
+            logger.debug(f"Creating default workflow for organization: {organization_id}")
+
+            # Check if default workflow already exists
+            existing_default = self.get_default_workflow(organization_id)
+            if existing_default:
+                raise ValueError(f"Default workflow already exists for organization {organization_id}")
+
+            orm_workflow = WorkflowORM(
+                name="Default Workflow",
+                description="Standard workflow with TODO, IN_PROGRESS, and DONE statuses",
+                statuses=json.dumps(["TODO", "IN_PROGRESS", "DONE"]),
+                organization_id=organization_id,
+                is_default=True,
+            )
+            self.session.add(orm_workflow)
+            self.session.commit()
+            self.session.refresh(orm_workflow)
+            logger.debug(f"Default workflow created with ID: {orm_workflow.id}")
+            return orm_workflow_to_domain_workflow(orm_workflow)
+
+        def update(self, workflow_id: str, update_command: WorkflowUpdateCommand) -> Optional[Workflow]:
+            """Update an existing workflow.
+
+            Args:
+                workflow_id: ID of workflow to update
+                update_command: Update command with fields to change
+
+            Returns:
+                Updated workflow if found, None otherwise
+
+            Note: is_default cannot be changed through update
+            """
+            logger.debug(f"Updating workflow: {workflow_id}")
+            workflow = self._get_orm_by_id(workflow_id)
+            if not workflow:
+                logger.debug(f"Workflow not found for update: {workflow_id}")
+                return None
+
+            # Update only the fields that are provided and not None
+            update_data = update_command.model_dump(exclude_unset=True, exclude_none=True)
+            if update_data:
+                # Special handling for statuses (needs JSON serialization)
+                if "statuses" in update_data:
+                    update_data["statuses"] = json.dumps(update_data["statuses"])
+
+                for field, value in update_data.items():
+                    setattr(workflow, field, value)
+
+            self.session.commit()
+            self.session.refresh(workflow)
+            logger.debug(f"Workflow updated: {workflow_id}")
+            return orm_workflow_to_domain_workflow(workflow)
+
+        def delete(self, workflow_id: str) -> bool:
+            """Delete a workflow.
+
+            Args:
+                workflow_id: ID of workflow to delete
+
+            Returns:
+                True if deleted, False if not found
+
+            Note: Caller should verify workflow is not in use before calling this
+            """
+            logger.debug(f"Deleting workflow: {workflow_id}")
+            workflow = self._get_orm_by_id(workflow_id)
+            if not workflow:
+                logger.debug(f"Workflow not found for deletion: {workflow_id}")
+                return False
+
+            self.session.delete(workflow)
+            self.session.commit()
+            logger.debug(f"Workflow deleted: {workflow_id}")
             return True
 
 

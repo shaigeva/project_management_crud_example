@@ -5,11 +5,12 @@ This module contains Pydantic models for representing the domain, API data valid
 The StubEntity models serve as a template/scaffolding for creating real domain entities.
 """
 
+import re
 from datetime import datetime
 from enum import Enum
-from typing import ClassVar, Optional
+from typing import ClassVar, List, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class AuditableEntity(BaseModel):
@@ -76,6 +77,11 @@ class ActionType(str, Enum):
     COMMENT_CREATED = "comment_created"
     COMMENT_UPDATED = "comment_updated"
     COMMENT_DELETED = "comment_deleted"
+
+    # Workflow actions
+    WORKFLOW_CREATED = "workflow_created"
+    WORKFLOW_UPDATED = "workflow_updated"
+    WORKFLOW_DELETED = "workflow_deleted"
 
 
 class StubEntityData(BaseModel):
@@ -306,6 +312,125 @@ class EpicTicketRemoveCommand(AuditableCommand):
 
     epic_id: str = Field(..., description="ID of epic")
     ticket_id: str = Field(..., description="ID of ticket to remove")
+
+
+# Workflow Models
+
+
+class WorkflowData(BaseModel):
+    """Base workflow data structure."""
+
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=255,
+        description="Workflow name",
+    )
+    description: Optional[str] = Field(None, max_length=1000, description="Workflow description")
+    statuses: List[str] = Field(
+        ...,
+        min_length=1,
+        description="List of valid status names for this workflow (non-empty)",
+    )
+
+    @field_validator("statuses")
+    @classmethod
+    def validate_statuses(cls, v: List[str]) -> List[str]:
+        """Validate workflow statuses.
+
+        Rules:
+        - Must be non-empty list
+        - Each status must match pattern ^[A-Z0-9_-]+$
+        - No duplicate statuses allowed
+        """
+        if not v:
+            raise ValueError("Statuses list cannot be empty")
+
+        # Check for duplicates
+        if len(v) != len(set(v)):
+            raise ValueError("Duplicate status names are not allowed")
+
+        # Validate each status name format
+        status_pattern = re.compile(r"^[A-Z0-9_-]+$")
+        for status in v:
+            if not status_pattern.match(status):
+                raise ValueError(
+                    f"Invalid status name '{status}'. Status names must contain only uppercase letters, "
+                    f"numbers, underscores, and hyphens (pattern: ^[A-Z0-9_-]+$)"
+                )
+
+        return v
+
+
+class Workflow(WorkflowData):
+    """Complete workflow model with metadata."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str = Field(..., description="Workflow ID")
+    organization_id: str = Field(..., description="Organization ID this workflow belongs to")
+    is_default: bool = Field(False, description="Whether this is the organization's default workflow")
+    created_at: datetime = Field(..., description="Creation timestamp")
+    updated_at: datetime = Field(..., description="Last update timestamp")
+
+
+class WorkflowCreateCommand(AuditableCommand):
+    """Command model for creating a new workflow."""
+
+    _entity_type: ClassVar[str] = "workflow"
+    _action_type: ClassVar[ActionType] = ActionType.WORKFLOW_CREATED
+
+    workflow_data: WorkflowData
+    organization_id: str = Field(..., description="Organization ID this workflow belongs to")
+
+
+class WorkflowUpdateCommand(AuditableCommand):
+    """Command model for updating an existing workflow."""
+
+    _entity_type: ClassVar[str] = "workflow"
+    _action_type: ClassVar[ActionType] = ActionType.WORKFLOW_UPDATED
+
+    name: Optional[str] = Field(None, min_length=1, max_length=255, description="Workflow name")
+    description: Optional[str] = Field(None, max_length=1000, description="Workflow description")
+    statuses: Optional[List[str]] = Field(
+        None,
+        min_length=1,
+        description="List of valid status names for this workflow",
+    )
+
+    @field_validator("statuses")
+    @classmethod
+    def validate_statuses(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        """Validate workflow statuses if provided."""
+        if v is None:
+            return v
+
+        if not v:
+            raise ValueError("Statuses list cannot be empty")
+
+        # Check for duplicates
+        if len(v) != len(set(v)):
+            raise ValueError("Duplicate status names are not allowed")
+
+        # Validate each status name format
+        status_pattern = re.compile(r"^[A-Z0-9_-]+$")
+        for status in v:
+            if not status_pattern.match(status):
+                raise ValueError(
+                    f"Invalid status name '{status}'. Status names must contain only uppercase letters, "
+                    f"numbers, underscores, and hyphens (pattern: ^[A-Z0-9_-]+$)"
+                )
+
+        return v
+
+
+class WorkflowDeleteCommand(AuditableCommand):
+    """Command model for deleting a workflow."""
+
+    _entity_type: ClassVar[str] = "workflow"
+    _action_type: ClassVar[ActionType] = ActionType.WORKFLOW_DELETED
+
+    workflow_id: str = Field(..., description="ID of workflow to delete")
 
 
 # Ticket Models
