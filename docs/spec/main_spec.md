@@ -214,7 +214,7 @@ Epics provide a way to group related tickets that may span multiple projects. An
 ---
 
 ## Feature: Comments
-**Status**: 🔴 0/8 requirements implemented (0%)
+**Status**: 🟢 8/8 requirements implemented (100%)
 **Detail Spec**: [detailed/comments_detailed_spec.md](detailed/comments_detailed_spec.md)
 **Purpose**: Discussion and collaboration on tickets
 **Version**: V1
@@ -223,14 +223,16 @@ Epics provide a way to group related tickets that may span multiple projects. An
 Users need to discuss tickets, provide updates, and collaborate. Comments allow threaded discussion on tickets. No attachments in V1.
 
 ### High-Level Requirements
-- 🔴 REQ-COMMENT-001: Add comment to ticket
-- 🔴 REQ-COMMENT-002: Retrieve comment by ID
-- 🔴 REQ-COMMENT-003: List comments for ticket
-- 🔴 REQ-COMMENT-004: Update comment (by author)
-- 🔴 REQ-COMMENT-005: Delete comment (by author or admin)
-- 🔴 REQ-COMMENT-006: Comments include author and timestamp
-- 🔴 REQ-COMMENT-007: Comments are organization-scoped
-- 🔴 REQ-COMMENT-008: Handle validation and permission errors
+- ✅ REQ-COMMENT-001: Add comment to ticket
+- ✅ REQ-COMMENT-002: Retrieve comment by ID
+- ✅ REQ-COMMENT-003: List comments for ticket
+- ✅ REQ-COMMENT-004: Update comment (by author)
+- ✅ REQ-COMMENT-005: Delete comment (by author or admin)
+- ✅ REQ-COMMENT-006: Comments include author and timestamp
+- ✅ REQ-COMMENT-007: Comments are organization-scoped
+- ✅ REQ-COMMENT-008: Handle validation and permission errors
+
+**Notes**: Complete comment functionality with 5 REST endpoints. Write Access+ users can create comments; all users can read comments in their organization. Author-only editing (even admins cannot edit others' comments). Author or Admin can delete comments. Content limited to 5000 chars. Chronological ordering (oldest first) for discussion flow. Activity logging for all CUD operations. 28 comprehensive API tests + 15 repository tests.
 
 ---
 
