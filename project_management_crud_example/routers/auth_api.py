@@ -10,8 +10,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from project_management_crud_example.config import settings
 from project_management_crud_example.dal.sqlite.repository import Repository
 from project_management_crud_example.dependencies import get_current_user, get_repository
-from project_management_crud_example.domain_models import ChangePasswordRequest, LoginRequest, LoginResponse, User
+from project_management_crud_example.domain_models import (
+    ChangePasswordRequest,
+    LoginRequest,
+    LoginResponse,
+    PasswordChangeCommand,
+    User,
+)
 from project_management_crud_example.exceptions import AccountInactiveException, InvalidCredentialsException
+from project_management_crud_example.utils.activity_log_helpers import log_activity
 from project_management_crud_example.utils.jwt import create_access_token
 from project_management_crud_example.utils.password import validate_password_strength
 
@@ -133,6 +140,16 @@ async def change_password(
     if not success:
         logger.error(f"Failed to update password for user: {current_user.id}")
         raise HTTPException(status_code=500, detail="Failed to update password")
+
+    # Log activity - password change (no actual passwords logged)
+    password_change_cmd = PasswordChangeCommand(user_id=current_user.id)
+    log_activity(
+        repo=repo,
+        command=password_change_cmd,
+        entity_id=current_user.id,
+        actor_id=current_user.id,  # User changing their own password
+        organization_id=current_user.organization_id or "",  # Handle None for super admin
+    )
 
     logger.info(f"Password changed successfully for user: {current_user.id}")
     return {"message": "Password changed successfully"}

@@ -424,8 +424,11 @@ class UserAuthData(BaseModel):
     is_active: bool = Field(..., description="Whether user is active")
 
 
-class UserCreateCommand(BaseModel):
+class UserCreateCommand(AuditableCommand):
     """Command model for creating a new user."""
+
+    _entity_type: ClassVar[str] = "user"
+    _action_type: ClassVar[ActionType] = ActionType.USER_CREATED
 
     user_data: UserData
     password: str = Field(..., min_length=1, description="Plain text password (will be hashed)")
@@ -433,17 +436,29 @@ class UserCreateCommand(BaseModel):
     role: UserRole = Field(..., description="User role")
 
 
-class UserUpdateCommand(BaseModel):
+class UserUpdateCommand(AuditableCommand):
     """Command model for updating an existing user.
 
     Only specified fields will be updated. username, organization_id, and password
     cannot be changed via this command.
     """
 
+    _entity_type: ClassVar[str] = "user"
+    _action_type: ClassVar[ActionType] = ActionType.USER_UPDATED
+
     email: Optional[EmailStr] = Field(None, description="User email address")
     full_name: Optional[str] = Field(None, min_length=1, max_length=255, description="User full name")
     role: Optional[UserRole] = Field(None, description="User role")
     is_active: Optional[bool] = Field(None, description="Whether user is active")
+
+
+class UserDeleteCommand(AuditableCommand):
+    """Command model for deleting a user."""
+
+    _entity_type: ClassVar[str] = "user"
+    _action_type: ClassVar[ActionType] = ActionType.USER_DELETED
+
+    user_id: str = Field(..., description="ID of user to delete")
 
 
 class UserCreateResponse(BaseModel):
@@ -482,6 +497,15 @@ class ChangePasswordRequest(BaseModel):
 
     current_password: str = Field(..., min_length=1, description="Current password for verification")
     new_password: str = Field(..., min_length=8, description="New password (must meet strength requirements)")
+
+
+class PasswordChangeCommand(AuditableCommand):
+    """Command for logging password changes (passwords are NOT included for security)."""
+
+    _entity_type: ClassVar[str] = "user"
+    _action_type: ClassVar[ActionType] = ActionType.USER_PASSWORD_CHANGED
+
+    user_id: str = Field(..., description="ID of user changing password")
 
 
 # Activity Log Models

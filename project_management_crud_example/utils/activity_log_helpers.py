@@ -15,6 +15,26 @@ from project_management_crud_example.domain_models import (
 
 logger = logging.getLogger(__name__)
 
+# Fields that should be redacted in activity logs for security
+SENSITIVE_COMMAND_FIELDS = {"password", "current_password", "new_password"}
+
+
+def _redact_sensitive_fields(command_dict: dict) -> dict:
+    """
+    Redact sensitive fields (passwords) from command dictionary.
+
+    Args:
+        command_dict: Command dictionary to redact
+
+    Returns:
+        New dictionary with sensitive fields redacted
+    """
+    redacted = command_dict.copy()
+    for field in SENSITIVE_COMMAND_FIELDS:
+        if field in redacted:
+            redacted[field] = "[REDACTED]"
+    return redacted
+
 
 def log_activity(
     repo: Repository,
@@ -76,6 +96,9 @@ def log_activity(
 
         # Build changes dict from command
         command_dict = command.model_dump(exclude_none=True, exclude={"_entity_type", "_action_type"})
+
+        # Redact sensitive fields (passwords)
+        command_dict = _redact_sensitive_fields(command_dict)
 
         changes: dict = {}
         if snapshot:

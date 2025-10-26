@@ -4,7 +4,9 @@ import re
 
 from fastapi.testclient import TestClient
 
-from tests.conftest import client  # noqa: F401
+from project_management_crud_example.dal.sqlite.repository import Repository
+from project_management_crud_example.domain_models import ActionType
+from tests.conftest import client, test_repo  # noqa: F401
 from tests.fixtures.auth_fixtures import (  # noqa: F401
     org_admin_token,
     super_admin_token,
@@ -593,3 +595,122 @@ class TestDeleteUser:
         response = client.delete(f"/api/users/{user_id}")
 
         assert response.status_code == 401
+
+
+class TestUserActivityLogging:
+    """Tests for user activity logging - REQ-ACTIVITY-003."""
+
+    def test_create_user_logs_activity(self, client: TestClient, test_repo: Repository, super_admin_token: str) -> None:
+        """Test that creating a user creates an activity log entry."""
+        org_id = create_test_org(client, super_admin_token)
+
+        # Create user
+        user_id, _password = create_admin_user(client, super_admin_token, org_id, username="testuser")
+
+        # Check activity log was created
+        logs = test_repo.activity_logs.list(entity_type="user", entity_id=user_id)
+
+        assert len(logs) == 1
+        log = logs[0]
+        assert log.entity_type == "user"
+        assert log.entity_id == user_id
+        assert log.action == ActionType.USER_CREATED
+        assert log.organization_id == org_id
+
+        # Verify command structure
+        assert "command" in log.changes
+        assert log.changes["command"]["user_data"]["username"] == "testuser"
+        assert log.changes["command"]["organization_id"] == org_id
+        # Verify password is redacted
+        assert log.changes["command"]["password"] == "[REDACTED]"
+
+    def test_update_user_logs_activity(self, client: TestClient, test_repo: Repository, super_admin_token: str) -> None:
+        """Test that updating a user creates an activity log entry."""
+        org_id = create_test_org(client, super_admin_token)
+        user_id, _password = create_admin_user(client, super_admin_token, org_id, username="testuser")
+
+        # Update user
+        update_data = {"full_name": "Updated Name", "email": "updated@example.com"}
+        response = client.put(
+            f"/api/users/{user_id}",
+            json=update_data,
+            headers=auth_headers(super_admin_token),
+        )
+        assert response.status_code == 200
+
+        # Check activity log for update
+        logs = test_repo.activity_logs.list(entity_type="user", entity_id=user_id)
+
+        # Should have 2 logs: create and update
+        assert len(logs) == 2
+
+        # Check update log (second one)
+        update_log = logs[1]
+        assert update_log.action == ActionType.USER_UPDATED
+        assert "command" in update_log.changes
+        assert update_log.changes["command"]["full_name"] == "Updated Name"
+        assert update_log.changes["command"]["email"] == "updated@example.com"
+
+    def test_delete_user_logs_activity(self, client: TestClient, test_repo: Repository, super_admin_token: str) -> None:
+        """Test that deleting a user creates an activity log entry."""
+        org_id = create_test_org(client, super_admin_token)
+        user_id, _password = create_admin_user(client, super_admin_token, org_id, username="testuser")
+
+        # Delete user
+        response = client.delete(f"/api/users/{user_id}", headers=auth_headers(super_admin_token))
+        assert response.status_code == 204
+
+        # Check activity log - should persist even after deletion
+        logs = test_repo.activity_logs.list(entity_type="user", entity_id=user_id)
+
+        # Should have 2 logs: create and delete
+        assert len(logs) == 2
+
+        # Check delete log
+        delete_log = logs[1]
+        assert delete_log.action == ActionType.USER_DELETED
+        assert "command" in delete_log.changes
+        assert delete_log.changes["command"]["user_id"] == user_id
+        assert "snapshot" in delete_log.changes
+        assert delete_log.changes["snapshot"]["username"] == "testuser"
+
+    def test_password_change_logs_activity(
+        self, client: TestClient, test_repo: Repository, super_admin_token: str
+    ) -> None:
+        """Test that changing password creates an activity log entry with redacted passwords."""
+        org_id = create_test_org(client, super_admin_token)
+        user_id, password = create_admin_user(client, super_admin_token, org_id, username="testuser")
+
+        # Login as the user
+        login_response = client.post("/auth/login", json={"username": "testuser", "password": password})
+        assert login_response.status_code == 200
+        user_token = login_response.json()["access_token"]
+
+        # Change password
+        change_password_data = {"current_password": password, "new_password": "NewPassword123!"}
+        response = client.post(
+            "/auth/change-password",
+            json=change_password_data,
+            headers=auth_headers(user_token),
+        )
+        assert response.status_code == 200
+
+        # Check activity log for password change
+        logs = test_repo.activity_logs.list(entity_type="user", entity_id=user_id)
+
+        # Should have at least 2 logs: create and password change
+        password_change_logs = [log for log in logs if log.action == ActionType.USER_PASSWORD_CHANGED]
+        assert len(password_change_logs) == 1
+
+        password_log = password_change_logs[0]
+        assert password_log.entity_type == "user"
+        assert password_log.entity_id == user_id
+        assert password_log.action == ActionType.USER_PASSWORD_CHANGED
+
+        # Verify command structure - should NOT contain actual passwords
+        assert "command" in password_log.changes
+        assert password_log.changes["command"]["user_id"] == user_id
+        # Verify no password fields are present (PasswordChangeCommand doesn't have them)
+        assert "password" not in password_log.changes["command"]
+        assert "current_password" not in password_log.changes["command"]
+        assert "new_password" not in password_log.changes["command"]

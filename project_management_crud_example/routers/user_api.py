@@ -20,10 +20,13 @@ from project_management_crud_example.domain_models import (
     User,
     UserCreateResponse,
     UserData,
+    UserDeleteCommand,
     UserRole,
     UserUpdateCommand,
 )
 from project_management_crud_example.exceptions import InsufficientPermissionsException
+from project_management_crud_example.utils.activity_log_helpers import log_activity
+from project_management_crud_example.utils.debug_helpers import log_diff_debug
 from project_management_crud_example.utils.password import generate_password
 
 logger = logging.getLogger(__name__)
@@ -104,6 +107,15 @@ async def create_user(
     try:
         created_user = repo.users.create(command)
         logger.info(f"User created: {created_user.id} (username: {user_data.username})")
+
+        # Log activity - command-based
+        log_activity(
+            repo=repo,
+            command=command,
+            entity_id=created_user.id,
+            actor_id=admin.id,
+            organization_id=organization_id,
+        )
 
         return UserCreateResponse(
             user=created_user,
@@ -270,6 +282,9 @@ async def update_user(
             detail="Cannot assign super_admin role via this endpoint",
         )
 
+    # Capture old state for debug logging
+    old_user = existing_user
+
     try:
         updated_user = repo.users.update(user_id, update_data)
 
@@ -279,6 +294,18 @@ async def update_user(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User not found",
             )
+
+        # Debug logging: show what changed
+        log_diff_debug(old_user, updated_user, "user", "update_user")
+
+        # Log activity - command-based
+        log_activity(
+            repo=repo,
+            command=update_data,
+            entity_id=user_id,
+            actor_id=admin.id,
+            organization_id=updated_user.organization_id or "",  # Handle None for super admin
+        )
 
         logger.info(f"User updated: {user_id}")
         return updated_user
@@ -313,15 +340,38 @@ async def delete_user(
     """
     logger.info(f"Deleting user: {user_id} (by Super Admin {super_admin.id})")
 
+    # Get user before deletion for snapshot
+    user = repo.users.get_by_id(user_id)
+    if not user:
+        logger.debug(f"User not found for deletion: {user_id}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
     try:
         success = repo.users.delete(user_id)
 
         if not success:
-            logger.debug(f"User not found for deletion: {user_id}")
+            # Should not happen as we checked existence above
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User not found",
             )
+
+        # Debug logging: show what was deleted
+        log_diff_debug(user, None, "user", "delete_user")
+
+        # Log activity - command-based with snapshot
+        delete_cmd = UserDeleteCommand(user_id=user_id)
+        log_activity(
+            repo=repo,
+            command=delete_cmd,
+            entity_id=user_id,
+            actor_id=super_admin.id,
+            organization_id=user.organization_id or "",  # Handle None for super admin
+            snapshot=user.model_dump(mode="json", exclude_none=True),
+        )
 
         logger.info(f"User deleted: {user_id}")
     except IntegrityError as e:
