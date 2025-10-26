@@ -2,7 +2,9 @@
 
 from fastapi.testclient import TestClient
 
-from tests.conftest import client  # noqa: F401
+from project_management_crud_example.dal.sqlite.repository import Repository
+from project_management_crud_example.domain_models import ActionType
+from tests.conftest import client, test_repo  # noqa: F401
 from tests.fixtures.auth_fixtures import org_admin_token, super_admin_token  # noqa: F401
 from tests.helpers import auth_headers, create_test_org
 
@@ -425,3 +427,62 @@ class TestOrganizationWorkflows:
             headers=auth_headers(token),
         )
         assert get_other_response.status_code == 403
+
+
+class TestOrganizationActivityLogging:
+    """Tests for organization activity logging."""
+
+    def test_create_organization_logs_activity(
+        self, client: TestClient, test_repo: Repository, super_admin_token: str
+    ) -> None:
+        """Test that creating an organization creates an activity log entry."""
+        # Create organization
+        org_data = {"name": "Test Organization", "description": "Test org for activity logging"}
+        response = client.post("/api/organizations", json=org_data, headers=auth_headers(super_admin_token))
+        assert response.status_code == 201
+        org_id = response.json()["id"]
+
+        # Get super admin user ID from token
+        login_response = client.get("/api/users", headers=auth_headers(super_admin_token))
+        super_admin_id = login_response.json()[0]["id"]  # Super admin should be first/only user
+
+        # Verify activity log was created
+        logs = test_repo.activity_logs.list(entity_type="organization", entity_id=org_id)
+
+        assert len(logs) == 1
+        log = logs[0]
+        assert log.entity_type == "organization"
+        assert log.entity_id == org_id
+        assert log.action == ActionType.ORGANIZATION_CREATED
+        assert log.actor_id == super_admin_id
+        assert log.organization_id == org_id
+        assert "command" in log.changes
+        assert log.changes["command"]["organization_data"]["name"] == "Test Organization"
+
+    def test_update_organization_logs_activity(
+        self, client: TestClient, test_repo: Repository, super_admin_token: str
+    ) -> None:
+        """Test that updating an organization creates an activity log entry."""
+        # Create organization
+        org_id = create_test_org(client, super_admin_token, "Test Org")
+
+        # Get super admin user ID
+        login_response = client.get("/api/users", headers=auth_headers(super_admin_token))
+        super_admin_id = login_response.json()[0]["id"]
+
+        # Update organization
+        update_data = {"name": "Updated Organization", "description": "Updated description"}
+        response = client.put(f"/api/organizations/{org_id}", json=update_data, headers=auth_headers(super_admin_token))
+        assert response.status_code == 200
+
+        # Verify activity log was created for update
+        logs = test_repo.activity_logs.list(entity_type="organization", entity_id=org_id)
+
+        # Should have 2 logs: create + update
+        assert len(logs) == 2
+        update_log = logs[1]  # Most recent log
+        assert update_log.action == ActionType.ORGANIZATION_UPDATED
+        assert update_log.actor_id == super_admin_id
+        assert update_log.organization_id == org_id
+        assert "command" in update_log.changes
+        assert update_log.changes["command"]["name"] == "Updated Organization"

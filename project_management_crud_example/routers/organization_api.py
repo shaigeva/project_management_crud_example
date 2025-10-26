@@ -19,6 +19,8 @@ from project_management_crud_example.domain_models import (
     User,
 )
 from project_management_crud_example.exceptions import InsufficientPermissionsException
+from project_management_crud_example.utils.activity_log_helpers import log_activity
+from project_management_crud_example.utils.debug_helpers import log_diff_debug
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +53,16 @@ async def create_organization(
 
     try:
         organization = repo.organizations.create(command)
+
+        # Log activity - command-based
+        log_activity(
+            repo=repo,
+            command=command,
+            entity_id=organization.id,
+            actor_id=super_admin.id,
+            organization_id=organization.id,
+        )
+
         logger.info(f"Organization created: {organization.id}")
         return organization
     except IntegrityError:
@@ -177,15 +189,36 @@ async def update_organization(
     """
     logger.info(f"Updating organization: {organization_id} (by user {super_admin.id})")
 
+    # Get existing organization for debug logging
+    existing_organization = repo.organizations.get_by_id(organization_id)
+    if not existing_organization:
+        logger.debug(f"Organization not found for update: {organization_id}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organization not found",
+        )
+
     try:
         updated_organization = repo.organizations.update(organization_id, update_data)
 
         if not updated_organization:
-            logger.debug(f"Organization not found for update: {organization_id}")
+            # Should not happen as we checked existence above
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Organization not found",
             )
+
+        # Debug logging: show what changed
+        log_diff_debug(existing_organization, updated_organization, "organization", "update_organization")
+
+        # Log activity - command-based
+        log_activity(
+            repo=repo,
+            command=update_data,
+            entity_id=organization_id,
+            actor_id=super_admin.id,
+            organization_id=organization_id,
+        )
 
         logger.info(f"Organization updated: {organization_id}")
         return updated_organization

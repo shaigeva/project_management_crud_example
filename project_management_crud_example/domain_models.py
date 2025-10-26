@@ -68,6 +68,10 @@ class ActionType(str, Enum):
     EPIC_TICKET_ADDED = "epic_ticket_added"
     EPIC_TICKET_REMOVED = "epic_ticket_removed"
 
+    # Organization actions
+    ORGANIZATION_CREATED = "organization_created"
+    ORGANIZATION_UPDATED = "organization_updated"
+
 
 class StubEntityData(BaseModel):
     """Base data structure for stub entity - template for creating real entities."""
@@ -125,14 +129,20 @@ class Organization(OrganizationData):
     updated_at: datetime = Field(..., description="Last update timestamp")
 
 
-class OrganizationCreateCommand(BaseModel):
+class OrganizationCreateCommand(AuditableCommand):
     """Command model for creating a new organization."""
+
+    _entity_type: ClassVar[str] = "organization"
+    _action_type: ClassVar[ActionType] = ActionType.ORGANIZATION_CREATED
 
     organization_data: OrganizationData
 
 
-class OrganizationUpdateCommand(BaseModel):
+class OrganizationUpdateCommand(AuditableCommand):
     """Command model for updating an existing organization."""
+
+    _entity_type: ClassVar[str] = "organization"
+    _action_type: ClassVar[ActionType] = ActionType.ORGANIZATION_UPDATED
 
     name: Optional[str] = Field(None, min_length=1, max_length=255, description="Organization name")
     description: Optional[str] = Field(None, max_length=1000, description="Organization description")
