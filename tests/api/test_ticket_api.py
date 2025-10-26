@@ -1010,15 +1010,16 @@ class TestTicketActivityLogging:
         # Query activity logs for this ticket
         logs = test_repo.activity_logs.list(entity_type="ticket", entity_id=ticket_id)
 
-        # Verify log was created
+        # Verify log was created - command-based format
         assert len(logs) == 1
         log = logs[0]
         assert log.action == ActionType.TICKET_CREATED
         assert log.entity_type == "ticket"
         assert log.entity_id == ticket_id
-        assert "created" in log.changes
-        assert log.changes["created"]["title"] == "Test Ticket"
-        assert log.changes["created"]["description"] == "Test description"
+        assert "command" in log.changes
+        assert log.changes["command"]["ticket_data"]["title"] == "Test Ticket"
+        assert log.changes["command"]["ticket_data"]["description"] == "Test description"
+        assert log.changes["command"]["project_id"] == project_id
 
     def test_update_ticket_creates_activity_log(
         self,
@@ -1058,16 +1059,13 @@ class TestTicketActivityLogging:
         # Query activity logs for this ticket
         logs = test_repo.activity_logs.list(entity_type="ticket", entity_id=ticket_id, action=ActionType.TICKET_UPDATED)
 
-        # Verify update log was created
+        # Verify update log was created - command-based format
         assert len(logs) == 1
         log = logs[0]
         assert log.action == ActionType.TICKET_UPDATED
-        assert "title" in log.changes
-        assert log.changes["title"]["old_value"] == "Original Title"
-        assert log.changes["title"]["new_value"] == "Updated Title"
-        assert "description" in log.changes
-        assert log.changes["description"]["old_value"] == "Original description"
-        assert log.changes["description"]["new_value"] == "Updated description"
+        assert "command" in log.changes
+        assert log.changes["command"]["title"] == "Updated Title"
+        assert log.changes["command"]["description"] == "Updated description"
 
     def test_change_ticket_status_creates_activity_log(
         self,
@@ -1109,13 +1107,13 @@ class TestTicketActivityLogging:
             entity_type="ticket", entity_id=ticket_id, action=ActionType.TICKET_STATUS_CHANGED
         )
 
-        # Verify status change log was created
+        # Verify status change log was created - command-based format
         assert len(logs) == 1
         log = logs[0]
         assert log.action == ActionType.TICKET_STATUS_CHANGED
-        assert "status" in log.changes
-        assert log.changes["status"]["old_value"] == "TODO"
-        assert log.changes["status"]["new_value"] == "IN_PROGRESS"
+        assert "command" in log.changes
+        assert log.changes["command"]["ticket_id"] == ticket_id
+        assert log.changes["command"]["status"] == "IN_PROGRESS"
 
     def test_assign_ticket_creates_activity_log(
         self,
@@ -1160,13 +1158,13 @@ class TestTicketActivityLogging:
             entity_type="ticket", entity_id=ticket_id, action=ActionType.TICKET_ASSIGNED
         )
 
-        # Verify assignment log was created
+        # Verify assignment log was created - command-based format
         assert len(logs) == 1
         log = logs[0]
         assert log.action == ActionType.TICKET_ASSIGNED
-        assert "assignee_id" in log.changes
-        assert log.changes["assignee_id"]["old_value"] is None
-        assert log.changes["assignee_id"]["new_value"] == assignee_id
+        assert "command" in log.changes
+        assert log.changes["command"]["ticket_id"] == ticket_id
+        assert log.changes["command"]["assignee_id"] == assignee_id
 
     def test_move_ticket_creates_activity_log(
         self,
@@ -1215,13 +1213,13 @@ class TestTicketActivityLogging:
         # Query activity logs for move
         logs = test_repo.activity_logs.list(entity_type="ticket", entity_id=ticket_id, action=ActionType.TICKET_MOVED)
 
-        # Verify move log was created
+        # Verify move log was created - command-based format
         assert len(logs) == 1
         log = logs[0]
         assert log.action == ActionType.TICKET_MOVED
-        assert "project_id" in log.changes
-        assert log.changes["project_id"]["old_value"] == project1_id
-        assert log.changes["project_id"]["new_value"] == project2_id
+        assert "command" in log.changes
+        assert log.changes["command"]["ticket_id"] == ticket_id
+        assert log.changes["command"]["target_project_id"] == project2_id
 
     def test_delete_ticket_creates_activity_log(
         self,
@@ -1257,14 +1255,16 @@ class TestTicketActivityLogging:
         # Query activity logs for deletion (logs persist after deletion)
         logs = test_repo.activity_logs.list(entity_type="ticket", entity_id=ticket_id, action=ActionType.TICKET_DELETED)
 
-        # Verify deletion log was created with snapshot
+        # Verify deletion log was created with snapshot - command-based format
         assert len(logs) == 1
         log = logs[0]
         assert log.action == ActionType.TICKET_DELETED
-        assert "deleted" in log.changes
-        assert log.changes["deleted"]["id"] == ticket_id
-        assert log.changes["deleted"]["title"] == "Delete Test"
-        assert log.changes["deleted"]["status"] == "TODO"
+        assert "command" in log.changes
+        assert log.changes["command"]["ticket_id"] == ticket_id
+        assert "snapshot" in log.changes
+        assert log.changes["snapshot"]["id"] == ticket_id
+        assert log.changes["snapshot"]["title"] == "Delete Test"
+        assert log.changes["snapshot"]["status"] == "TODO"
 
     def test_activity_log_captures_actor(
         self,

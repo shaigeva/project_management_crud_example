@@ -7,9 +7,59 @@ The StubEntity models serve as a template/scaffolding for creating real domain e
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import ClassVar, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
+
+
+class AuditableEntity(BaseModel):
+    """Base class for entities that support activity logging.
+
+    All entities that need activity logging should inherit from this class.
+    Subclasses must define _entity_type as a ClassVar and must have an id field.
+    """
+
+    # Subclasses MUST override this with their entity type
+    _entity_type: ClassVar[str]
+
+
+class AuditableCommand(BaseModel):
+    """Base class for all commands that create activity logs.
+
+    All commands that should be logged must inherit from this class.
+    Subclasses must define _entity_type and _action_type as ClassVars.
+    """
+
+    _entity_type: ClassVar[str]
+    _action_type: ClassVar["ActionType"]
+
+
+class ActionType(str, Enum):
+    """Action types for activity logging."""
+
+    # Ticket actions
+    TICKET_CREATED = "ticket_created"
+    TICKET_UPDATED = "ticket_updated"
+    TICKET_STATUS_CHANGED = "ticket_status_changed"
+    TICKET_ASSIGNED = "ticket_assigned"
+    TICKET_MOVED = "ticket_moved"
+    TICKET_DELETED = "ticket_deleted"
+
+    # Project actions
+    PROJECT_CREATED = "project_created"
+    PROJECT_UPDATED = "project_updated"
+    PROJECT_ARCHIVED = "project_archived"
+    PROJECT_UNARCHIVED = "project_unarchived"
+    PROJECT_DELETED = "project_deleted"
+
+    # User actions
+    USER_CREATED = "user_created"
+    USER_UPDATED = "user_updated"
+    USER_ROLE_CHANGED = "user_role_changed"
+    USER_ACTIVATED = "user_activated"
+    USER_DEACTIVATED = "user_deactivated"
+    USER_PASSWORD_CHANGED = "user_password_changed"
+    USER_DELETED = "user_deleted"
 
 
 class StubEntityData(BaseModel):
@@ -97,10 +147,12 @@ class ProjectData(BaseModel):
     description: Optional[str] = Field(None, max_length=1000, description="Project description")
 
 
-class Project(ProjectData):
+class Project(ProjectData, AuditableEntity):
     """Complete project model with metadata."""
 
     model_config = ConfigDict(from_attributes=True)
+
+    _entity_type: ClassVar[str] = "project"
 
     id: str = Field(..., description="Project ID")
     organization_id: str = Field(..., description="Organization ID this project belongs to")
@@ -111,19 +163,52 @@ class Project(ProjectData):
     updated_at: datetime = Field(..., description="Last update timestamp")
 
 
-class ProjectCreateCommand(BaseModel):
+class ProjectCreateCommand(AuditableCommand):
     """Command model for creating a new project."""
+
+    _entity_type: ClassVar[str] = "project"
+    _action_type: ClassVar[ActionType] = ActionType.PROJECT_CREATED
 
     project_data: ProjectData
     organization_id: str = Field(..., description="Organization ID this project belongs to")
 
 
-class ProjectUpdateCommand(BaseModel):
+class ProjectUpdateCommand(AuditableCommand):
     """Command model for updating an existing project."""
+
+    _entity_type: ClassVar[str] = "project"
+    _action_type: ClassVar[ActionType] = ActionType.PROJECT_UPDATED
 
     name: Optional[str] = Field(None, min_length=1, max_length=255, description="Project name")
     description: Optional[str] = Field(None, max_length=1000, description="Project description")
     is_active: Optional[bool] = Field(None, description="Whether project is active")
+
+
+class ProjectDeleteCommand(AuditableCommand):
+    """Command model for deleting a project."""
+
+    _entity_type: ClassVar[str] = "project"
+    _action_type: ClassVar[ActionType] = ActionType.PROJECT_DELETED
+
+    project_id: str = Field(..., description="ID of project to delete")
+
+
+class ProjectArchiveCommand(AuditableCommand):
+    """Command model for archiving a project."""
+
+    _entity_type: ClassVar[str] = "project"
+    _action_type: ClassVar[ActionType] = ActionType.PROJECT_ARCHIVED
+
+    project_id: str = Field(..., description="ID of project to archive")
+
+
+class ProjectUnarchiveCommand(AuditableCommand):
+    """Command model for unarchiving a project."""
+
+    _entity_type: ClassVar[str] = "project"
+    _action_type: ClassVar[ActionType] = ActionType.PROJECT_UNARCHIVED
+
+    project_id: str = Field(..., description="ID of project to unarchive")
 
 
 # Epic Models
@@ -199,10 +284,12 @@ class TicketData(BaseModel):
     priority: Optional[TicketPriority] = Field(None, description="Ticket priority level")
 
 
-class Ticket(TicketData):
+class Ticket(TicketData, AuditableEntity):
     """Complete ticket model with metadata."""
 
     model_config = ConfigDict(from_attributes=True)
+
+    _entity_type: ClassVar[str] = "ticket"
 
     id: str = Field(..., description="Ticket ID")
     status: TicketStatus = Field(..., description="Ticket status")
@@ -213,20 +300,65 @@ class Ticket(TicketData):
     updated_at: datetime = Field(..., description="Last update timestamp")
 
 
-class TicketCreateCommand(BaseModel):
+class TicketCreateCommand(AuditableCommand):
     """Command model for creating a new ticket."""
+
+    _entity_type: ClassVar[str] = "ticket"
+    _action_type: ClassVar[ActionType] = ActionType.TICKET_CREATED
 
     ticket_data: TicketData
     project_id: str = Field(..., description="Project ID this ticket belongs to")
     assignee_id: Optional[str] = Field(None, description="ID of user to assign to this ticket")
 
 
-class TicketUpdateCommand(BaseModel):
+class TicketUpdateCommand(AuditableCommand):
     """Command model for updating an existing ticket."""
+
+    _entity_type: ClassVar[str] = "ticket"
+    _action_type: ClassVar[ActionType] = ActionType.TICKET_UPDATED
 
     title: Optional[str] = Field(None, min_length=1, max_length=500, description="Ticket title")
     description: Optional[str] = Field(None, max_length=2000, description="Ticket description")
     priority: Optional[TicketPriority] = Field(None, description="Ticket priority level")
+
+
+class TicketDeleteCommand(AuditableCommand):
+    """Command model for deleting a ticket."""
+
+    _entity_type: ClassVar[str] = "ticket"
+    _action_type: ClassVar[ActionType] = ActionType.TICKET_DELETED
+
+    ticket_id: str = Field(..., description="ID of ticket to delete")
+
+
+class TicketStatusChangeCommand(AuditableCommand):
+    """Command model for changing ticket status."""
+
+    _entity_type: ClassVar[str] = "ticket"
+    _action_type: ClassVar[ActionType] = ActionType.TICKET_STATUS_CHANGED
+
+    ticket_id: str = Field(..., description="ID of ticket to update")
+    status: TicketStatus = Field(..., description="New status")
+
+
+class TicketMoveCommand(AuditableCommand):
+    """Command model for moving ticket to different project."""
+
+    _entity_type: ClassVar[str] = "ticket"
+    _action_type: ClassVar[ActionType] = ActionType.TICKET_MOVED
+
+    ticket_id: str = Field(..., description="ID of ticket to move")
+    target_project_id: str = Field(..., description="ID of target project")
+
+
+class TicketAssignCommand(AuditableCommand):
+    """Command model for assigning/unassigning ticket."""
+
+    _entity_type: ClassVar[str] = "ticket"
+    _action_type: ClassVar[ActionType] = ActionType.TICKET_ASSIGNED
+
+    ticket_id: str = Field(..., description="ID of ticket to assign")
+    assignee_id: Optional[str] = Field(None, description="ID of user to assign (None to unassign)")
 
 
 # User Management Models
@@ -256,10 +388,12 @@ class UserData(BaseModel):
     full_name: str = Field(..., min_length=1, max_length=255, description="User full name")
 
 
-class User(UserData):
+class User(UserData, AuditableEntity):
     """Complete user model with metadata."""
 
     model_config = ConfigDict(from_attributes=True)
+
+    _entity_type: ClassVar[str] = "user"
 
     id: str = Field(..., description="User ID")
     organization_id: Optional[str] = Field(None, description="Organization ID (None for Super Admin)")
@@ -351,34 +485,6 @@ class ChangePasswordRequest(BaseModel):
 
 
 # Activity Log Models
-
-
-class ActionType(str, Enum):
-    """Action types for activity logging."""
-
-    # Ticket actions
-    TICKET_CREATED = "ticket_created"
-    TICKET_UPDATED = "ticket_updated"
-    TICKET_STATUS_CHANGED = "ticket_status_changed"
-    TICKET_ASSIGNED = "ticket_assigned"
-    TICKET_MOVED = "ticket_moved"
-    TICKET_DELETED = "ticket_deleted"
-
-    # Project actions
-    PROJECT_CREATED = "project_created"
-    PROJECT_UPDATED = "project_updated"
-    PROJECT_ARCHIVED = "project_archived"
-    PROJECT_UNARCHIVED = "project_unarchived"
-    PROJECT_DELETED = "project_deleted"
-
-    # User actions
-    USER_CREATED = "user_created"
-    USER_UPDATED = "user_updated"
-    USER_ROLE_CHANGED = "user_role_changed"
-    USER_ACTIVATED = "user_activated"
-    USER_DEACTIVATED = "user_deactivated"
-    USER_PASSWORD_CHANGED = "user_password_changed"
-    USER_DELETED = "user_deleted"
 
 
 class ActivityLog(BaseModel):

@@ -13,16 +13,21 @@ from pydantic import BaseModel
 from project_management_crud_example.dal.sqlite.repository import Repository
 from project_management_crud_example.dependencies import get_current_user, get_repository
 from project_management_crud_example.domain_models import (
-    ActionType,
-    ActivityLogCreateCommand,
+    Project,
     Ticket,
+    TicketAssignCommand,
     TicketCreateCommand,
     TicketData,
+    TicketDeleteCommand,
+    TicketMoveCommand,
     TicketStatus,
+    TicketStatusChangeCommand,
     TicketUpdateCommand,
     User,
     UserRole,
 )
+from project_management_crud_example.utils.activity_log_helpers import log_activity
+from project_management_crud_example.utils.debug_helpers import log_diff_debug
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +58,7 @@ def _get_project_and_check_access(
     repo: Repository,
     current_user: User,
     operation: str,
-) -> None:
+) -> Project:
     """Get project and verify user has access to it.
 
     Args:
@@ -61,6 +66,9 @@ def _get_project_and_check_access(
         repo: Repository instance
         current_user: Current authenticated user
         operation: Description of operation for logging
+
+    Returns:
+        Project if found and accessible
 
     Raises:
         HTTP 404: Project not found
@@ -85,6 +93,8 @@ def _get_project_and_check_access(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied: project belongs to different organization",
             )
+
+    return project
 
 
 def _get_ticket_and_check_access(
@@ -121,46 +131,6 @@ def _get_ticket_and_check_access(
     _get_project_and_check_access(ticket.project_id, repo, current_user, operation)
 
     return ticket
-
-
-def _log_ticket_activity(
-    repo: Repository,
-    ticket: Ticket,
-    action: ActionType,
-    actor_id: str,
-    changes: dict,
-) -> None:
-    """Create activity log entry for ticket operation.
-
-    Args:
-        repo: Repository instance
-        ticket: Ticket that was operated on
-        action: Type of action performed
-        actor_id: User who performed the action
-        changes: Dict describing what changed
-
-    Note: Failures to log are caught and logged but don't fail the operation.
-    """
-    try:
-        # Get organization from project
-        project = repo.projects.get_by_id(ticket.project_id)
-        if not project:
-            logger.warning(f"Cannot log activity: project {ticket.project_id} not found")
-            return
-
-        command = ActivityLogCreateCommand(
-            entity_type="ticket",
-            entity_id=ticket.id,
-            action=action,
-            actor_id=actor_id,
-            organization_id=project.organization_id,
-            changes=changes,
-        )
-        repo.activity_logs.create(command)
-        logger.debug(f"Activity logged: {action.value} for ticket {ticket.id}")
-    except Exception as e:
-        # Don't fail the operation if logging fails
-        logger.error(f"Failed to log ticket activity: {e}", exc_info=True)
 
 
 @router.post("", response_model=Ticket, status_code=status.HTTP_201_CREATED)
@@ -203,7 +173,7 @@ async def create_ticket(
         )
 
     # Verify project exists and user has access to it
-    _get_project_and_check_access(project_id, repo, current_user, "create ticket")
+    project = _get_project_and_check_access(project_id, repo, current_user, "create ticket")
 
     # If assignee specified, verify user exists and is in same organization
     if assignee_id:
@@ -241,22 +211,12 @@ async def create_ticket(
     logger.info(f"Ticket created: {ticket.id}")
 
     # Log activity
-    _log_ticket_activity(
+    log_activity(
         repo=repo,
-        ticket=ticket,
-        action=ActionType.TICKET_CREATED,
+        command=command,
+        entity_id=ticket.id,
         actor_id=current_user.id,
-        changes={
-            "created": {
-                "title": ticket.title,
-                "description": ticket.description,
-                "status": ticket.status.value,
-                "priority": ticket.priority.value if ticket.priority else None,
-                "assignee_id": ticket.assignee_id,
-                "reporter_id": ticket.reporter_id,
-                "project_id": ticket.project_id,
-            }
-        },
+        organization_id=project.organization_id,
     )
 
     return ticket
@@ -401,9 +361,15 @@ async def update_ticket(
         )
 
     # Verify ticket exists and user has access
-    old_ticket = _get_ticket_and_check_access(ticket_id, repo, current_user, "update ticket")
+    ticket = _get_ticket_and_check_access(ticket_id, repo, current_user, "update ticket")
+
+    # Get project for organization_id
+    project = repo.projects.get_by_id(ticket.project_id)
 
     logger.info(f"Updating ticket: {ticket_id} (by user {current_user.id})")
+
+    # Capture old state for debug logging
+    old_ticket = ticket
 
     updated_ticket = repo.tickets.update(ticket_id, update_data)
 
@@ -414,28 +380,19 @@ async def update_ticket(
             detail="Ticket not found",
         )
 
+    # Debug logging: show what changed
+    log_diff_debug(old_ticket, updated_ticket, "ticket", "update_ticket")
+
     logger.info(f"Ticket updated: {ticket_id}")
 
-    # Log activity - capture what changed
-    changes = {}
-    if updated_ticket.title != old_ticket.title:
-        changes["title"] = {"old_value": old_ticket.title, "new_value": updated_ticket.title}
-    if updated_ticket.description != old_ticket.description:
-        changes["description"] = {"old_value": old_ticket.description, "new_value": updated_ticket.description}
-    if updated_ticket.priority != old_ticket.priority:
-        changes["priority"] = {
-            "old_value": old_ticket.priority.value if old_ticket.priority else None,
-            "new_value": updated_ticket.priority.value if updated_ticket.priority else None,
-        }
-
-    if changes:  # Only log if something actually changed
-        _log_ticket_activity(
-            repo=repo,
-            ticket=updated_ticket,
-            action=ActionType.TICKET_UPDATED,
-            actor_id=current_user.id,
-            changes=changes,
-        )
+    # Log activity - command-based
+    log_activity(
+        repo=repo,
+        command=update_data,
+        entity_id=ticket_id,
+        actor_id=current_user.id,
+        organization_id=project.organization_id,
+    )
 
     return updated_ticket
 
@@ -478,7 +435,10 @@ async def update_ticket_status(
         )
 
     # Verify ticket exists and user has access
-    old_ticket = _get_ticket_and_check_access(ticket_id, repo, current_user, "change ticket status")
+    ticket = _get_ticket_and_check_access(ticket_id, repo, current_user, "change ticket status")
+
+    # Get project for organization_id
+    project = repo.projects.get_by_id(ticket.project_id)
 
     logger.info(f"Changing ticket status: {ticket_id} to {status_update.status.value} (by user {current_user.id})")
 
@@ -492,13 +452,14 @@ async def update_ticket_status(
 
     logger.info(f"Ticket status updated: {ticket_id}")
 
-    # Log activity
-    _log_ticket_activity(
+    # Log activity - command-based
+    status_cmd = TicketStatusChangeCommand(ticket_id=ticket_id, status=status_update.status)
+    log_activity(
         repo=repo,
-        ticket=updated_ticket,
-        action=ActionType.TICKET_STATUS_CHANGED,
+        command=status_cmd,
+        entity_id=ticket_id,
         actor_id=current_user.id,
-        changes={"status": {"old_value": old_ticket.status.value, "new_value": updated_ticket.status.value}},
+        organization_id=project.organization_id,
     )
 
     return updated_ticket
@@ -540,7 +501,10 @@ async def move_ticket_to_project(
         )
 
     # Verify ticket exists and user has access to source project
-    old_ticket = _get_ticket_and_check_access(ticket_id, repo, current_user, "move ticket")
+    ticket = _get_ticket_and_check_access(ticket_id, repo, current_user, "move ticket")
+
+    # Get source project for organization_id
+    source_project = repo.projects.get_by_id(ticket.project_id)
 
     # Verify target project exists and user has access to it
     _get_project_and_check_access(project_update.project_id, repo, current_user, "move ticket to project")
@@ -548,7 +512,7 @@ async def move_ticket_to_project(
     # Both projects verified to be in user's org (or user is Super Admin)
 
     logger.info(
-        f"Moving ticket {ticket_id} from project {old_ticket.project_id} to {project_update.project_id} (by user {current_user.id})"
+        f"Moving ticket {ticket_id} from project {ticket.project_id} to {project_update.project_id} (by user {current_user.id})"
     )
 
     updated_ticket = repo.tickets.update_project(ticket_id, project_update.project_id)
@@ -561,13 +525,14 @@ async def move_ticket_to_project(
 
     logger.info(f"Ticket moved: {ticket_id}")
 
-    # Log activity
-    _log_ticket_activity(
+    # Log activity - command-based
+    move_cmd = TicketMoveCommand(ticket_id=ticket_id, target_project_id=project_update.project_id)
+    log_activity(
         repo=repo,
-        ticket=updated_ticket,
-        action=ActionType.TICKET_MOVED,
+        command=move_cmd,
+        entity_id=ticket_id,
         actor_id=current_user.id,
-        changes={"project_id": {"old_value": old_ticket.project_id, "new_value": updated_ticket.project_id}},
+        organization_id=source_project.organization_id,
     )
 
     return updated_ticket
@@ -610,7 +575,10 @@ async def update_ticket_assignee(
         )
 
     # Verify ticket exists and user has access
-    old_ticket = _get_ticket_and_check_access(ticket_id, repo, current_user, "assign ticket")
+    ticket = _get_ticket_and_check_access(ticket_id, repo, current_user, "assign ticket")
+
+    # Get project for organization_id
+    project = repo.projects.get_by_id(ticket.project_id)
 
     # If assigning (not unassigning), verify assignee exists and is valid
     if assignee_update.assignee_id:
@@ -648,13 +616,14 @@ async def update_ticket_assignee(
 
     logger.info(f"Ticket assignee updated: {ticket_id}")
 
-    # Log activity
-    _log_ticket_activity(
+    # Log activity - command-based
+    assign_cmd = TicketAssignCommand(ticket_id=ticket_id, assignee_id=assignee_update.assignee_id)
+    log_activity(
         repo=repo,
-        ticket=updated_ticket,
-        action=ActionType.TICKET_ASSIGNED,
+        command=assign_cmd,
+        entity_id=ticket_id,
         actor_id=current_user.id,
-        changes={"assignee_id": {"old_value": old_ticket.assignee_id, "new_value": updated_ticket.assignee_id}},
+        organization_id=project.organization_id,
     )
 
     return updated_ticket
@@ -691,7 +660,10 @@ async def delete_ticket(
         )
 
     # Verify ticket exists and user has access - capture snapshot before deletion
-    ticket_snapshot = _get_ticket_and_check_access(ticket_id, repo, current_user, "delete ticket")
+    ticket = _get_ticket_and_check_access(ticket_id, repo, current_user, "delete ticket")
+
+    # Get project for organization_id
+    project = repo.projects.get_by_id(ticket.project_id)
 
     logger.info(f"Deleting ticket: {ticket_id} (by user {current_user.id})")
 
@@ -703,24 +675,18 @@ async def delete_ticket(
             detail="Ticket not found",
         )
 
+    # Debug logging: show what was deleted
+    log_diff_debug(ticket, None, "ticket", "delete_ticket")
+
     logger.info(f"Ticket deleted: {ticket_id}")
 
-    # Log activity - include snapshot of deleted ticket
-    _log_ticket_activity(
+    # Log activity - command-based with snapshot
+    delete_cmd = TicketDeleteCommand(ticket_id=ticket_id)
+    log_activity(
         repo=repo,
-        ticket=ticket_snapshot,
-        action=ActionType.TICKET_DELETED,
+        command=delete_cmd,
+        entity_id=ticket_id,
         actor_id=current_user.id,
-        changes={
-            "deleted": {
-                "id": ticket_snapshot.id,
-                "title": ticket_snapshot.title,
-                "description": ticket_snapshot.description,
-                "status": ticket_snapshot.status.value,
-                "priority": ticket_snapshot.priority.value if ticket_snapshot.priority else None,
-                "assignee_id": ticket_snapshot.assignee_id,
-                "reporter_id": ticket_snapshot.reporter_id,
-                "project_id": ticket_snapshot.project_id,
-            }
-        },
+        organization_id=project.organization_id,
+        snapshot=ticket.model_dump(mode="json", exclude_none=True),
     )

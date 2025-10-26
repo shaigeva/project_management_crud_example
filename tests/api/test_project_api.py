@@ -1159,10 +1159,11 @@ class TestProjectActivityLogging:
         assert log.action.value == "project_created"
         assert log.organization_id == org_id
 
-        # Verify changes structure
-        assert "created" in log.changes
-        assert log.changes["created"]["name"] == "Logged Project"
-        assert log.changes["created"]["description"] == "Test logging"
+        # Verify changes structure - command-based format
+        assert "command" in log.changes
+        assert log.changes["command"]["project_data"]["name"] == "Logged Project"
+        assert log.changes["command"]["project_data"]["description"] == "Test logging"
+        assert log.changes["command"]["organization_id"] == org_id
 
     def test_update_project_logs_activity(
         self, client: TestClient, test_repo: Repository, org_admin_token: tuple[str, str]
@@ -1188,15 +1189,12 @@ class TestProjectActivityLogging:
         # Should have 2 logs: create and update
         assert len(logs) == 2
 
-        # Check update log (second one)
+        # Check update log (second one) - command-based format
         update_log = logs[1]
         assert update_log.action.value == "project_updated"
-        assert "name" in update_log.changes
-        assert update_log.changes["name"]["old_value"] == "Original Name"
-        assert update_log.changes["name"]["new_value"] == "Updated Name"
-        assert "description" in update_log.changes
-        assert update_log.changes["description"]["old_value"] == "Original desc"
-        assert update_log.changes["description"]["new_value"] == "Updated desc"
+        assert "command" in update_log.changes
+        assert update_log.changes["command"]["name"] == "Updated Name"
+        assert update_log.changes["command"]["description"] == "Updated desc"
 
     def test_archive_project_logs_activity(
         self, client: TestClient, test_repo: Repository, org_admin_token: tuple[str, str]
@@ -1220,12 +1218,11 @@ class TestProjectActivityLogging:
         # Should have 2 logs: create and archive
         assert len(logs) == 2
 
-        # Check archive log
+        # Check archive log - command-based format
         archive_log = logs[1]
         assert archive_log.action.value == "project_archived"
-        assert "is_archived" in archive_log.changes
-        assert archive_log.changes["is_archived"]["old_value"] is False
-        assert archive_log.changes["is_archived"]["new_value"] is True
+        assert "command" in archive_log.changes
+        assert archive_log.changes["command"]["project_id"] == project_id
 
     def test_unarchive_project_logs_activity(
         self, client: TestClient, test_repo: Repository, org_admin_token: tuple[str, str]
@@ -1250,12 +1247,11 @@ class TestProjectActivityLogging:
         # Should have 3 logs: create, archive, unarchive
         assert len(logs) == 3
 
-        # Check unarchive log
+        # Check unarchive log - command-based format
         unarchive_log = logs[2]
         assert unarchive_log.action.value == "project_unarchived"
-        assert "is_archived" in unarchive_log.changes
-        assert unarchive_log.changes["is_archived"]["old_value"] is True
-        assert unarchive_log.changes["is_archived"]["new_value"] is False
+        assert "command" in unarchive_log.changes
+        assert unarchive_log.changes["command"]["project_id"] == project_id
 
     def test_delete_project_logs_activity(
         self, client: TestClient, test_repo: Repository, org_admin_token: tuple[str, str]
@@ -1279,12 +1275,14 @@ class TestProjectActivityLogging:
         # Should have 2 logs: create and delete
         assert len(logs) == 2
 
-        # Check delete log
+        # Check delete log - command-based format with snapshot
         delete_log = logs[1]
         assert delete_log.action.value == "project_deleted"
-        assert "deleted" in delete_log.changes
-        assert delete_log.changes["deleted"]["name"] == "To Delete"
-        assert delete_log.changes["deleted"]["description"] == "Delete me"
+        assert "command" in delete_log.changes
+        assert delete_log.changes["command"]["project_id"] == project_id
+        assert "snapshot" in delete_log.changes
+        assert delete_log.changes["snapshot"]["name"] == "To Delete"
+        assert delete_log.changes["snapshot"]["description"] == "Delete me"
 
     def test_activity_log_captures_actor(
         self, client: TestClient, test_repo: Repository, org_admin_token: tuple[str, str]
