@@ -176,3 +176,17 @@ def orm_activity_logs_to_domain_activity_logs(
 ) -> List[domain_models.ActivityLog]:
     """Convert a list of ORM ActivityLogs to domain ActivityLogs."""
     return [orm_activity_log_to_domain_activity_log(orm_activity_log) for orm_activity_log in orm_activity_logs]
+
+
+def orm_comment_to_domain_comment(
+    orm_comment: orm_data_models.CommentORM,
+) -> domain_models.Comment:
+    """Convert an ORM Comment model to a domain Comment model."""
+    return domain_models.Comment(
+        id=str(orm_comment.id),
+        ticket_id=str(orm_comment.ticket_id),
+        author_id=str(orm_comment.author_id),
+        content=orm_comment.content,  # type: ignore[arg-type]
+        created_at=orm_comment.created_at,  # type: ignore[arg-type]
+        updated_at=orm_comment.updated_at,  # type: ignore[arg-type]
+    )

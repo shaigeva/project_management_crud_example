@@ -72,6 +72,11 @@ class ActionType(str, Enum):
     ORGANIZATION_CREATED = "organization_created"
     ORGANIZATION_UPDATED = "organization_updated"
 
+    # Comment actions
+    COMMENT_CREATED = "comment_created"
+    COMMENT_UPDATED = "comment_updated"
+    COMMENT_DELETED = "comment_deleted"
+
 
 class StubEntityData(BaseModel):
     """Base data structure for stub entity - template for creating real entities."""
@@ -589,3 +594,59 @@ class ActivityLogCreateCommand(BaseModel):
     organization_id: str = Field(..., description="Organization ID")
     changes: dict = Field(..., description="Details of what changed")
     metadata: Optional[dict] = Field(None, description="Additional metadata (optional)")
+
+
+# Comment Models
+
+
+class CommentData(BaseModel):
+    """Base comment data structure."""
+
+    content: str = Field(
+        ...,
+        min_length=1,
+        max_length=5000,
+        description="Comment content/text",
+    )
+
+
+class Comment(CommentData, AuditableEntity):
+    """Complete comment model with metadata."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    _entity_type: ClassVar[str] = "comment"
+
+    id: str = Field(..., description="Comment ID")
+    ticket_id: str = Field(..., description="Ticket ID this comment belongs to")
+    author_id: str = Field(..., description="ID of user who created this comment")
+    created_at: datetime = Field(..., description="Creation timestamp")
+    updated_at: datetime = Field(..., description="Last update timestamp")
+
+
+class CommentCreateCommand(AuditableCommand):
+    """Command model for creating a new comment."""
+
+    _entity_type: ClassVar[str] = "comment"
+    _action_type: ClassVar[ActionType] = ActionType.COMMENT_CREATED
+
+    comment_data: CommentData
+    ticket_id: str = Field(..., description="Ticket ID this comment belongs to")
+
+
+class CommentUpdateCommand(AuditableCommand):
+    """Command model for updating an existing comment."""
+
+    _entity_type: ClassVar[str] = "comment"
+    _action_type: ClassVar[ActionType] = ActionType.COMMENT_UPDATED
+
+    content: str = Field(..., min_length=1, max_length=5000, description="Comment content")
+
+
+class CommentDeleteCommand(AuditableCommand):
+    """Command model for deleting a comment."""
+
+    _entity_type: ClassVar[str] = "comment"
+    _action_type: ClassVar[ActionType] = ActionType.COMMENT_DELETED
+
+    comment_id: str = Field(..., description="ID of comment to delete")

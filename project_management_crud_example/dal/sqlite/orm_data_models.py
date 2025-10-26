@@ -207,3 +207,25 @@ class ActivityLogORM(Base):
 
     def __repr__(self) -> str:
         return f"<ActivityLog(id='{self.id}', entity_type='{self.entity_type}', entity_id='{self.entity_id}', action='{self.action}')>"
+
+
+class CommentORM(Base):
+    """SQLAlchemy ORM model for comments."""
+
+    __tablename__ = "comments"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    ticket_id = Column(String(36), ForeignKey("tickets.id"), nullable=False, index=True)
+    author_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    content = Column(String(5000), nullable=False)
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    def __repr__(self) -> str:
+        return f"<Comment(id='{self.id}', ticket_id='{self.ticket_id}', author_id='{self.author_id}')>"

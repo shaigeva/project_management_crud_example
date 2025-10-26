@@ -23,6 +23,9 @@ from project_management_crud_example.domain_models import (
     ActionType,
     ActivityLog,
     ActivityLogCreateCommand,
+    Comment,
+    CommentCreateCommand,
+    CommentUpdateCommand,
     Epic,
     EpicCreateCommand,
     EpicUpdateCommand,
@@ -50,6 +53,7 @@ from project_management_crud_example.utils.password import PasswordHasher, TestP
 from .converters import (
     orm_activity_log_to_domain_activity_log,
     orm_activity_logs_to_domain_activity_logs,
+    orm_comment_to_domain_comment,
     orm_epic_to_domain_epic,
     orm_organization_to_domain_organization,
     orm_project_to_domain_project,
@@ -61,6 +65,7 @@ from .converters import (
 )
 from .orm_data_models import (
     ActivityLogORM,
+    CommentORM,
     EpicORM,
     EpicTicketORM,
     OrganizationORM,
@@ -101,6 +106,7 @@ class Repository:
         self.projects = self.Projects(session)
         self.epics = self.Epics(session)
         self.tickets = self.Tickets(session)
+        self.comments = self.Comments(session)
         self.users = self.Users(session, password_hasher)
         self.activity_logs = self.ActivityLogs(session)
         self.stub_entities = self.StubEntities(session)
@@ -1287,6 +1293,111 @@ class Repository:
             orm_logs = query.all()
             logger.debug(f"Found {len(orm_logs)} activity logs")
             return orm_activity_logs_to_domain_activity_logs(orm_logs)
+
+    class Comments:
+        """Comment-related data access operations."""
+
+        def __init__(self, session: Session) -> None:
+            self.session = session
+
+        def create(self, comment_create_command: CommentCreateCommand, author_id: str) -> Comment:
+            """Create a new comment.
+
+            Args:
+                comment_create_command: Command containing comment data and ticket_id
+                author_id: ID of the user creating this comment (current user)
+
+            Returns:
+                Created Comment domain model
+            """
+            comment_data = comment_create_command.comment_data
+            logger.debug(f"Creating new comment on ticket: {comment_create_command.ticket_id}")
+
+            orm_comment = CommentORM(
+                ticket_id=comment_create_command.ticket_id,
+                author_id=author_id,
+                content=comment_data.content,
+            )
+
+            self.session.add(orm_comment)
+            self.session.commit()
+            self.session.refresh(orm_comment)
+            logger.debug(f"Comment created with ID: {orm_comment.id}")
+            return orm_comment_to_domain_comment(orm_comment)
+
+        def get_by_id(self, comment_id: str) -> Optional[Comment]:
+            """Get a specific comment by ID."""
+            logger.debug(f"Retrieving comment by ID: {comment_id}")
+            orm_comment = self.session.query(CommentORM).filter(CommentORM.id == comment_id).first()  # type: ignore[operator]
+            if orm_comment is None:
+                logger.debug(f"Comment not found: {comment_id}")
+                return None
+            logger.debug(f"Comment found: {comment_id}")
+            return orm_comment_to_domain_comment(orm_comment)
+
+        def get_by_ticket_id(self, ticket_id: str) -> List[Comment]:
+            """Get all comments for a specific ticket, ordered chronologically (oldest first).
+
+            Args:
+                ticket_id: ID of the ticket
+
+            Returns:
+                List of comments ordered by created_at (oldest first)
+            """
+            logger.debug(f"Retrieving comments for ticket: {ticket_id}")
+            orm_comments = (
+                self.session.query(CommentORM)
+                .filter(CommentORM.ticket_id == ticket_id)  # type: ignore[operator]
+                .order_by(CommentORM.created_at)  # type: ignore[union-attr]
+                .all()
+            )
+            return [orm_comment_to_domain_comment(comment) for comment in orm_comments]
+
+        def update(self, comment_id: str, update_command: CommentUpdateCommand) -> Optional[Comment]:
+            """Update an existing comment's content.
+
+            Args:
+                comment_id: ID of comment to update
+                update_command: Command containing new content
+
+            Returns:
+                Updated Comment if found, None otherwise
+            """
+            logger.debug(f"Updating comment: {comment_id}")
+            orm_comment = self.session.query(CommentORM).filter(CommentORM.id == comment_id).first()  # type: ignore[operator]
+
+            if orm_comment is None:
+                logger.debug(f"Comment not found for update: {comment_id}")
+                return None
+
+            # Update content
+            orm_comment.content = update_command.content  # type: ignore[assignment]
+
+            self.session.commit()
+            self.session.refresh(orm_comment)
+            logger.debug(f"Comment updated: {comment_id}")
+            return orm_comment_to_domain_comment(orm_comment)
+
+        def delete(self, comment_id: str) -> bool:
+            """Delete a comment.
+
+            Args:
+                comment_id: ID of comment to delete
+
+            Returns:
+                True if deleted, False if not found
+            """
+            logger.debug(f"Deleting comment: {comment_id}")
+            orm_comment = self.session.query(CommentORM).filter(CommentORM.id == comment_id).first()  # type: ignore[operator]
+
+            if orm_comment is None:
+                logger.debug(f"Comment not found for deletion: {comment_id}")
+                return False
+
+            self.session.delete(orm_comment)
+            self.session.commit()
+            logger.debug(f"Comment deleted: {comment_id}")
+            return True
 
     class StubEntities:
         """Stub entity operations - template/scaffolding for reference."""
