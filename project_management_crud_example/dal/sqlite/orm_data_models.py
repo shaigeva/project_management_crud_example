@@ -10,7 +10,7 @@ The StubEntityORM model serves as a template/scaffolding for creating real ORM m
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, String, Text
 from sqlalchemy.orm import declarative_base
 
 # SQLAlchemy Base for all ORM models
@@ -180,3 +180,30 @@ class UserORM(Base):
 
     def __repr__(self) -> str:
         return f"<User(id='{self.id}', username='{self.username}', role='{self.role}')>"
+
+
+class ActivityLogORM(Base):
+    """SQLAlchemy ORM model for activity logs."""
+
+    __tablename__ = "activity_logs"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    entity_type = Column(String(50), nullable=False)
+    entity_id = Column(String(36), nullable=False)
+    action = Column(String(50), nullable=False)
+    actor_id = Column(String(36), nullable=False)
+    organization_id = Column(String(36), nullable=False, index=True)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
+
+    # Using Text for JSON storage (SQLite doesn't have native JSON type)
+    changes = Column(Text, nullable=False)
+    extra_metadata = Column(Text, nullable=True)
+
+    # Define indexes for common query patterns
+    __table_args__ = (
+        Index("idx_activity_logs_entity", "entity_type", "entity_id"),
+        Index("idx_activity_logs_actor", "actor_id"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<ActivityLog(id='{self.id}', entity_type='{self.entity_type}', entity_id='{self.entity_id}', action='{self.action}')>"

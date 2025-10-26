@@ -10,7 +10,9 @@ This allows for clean organization while enabling cross-entity queries naturally
 The StubEntities nested class serves as a template/scaffolding for reference.
 """
 
+import json
 import logging
+from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import func
@@ -18,6 +20,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from project_management_crud_example.domain_models import (
+    ActionType,
+    ActivityLog,
+    ActivityLogCreateCommand,
     Epic,
     EpicCreateCommand,
     EpicUpdateCommand,
@@ -43,6 +48,8 @@ from project_management_crud_example.domain_models import (
 from project_management_crud_example.utils.password import PasswordHasher, TestPasswordHasher
 
 from .converters import (
+    orm_activity_log_to_domain_activity_log,
+    orm_activity_logs_to_domain_activity_logs,
     orm_epic_to_domain_epic,
     orm_organization_to_domain_organization,
     orm_project_to_domain_project,
@@ -52,7 +59,16 @@ from .converters import (
     orm_user_to_domain_user,
     orm_user_to_user_auth_data,
 )
-from .orm_data_models import EpicORM, EpicTicketORM, OrganizationORM, ProjectORM, StubEntityORM, TicketORM, UserORM
+from .orm_data_models import (
+    ActivityLogORM,
+    EpicORM,
+    EpicTicketORM,
+    OrganizationORM,
+    ProjectORM,
+    StubEntityORM,
+    TicketORM,
+    UserORM,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +102,7 @@ class Repository:
         self.epics = self.Epics(session)
         self.tickets = self.Tickets(session)
         self.users = self.Users(session, password_hasher)
+        self.activity_logs = self.ActivityLogs(session)
         self.stub_entities = self.StubEntities(session)
 
     class Users:
@@ -1163,6 +1180,113 @@ class Repository:
             self.session.commit()
             logger.debug(f"Ticket deleted: {ticket_id}")
             return True
+
+    class ActivityLogs:
+        """Activity log operations for audit trail."""
+
+        def __init__(self, session: Session) -> None:
+            self.session = session
+
+        def create(self, command: ActivityLogCreateCommand) -> ActivityLog:
+            """Create a new activity log entry.
+
+            Args:
+                command: Command containing activity log data
+
+            Returns:
+                Created ActivityLog domain model
+
+            Note: Timestamp is auto-generated. Changes and metadata are serialized as JSON.
+            """
+            logger.debug(f"Creating activity log: {command.action} for {command.entity_type}:{command.entity_id}")
+
+            orm_log = ActivityLogORM(
+                entity_type=command.entity_type,
+                entity_id=command.entity_id,
+                action=command.action.value,
+                actor_id=command.actor_id,
+                organization_id=command.organization_id,
+                changes=json.dumps(command.changes),
+                extra_metadata=json.dumps(command.metadata) if command.metadata else None,
+            )
+            self.session.add(orm_log)
+            self.session.commit()
+            self.session.refresh(orm_log)
+            logger.debug(f"Activity log created with ID: {orm_log.id}")
+            return orm_activity_log_to_domain_activity_log(orm_log)
+
+        def get_by_id(self, log_id: str) -> Optional[ActivityLog]:
+            """Get a specific activity log by ID.
+
+            Args:
+                log_id: Activity log ID
+
+            Returns:
+                ActivityLog if found, None otherwise
+            """
+            logger.debug(f"Retrieving activity log by ID: {log_id}")
+            orm_log = self.session.query(ActivityLogORM).filter(ActivityLogORM.id == log_id).first()  # type: ignore[operator]
+            if orm_log is None:
+                logger.debug(f"Activity log not found: {log_id}")
+                return None
+            logger.debug(f"Activity log found: {log_id}")
+            return orm_activity_log_to_domain_activity_log(orm_log)
+
+        def list(
+            self,
+            entity_type: Optional[str] = None,
+            entity_id: Optional[str] = None,
+            actor_id: Optional[str] = None,
+            action: Optional[ActionType] = None,
+            from_date: Optional[datetime] = None,
+            to_date: Optional[datetime] = None,
+            organization_id: Optional[str] = None,
+            order: str = "asc",
+        ) -> List[ActivityLog]:
+            """List activity logs with optional filtering.
+
+            Args:
+                entity_type: Filter by entity type (e.g., "ticket", "project")
+                entity_id: Filter by specific entity ID
+                actor_id: Filter by user who performed action
+                action: Filter by action type
+                from_date: Filter logs after this timestamp (inclusive)
+                to_date: Filter logs before this timestamp (inclusive)
+                organization_id: Filter by organization
+                order: "asc" for oldest first (default), "desc" for newest first
+
+            Returns:
+                List of ActivityLog entries matching filters, ordered by timestamp
+            """
+            logger.debug(f"Listing activity logs with filters: entity_type={entity_type}, entity_id={entity_id}")
+
+            query = self.session.query(ActivityLogORM)
+
+            # Apply filters
+            if entity_type is not None:
+                query = query.filter(ActivityLogORM.entity_type == entity_type)  # type: ignore[operator]
+            if entity_id is not None:
+                query = query.filter(ActivityLogORM.entity_id == entity_id)  # type: ignore[operator]
+            if actor_id is not None:
+                query = query.filter(ActivityLogORM.actor_id == actor_id)  # type: ignore[operator]
+            if action is not None:
+                query = query.filter(ActivityLogORM.action == action.value)  # type: ignore[operator]
+            if from_date is not None:
+                query = query.filter(ActivityLogORM.timestamp >= from_date)  # type: ignore[operator]
+            if to_date is not None:
+                query = query.filter(ActivityLogORM.timestamp <= to_date)  # type: ignore[operator]
+            if organization_id is not None:
+                query = query.filter(ActivityLogORM.organization_id == organization_id)  # type: ignore[operator]
+
+            # Apply ordering
+            if order == "desc":
+                query = query.order_by(ActivityLogORM.timestamp.desc())  # type: ignore[union-attr]
+            else:
+                query = query.order_by(ActivityLogORM.timestamp.asc())  # type: ignore[union-attr]
+
+            orm_logs = query.all()
+            logger.debug(f"Found {len(orm_logs)} activity logs")
+            return orm_activity_logs_to_domain_activity_logs(orm_logs)
 
     class StubEntities:
         """Stub entity operations - template/scaffolding for reference."""

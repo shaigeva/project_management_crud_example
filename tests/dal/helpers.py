@@ -6,6 +6,9 @@ via repository methods, reducing boilerplate in repository test files.
 
 from project_management_crud_example.dal.sqlite.repository import Repository
 from project_management_crud_example.domain_models import (
+    ActionType,
+    ActivityLog,
+    ActivityLogCreateCommand,
     Epic,
     EpicCreateCommand,
     EpicData,
@@ -101,3 +104,43 @@ def create_test_epic_via_repo(
     """
     epic_data = EpicData(name=name, description=description)
     return test_repo.epics.create(EpicCreateCommand(epic_data=epic_data, organization_id=org_id))
+
+
+def create_test_activity_log_via_repo(
+    test_repo: Repository,
+    entity_type: str = "ticket",
+    entity_id: str = "test-entity-id",
+    action: ActionType = ActionType.TICKET_CREATED,
+    actor_id: str = "test-user-id",
+    organization_id: str = "test-org-id",
+    changes: dict | None = None,
+    metadata: dict | None = None,
+) -> ActivityLog:
+    """Create test activity log via repository.
+
+    Args:
+        test_repo: Repository instance
+        entity_type: Type of entity (default: "ticket")
+        entity_id: Entity ID (default: "test-entity-id")
+        action: Action type (default: TICKET_CREATED)
+        actor_id: User who performed action (default: "test-user-id")
+        organization_id: Organization ID (default: "test-org-id")
+        changes: Changes dict (default: simple created dict)
+        metadata: Optional metadata dict
+
+    Returns:
+        Created ActivityLog domain model
+    """
+    if changes is None:
+        changes = {"created": {"name": "Test"}}
+
+    command = ActivityLogCreateCommand(
+        entity_type=entity_type,
+        entity_id=entity_id,
+        action=action,
+        actor_id=actor_id,
+        organization_id=organization_id,
+        changes=changes,
+        metadata=metadata,
+    )
+    return test_repo.activity_logs.create(command)

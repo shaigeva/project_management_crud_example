@@ -348,3 +348,62 @@ class ChangePasswordRequest(BaseModel):
 
     current_password: str = Field(..., min_length=1, description="Current password for verification")
     new_password: str = Field(..., min_length=8, description="New password (must meet strength requirements)")
+
+
+# Activity Log Models
+
+
+class ActionType(str, Enum):
+    """Action types for activity logging."""
+
+    # Ticket actions
+    TICKET_CREATED = "ticket_created"
+    TICKET_UPDATED = "ticket_updated"
+    TICKET_STATUS_CHANGED = "ticket_status_changed"
+    TICKET_ASSIGNED = "ticket_assigned"
+    TICKET_MOVED = "ticket_moved"
+    TICKET_DELETED = "ticket_deleted"
+
+    # Project actions
+    PROJECT_CREATED = "project_created"
+    PROJECT_UPDATED = "project_updated"
+    PROJECT_ARCHIVED = "project_archived"
+    PROJECT_UNARCHIVED = "project_unarchived"
+    PROJECT_DELETED = "project_deleted"
+
+    # User actions
+    USER_CREATED = "user_created"
+    USER_UPDATED = "user_updated"
+    USER_ROLE_CHANGED = "user_role_changed"
+    USER_ACTIVATED = "user_activated"
+    USER_DEACTIVATED = "user_deactivated"
+    USER_PASSWORD_CHANGED = "user_password_changed"
+    USER_DELETED = "user_deleted"
+
+
+class ActivityLog(BaseModel):
+    """Complete activity log entry with metadata."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str = Field(..., description="Activity log entry ID")
+    entity_type: str = Field(..., description="Type of entity (ticket, project, user, etc.)")
+    entity_id: str = Field(..., description="ID of the entity that changed")
+    action: ActionType = Field(..., description="Action that was performed")
+    actor_id: str = Field(..., description="ID of user who performed the action")
+    organization_id: str = Field(..., description="Organization ID for scoping")
+    timestamp: datetime = Field(..., description="When the action occurred")
+    changes: dict = Field(..., description="Details of what changed")
+    metadata: Optional[dict] = Field(None, description="Additional metadata (optional)")
+
+
+class ActivityLogCreateCommand(BaseModel):
+    """Command model for creating a new activity log entry."""
+
+    entity_type: str = Field(..., min_length=1, max_length=50, description="Type of entity")
+    entity_id: str = Field(..., description="ID of the entity")
+    action: ActionType = Field(..., description="Action performed")
+    actor_id: str = Field(..., description="User who performed the action")
+    organization_id: str = Field(..., description="Organization ID")
+    changes: dict = Field(..., description="Details of what changed")
+    metadata: Optional[dict] = Field(None, description="Additional metadata (optional)")

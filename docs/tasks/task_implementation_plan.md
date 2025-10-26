@@ -1,195 +1,271 @@
-# Task Implementation Plan: Add Project Archive/Soft Delete
+# Task Implementation Plan: Activity log data structures and repository
 
 **Task Status**: 🔄 In Progress
 **Date**: 2025-01-26
-**Implements Requirements**: REQ-PROJ-010
+**Implements Requirements**: Foundation for all REQ-ACTIVITY-001 through REQ-ACTIVITY-007
 
 ## Behaviors to Implement
 
-### From REQ-PROJ-010: Archive projects (soft delete)
-**Observable Behavior**:
-- Projects can be archived instead of permanently deleted
-- Archived projects don't appear in default listings
-- Archived projects can be included in listings with explicit parameter
-- Archived projects can be unarchived to restore them
-- Archive/unarchive operations record timestamps
-- Permission-based access to archive/unarchive operations
+This task creates the foundational infrastructure for activity logging. It does NOT implement the actual logging (that comes in Tasks 2-4), nor the API endpoints (Task 5). This task focuses on:
 
-**Acceptance Criteria**:
-- PATCH /api/projects/{id}/archive sets is_archived=true and archived_at=now
-- Archived projects don't appear in GET /api/projects by default
-- GET /api/projects?include_archived=true shows archived projects
-- PATCH /api/projects/{id}/unarchive restores project (is_archived=false, archived_at=null)
-- Cannot create tickets in archived projects (future requirement - note in tests)
-- Admin and PM can archive projects
-- Only Admin can unarchive projects
+1. Data structures to represent activity logs
+2. Database schema for storing activity logs
+3. Repository methods to create and query activity logs
+4. Complete repository testing
+
+### Foundation for REQ-ACTIVITY-001, 002, 003: Log entity changes
+
+**Observable Behavior** (will be tested in Tasks 2-4):
+- When entities are modified, activity log entries are created
+- Each log entry captures: what changed, who did it, when it happened
+
+**This Task's Contribution**:
+- Provide ActivityLog domain model
+- Provide ActivityLogCreateCommand for creating logs
+- Provide repository methods to persist logs
+
+### Foundation for REQ-ACTIVITY-004: Retrieve activity log for entity
+
+**Observable Behavior** (will be tested in Task 5):
+- GET /activity_logs?entity_type=ticket&entity_id=123 returns logs for that entity
+- Logs ordered by timestamp
+
+**This Task's Contribution**:
+- Repository method: `list(entity_type=..., entity_id=...)`
+- Returns logs in chronological order
+
+### Foundation for REQ-ACTIVITY-005: Filter activity logs
+
+**Observable Behavior** (will be tested in Task 5):
+- Query parameters filter logs by: entity_type, entity_id, actor_id, action, date range, organization_id
+- Multiple filters combine with AND logic
+
+**This Task's Contribution**:
+- Repository method: `list()` with all filter parameters
+- Complex filtering logic in repository
+
+### Foundation for REQ-ACTIVITY-006: Logs respect permissions
+
+**Observable Behavior** (will be tested in Task 5):
+- Users only see logs for entities they can access
+- Organization-scoped by default
+
+**This Task's Contribution**:
+- Organization_id field in logs
+- Repository can filter by organization
+
+### Foundation for REQ-ACTIVITY-007: Logs are immutable
+
+**Observable Behavior** (will be tested in Task 5):
+- No PUT/DELETE endpoints for activity logs
+
+**This Task's Contribution**:
+- Repository has create() and list() methods only
+- No update() or delete() methods
 
 ## Implementation Plan
 
 ### Domain Layer Changes
-- [x] Add `is_archived: bool` field to Project domain model (default False)
-- [x] Add `archived_at: Optional[datetime]` field to Project domain model
+
+- [ ] Add ActionType enum in domain_models.py
+  - Values: ticket_created, ticket_updated, ticket_status_changed, ticket_assigned, ticket_moved, ticket_deleted
+  - Plus: project_created, project_updated, project_archived, project_unarchived, project_deleted
+  - Plus: user_created, user_updated, user_role_changed, user_activated, user_deactivated, user_password_changed, user_deleted
+
+- [ ] Add ActivityLog model in domain_models.py
+  - Fields: id (str), entity_type (str), entity_id (str), action (ActionType), actor_id (str), organization_id (str), timestamp (datetime), changes (dict), metadata (Optional[dict])
+
+- [ ] Add ActivityLogCreateCommand in domain_models.py
+  - Fields: entity_type, entity_id, action, actor_id, organization_id, changes, metadata (optional)
+  - Timestamp auto-set by repository
 
 ### Repository Layer Changes
-- [x] Add `is_archived` and `archived_at` columns to ProjectORM model
-- [x] Update `orm_project_to_domain_project` converter to include new fields
-- [x] Add `archive(project_id: str) -> Optional[Project]` method to Projects repository
-- [x] Add `unarchive(project_id: str) -> Optional[Project]` method to Projects repository
-- [x] Update `get_by_filters()` to support `include_archived` parameter (default False)
-- [x] Update `get_all()` and `get_by_organization_id()` to exclude archived by default
 
-### API Layer Changes
-- [x] Add PATCH /api/projects/{id}/archive endpoint (Admin, PM can access)
-- [x] Add PATCH /api/projects/{id}/unarchive endpoint (Admin only)
-- [x] Update GET /api/projects to add `include_archived` query parameter (default False)
-- [x] Add organization scoping checks for archive/unarchive
-- [x] Add proper error handling (404, 403)
+- [ ] Add ActivityLogORM in orm_data_models.py
+  - Table: activity_logs
+  - Columns: id (String 36, PK), entity_type (String 50), entity_id (String 36), action (String 50), actor_id (String 36), organization_id (String 36), timestamp (DateTime), changes (Text), metadata (Text nullable)
+  - Indexes: entity_type+entity_id, organization_id, actor_id, timestamp
 
-### Database Migration
-- [x] Add migration or schema update for new columns (SQLite auto-handles via ORM)
+- [ ] Add converters in converters.py
+  - `orm_activity_log_to_domain_activity_log(orm_activity_log: ActivityLogORM) -> ActivityLog`
+  - `orm_activity_logs_to_domain_activity_logs(orm_activity_logs: List[ActivityLogORM]) -> List[ActivityLog]`
+  - Handle JSON deserialization for changes and metadata fields
+
+- [ ] Add Repository.ActivityLogs nested class in repository.py
+  - `create(command: ActivityLogCreateCommand) -> ActivityLog` - Create new log entry
+  - `get_by_id(log_id: str) -> Optional[ActivityLog]` - Get single log by ID
+  - `list(entity_type, entity_id, actor_id, action, from_date, to_date, organization_id, order) -> List[ActivityLog]` - List with filters
+
+- [ ] Update Repository.__init__ to instantiate self.activity_logs
+
+### Database Layer Changes
+
+- [ ] Update database.py to include ActivityLogORM in metadata for table creation
+
+### Other Changes
+
+- [ ] JSON serialization: Use json.dumps/loads for changes and metadata (SQLite has no native JSON)
 
 ## Test Planning
 
-### 1. API Tests (External Behavior)
-**File**: tests/api/test_project_api.py
-
-**New test class: TestArchiveProject**:
-- `test_archive_project_as_admin`
-  - Verifies: Admin can archive project
-  - Steps: Create project → PATCH /archive → verify is_archived=true, archived_at set
-
-- `test_archive_project_as_project_manager`
-  - Verifies: PM can archive project
-  - Steps: Create project as PM → PATCH /archive → verify success
-
-- `test_archive_project_as_write_user_fails`
-  - Verifies: Write user cannot archive
-  - Steps: PATCH /archive as write user → assert 403
-
-- `test_archive_project_from_different_org_fails`
-  - Verifies: Cannot archive project from other org
-  - Steps: Create project in org1 → archive from org2 → assert 403
-
-- `test_archive_nonexistent_project_returns_404`
-  - Verifies: Archiving non-existent project returns 404
-  - Steps: PATCH /archive with fake ID → assert 404
-
-- `test_archived_project_not_in_default_list`
-  - Verifies: Archived projects excluded from default GET /projects
-  - Steps: Create 2 projects → archive 1 → GET /projects → verify only 1 returned
-
-- `test_archived_project_included_with_parameter`
-  - Verifies: include_archived=true shows archived projects
-  - Steps: Create project → archive → GET /projects?include_archived=true → verify shown
-
-- `test_list_only_archived_projects`
-  - Verifies: Can list only archived projects
-  - Steps: Create active and archived → GET /projects?include_archived=true&is_active=false → verify only archived
-
-- `test_archive_already_archived_project_succeeds`
-  - Verifies: Archiving already archived project is idempotent
-  - Steps: Archive → archive again → verify success
-
-**New test class: TestUnarchiveProject**:
-- `test_unarchive_project_as_admin`
-  - Verifies: Admin can unarchive project
-  - Steps: Create → archive → PATCH /unarchive → verify is_archived=false, archived_at=null
-
-- `test_unarchive_project_as_project_manager_fails`
-  - Verifies: PM cannot unarchive (only Admin)
-  - Steps: Create/archive as PM → unarchive as PM → assert 403
-
-- `test_unarchive_project_from_different_org_fails`
-  - Verifies: Cannot unarchive project from other org
-  - Steps: Create/archive in org1 → unarchive from org2 → assert 403
-
-- `test_unarchive_nonexistent_project_returns_404`
-  - Verifies: Unarchiving non-existent project returns 404
-  - Steps: PATCH /unarchive with fake ID → assert 404
-
-- `test_unarchive_active_project_succeeds`
-  - Verifies: Unarchiving non-archived project is idempotent
-  - Steps: Create (not archived) → PATCH /unarchive → verify success
-
-- `test_unarchived_project_appears_in_default_list`
-  - Verifies: Unarchived project appears in default listing
-  - Steps: Create → archive → unarchive → GET /projects → verify present
-
-**Existing tests to update**:
-- None required - existing tests should still pass as archived behavior is additive
-
-**Edge Cases**:
-- Archive already archived project (idempotent)
-- Unarchive already active project (idempotent)
-- Filter combinations: include_archived with name/is_active filters
-- Super Admin can archive/unarchive across organizations
-
 ### 2. Repository Layer Tests
-**File**: tests/dal/test_project_repository.py
 
-**New test class: TestProjectRepositoryArchive**:
-- `test_archive_project_sets_fields`
-  - Verifies: archive() sets is_archived=true and archived_at
-  - Uses: repository.projects.archive(project_id) → verify fields set
+**File**: tests/dal/test_activity_log_repository.py
 
-- `test_archive_project_not_found_returns_none`
-  - Verifies: Archiving non-existent project returns None
-  - Uses: repository.projects.archive("fake-id") → assert None
+**Tests for create() method** (3 tests):
+- `test_create_activity_log` - Basic creation with all fields
+- `test_create_activity_log_with_metadata` - Metadata preserved
+- `test_create_activity_log_without_metadata` - Works without metadata
 
-- `test_archive_project_persists`
-  - Verifies: Archived state persists in database
-  - Uses: create → archive → get_by_id → verify is_archived=true
+**Tests for get_by_id() method** (2 tests):
+- `test_get_activity_log_by_id` - Retrieve by ID works
+- `test_get_activity_log_by_id_not_found` - Returns None for missing
 
-- `test_unarchive_project_clears_fields`
-  - Verifies: unarchive() sets is_archived=false and archived_at=null
-  - Uses: create → archive → unarchive → verify fields cleared
+**Tests for list() - basic** (4 tests):
+- `test_list_all_activity_logs` - Lists all when no filters
+- `test_list_activity_logs_empty` - Returns [] when empty
+- `test_list_activity_logs_ordered_ascending` - Default oldest first
+- `test_list_activity_logs_ordered_descending` - order="desc" newest first
 
-- `test_unarchive_project_not_found_returns_none`
-  - Verifies: Unarchiving non-existent project returns None
-  - Uses: repository.projects.unarchive("fake-id") → assert None
+**Tests for list() - entity filters** (3 tests):
+- `test_list_filter_by_entity_type` - Filter by ticket/project/user
+- `test_list_filter_by_entity_id` - Filter by specific ID
+- `test_list_filter_by_entity_type_and_id` - Combined filter
 
-- `test_get_by_filters_excludes_archived_by_default`
-  - Verifies: get_by_filters() excludes archived projects by default
-  - Uses: create 2 → archive 1 → get_by_filters() → verify 1 returned
+**Tests for list() - actor filter** (1 test):
+- `test_list_filter_by_actor_id` - Filter by who did it
 
-- `test_get_by_filters_includes_archived_when_requested`
-  - Verifies: get_by_filters(include_archived=true) includes archived
-  - Uses: create 2 → archive 1 → get_by_filters(include_archived=true) → verify 2 returned
+**Tests for list() - action filter** (1 test):
+- `test_list_filter_by_action` - Filter by action type
 
-- `test_get_by_filters_archived_only`
-  - Verifies: Can filter for only archived projects
-  - Uses: create active and archived → filter is_archived=true, include_archived=true → verify only archived
+**Tests for list() - date filters** (3 tests):
+- `test_list_filter_by_from_date` - Logs after date
+- `test_list_filter_by_to_date` - Logs before date
+- `test_list_filter_by_date_range` - Logs within range
 
-- `test_get_all_excludes_archived_by_default`
-  - Verifies: get_all() excludes archived projects
-  - Uses: create 2 → archive 1 → get_all() → verify 1 returned
+**Tests for list() - organization filter** (1 test):
+- `test_list_filter_by_organization_id` - Org scoping
 
-- `test_get_by_organization_id_excludes_archived`
-  - Verifies: get_by_organization_id() excludes archived
-  - Uses: create 2 in org → archive 1 → get_by_organization_id() → verify 1 returned
+**Tests for list() - combined** (1 test):
+- `test_list_multiple_filters_combined` - AND logic for filters
 
-### 3. Utility/Logic Tests
-Not applicable for this task.
+**Tests for changes field** (2 tests):
+- `test_activity_log_changes_preserved` - Complex dict preserved
+- `test_activity_log_changes_with_null_values` - Null values work
 
-### 4. Domain Model Validation Tests
-Not applicable - using simple boolean and optional datetime fields.
+**Total: ~21 repository tests**
 
-## Existing Tests to Update
+### 3. Converter Tests
 
-No existing tests need updates - archive functionality is additive and doesn't break existing behavior.
+**File**: tests/dal/test_converters.py
 
-## Dependencies
+**Activity log converter tests** (3 tests):
+- `test_orm_activity_log_to_domain` - Basic conversion
+- `test_orm_activity_log_with_null_metadata` - Handles None metadata
+- `test_orm_activity_logs_list_conversion` - List converter
 
-**Requires completion of**:
-- Task 1 (complete ✅)
+### Repository Helper Function
 
-**Blocks**:
-- None
+**File**: tests/dal/helpers.py
 
-## Notes
+Add:
+```python
+def create_test_activity_log_via_repo(
+    test_repo: Repository,
+    entity_type: str = "ticket",
+    entity_id: str = "test-entity-id",
+    action: ActionType = ActionType.TICKET_CREATED,
+    actor_id: str = "test-user-id",
+    organization_id: str = "test-org-id",
+    changes: Optional[dict] = None,
+    metadata: Optional[dict] = None,
+) -> ActivityLog
+```
 
-- Archive is a soft delete - project data remains in database
-- Hard delete endpoint (DELETE /projects/{id}) remains available for Admin
-- Future ticket creation validation will need to check is_archived field
-- archived_at timestamp helps with audit trails and potential auto-cleanup policies
-- include_archived parameter allows viewing historical data when needed
+## Technical Notes
+
+### JSON Storage
+
+SQLite doesn't have native JSON. Use Text columns with json.dumps/loads:
+
+```python
+# Repository create
+import json
+orm_log.changes = json.dumps(command.changes)
+
+# Converter
+changes=json.loads(orm_log.changes)
+```
+
+### Indexes
+
+Add for query performance:
+```python
+Index('idx_activity_logs_entity', 'entity_type', 'entity_id')
+Index('idx_activity_logs_organization', 'organization_id')
+Index('idx_activity_logs_actor', 'actor_id')
+Index('idx_activity_logs_timestamp', 'timestamp')
+```
+
+### Action Types (Enum)
+
+```python
+class ActionType(str, Enum):
+    # Tickets
+    TICKET_CREATED = "ticket_created"
+    TICKET_UPDATED = "ticket_updated"
+    TICKET_STATUS_CHANGED = "ticket_status_changed"
+    TICKET_ASSIGNED = "ticket_assigned"
+    TICKET_MOVED = "ticket_moved"
+    TICKET_DELETED = "ticket_deleted"
+
+    # Projects
+    PROJECT_CREATED = "project_created"
+    PROJECT_UPDATED = "project_updated"
+    PROJECT_ARCHIVED = "project_archived"
+    PROJECT_UNARCHIVED = "project_unarchived"
+    PROJECT_DELETED = "project_deleted"
+
+    # Users
+    USER_CREATED = "user_created"
+    USER_UPDATED = "user_updated"
+    USER_ROLE_CHANGED = "user_role_changed"
+    USER_ACTIVATED = "user_activated"
+    USER_DEACTIVATED = "user_deactivated"
+    USER_PASSWORD_CHANGED = "user_password_changed"
+    USER_DELETED = "user_deleted"
+```
+
+### Changes Structure Examples
+
+**Create**: Single-level with created data
+**Update**: Field-level old/new values
+**Delete**: Snapshot of deleted entity
+
+## Implementation Checklist
+
+Domain Layer:
+- [ ] ActionType enum
+- [ ] ActivityLog model
+- [ ] ActivityLogCreateCommand
+
+ORM Layer:
+- [ ] ActivityLogORM with indexes
+- [ ] Update database.py
+
+Converter Layer:
+- [ ] Converters with JSON handling
+
+Repository Layer:
+- [ ] ActivityLogs nested class
+- [ ] create(), get_by_id(), list() methods
+- [ ] Update Repository.__init__
+
+Testing:
+- [ ] ~21 repository tests
+- [ ] 3 converter tests
+- [ ] Repository helper function
+- [ ] Run validations
+
+Status Updates:
+- [ ] Mark task ✅ in current_task_list.md

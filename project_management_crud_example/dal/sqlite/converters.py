@@ -11,6 +11,7 @@ ORM and business models.
 The stub entity converters serve as a template/scaffolding for creating real converters.
 """
 
+import json
 from typing import List
 
 from project_management_crud_example import domain_models
@@ -148,3 +149,30 @@ def orm_user_to_user_auth_data(
         role=domain_models.UserRole(orm_user.role),  # type: ignore[arg-type]
         is_active=orm_user.is_active,  # type: ignore[arg-type]
     )
+
+
+def orm_activity_log_to_domain_activity_log(
+    orm_activity_log: orm_data_models.ActivityLogORM,
+) -> domain_models.ActivityLog:
+    """Convert an ORM ActivityLog model to a domain ActivityLog model.
+
+    Handles JSON deserialization for changes and metadata fields.
+    """
+    return domain_models.ActivityLog(
+        id=str(orm_activity_log.id),
+        entity_type=orm_activity_log.entity_type,  # type: ignore[arg-type]
+        entity_id=orm_activity_log.entity_id,  # type: ignore[arg-type]
+        action=domain_models.ActionType(orm_activity_log.action),  # type: ignore[arg-type]
+        actor_id=orm_activity_log.actor_id,  # type: ignore[arg-type]
+        organization_id=orm_activity_log.organization_id,  # type: ignore[arg-type]
+        timestamp=orm_activity_log.timestamp,  # type: ignore[arg-type]
+        changes=json.loads(orm_activity_log.changes),  # type: ignore[arg-type]
+        metadata=json.loads(orm_activity_log.extra_metadata) if orm_activity_log.extra_metadata else None,  # type: ignore[arg-type]
+    )
+
+
+def orm_activity_logs_to_domain_activity_logs(
+    orm_activity_logs: List[orm_data_models.ActivityLogORM],
+) -> List[domain_models.ActivityLog]:
+    """Convert a list of ORM ActivityLogs to domain ActivityLogs."""
+    return [orm_activity_log_to_domain_activity_log(orm_activity_log) for orm_activity_log in orm_activity_logs]
