@@ -134,7 +134,7 @@ Different users need different levels of access. The system supports five roles:
 ---
 
 ## Feature: Projects
-**Status**: 🟡 10/11 requirements implemented (91%)
+**Status**: 🟢 11/11 requirements implemented (100%)
 **Detail Spec**: [detailed/projects_detailed_spec.md](detailed/projects_detailed_spec.md)
 **Purpose**: Organize work into projects
 **Version**: V1
@@ -153,20 +153,20 @@ Projects (e.g., "Backend", "Frontend") are containers for tickets. Users with ap
 - ✅ REQ-PROJ-008: Handle validation errors
 - ✅ REQ-PROJ-009: Filter/search projects
 - ✅ REQ-PROJ-010: Archive projects (soft delete)
-- 🔴 REQ-PROJ-011: Projects reference workflows
+- ✅ REQ-PROJ-011: Projects reference workflows
 
-**Notes**: Complete project management with CRUD operations, role-based authorization (Admin, PM can create/update/archive; Admin can delete/unarchive), organization scoping, filtering by name and is_active status, and archive/soft delete functionality with include_archived parameter for listings. Workflow integration (REQ-PROJ-011) pending implementation.
+**Notes**: Complete project management with CRUD operations, role-based authorization (Admin, PM can create/update/archive; Admin can delete/unarchive), organization scoping, filtering by name and is_active status, and archive/soft delete functionality with include_archived parameter for listings. Workflow integration (REQ-PROJ-011) fully implemented with 6 comprehensive tests verifying workflow references, validation, and ticket compatibility.
 
 ---
 
 ## Feature: Tickets
-**Status**: 🟡 15/17 requirements implemented (88%)
+**Status**: 🟢 17/17 requirements implemented (100%)
 **Detail Spec**: [detailed/tickets_detailed_spec.md](detailed/tickets_detailed_spec.md)
 **Purpose**: Track work items within projects
 **Version**: V1
 
 ### Rationale
-Tickets are the core work items. They have a predefined set of fields (V1), belong to a project, can be moved between projects, and follow a simple workflow (TODO/IN-PROGRESS/DONE).
+Tickets are the core work items. They have a predefined set of fields (V1), belong to a project, can be moved between projects, and follow workflow-based status validation.
 
 ### High-Level Requirements
 - ✅ REQ-TICKET-001: Create ticket in project
@@ -184,10 +184,10 @@ Tickets are the core work items. They have a predefined set of fields (V1), belo
 - ✅ REQ-TICKET-013: Handle validation errors
 - ✅ REQ-TICKET-014: Ticket status workflow validation (basic - hardcoded enum)
 - ✅ REQ-TICKET-015: Activity log for ticket changes
-- 🔴 REQ-TICKET-016: Validate status against project workflow (custom workflows)
-- 🔴 REQ-TICKET-017: Validate workflow when moving tickets between projects
+- ✅ REQ-TICKET-016: Validate status against project workflow (custom workflows)
+- ✅ REQ-TICKET-017: Validate workflow when moving tickets between projects
 
-**Notes**: Complete ticket management with 9 REST endpoints including specialized operations (status change, project moves, assignments). Role-based authorization implemented (Admin/PM/Write can create/update, Admin/PM can assign/move, Admin can delete). Organization scoping enforced via project relationships. Activity logging implemented for all 6 ticket operations (create, update, status change, assign, move, delete). Custom workflow integration (REQ-TICKET-016, REQ-TICKET-017) pending implementation.
+**Notes**: Complete ticket management with 9 REST endpoints including specialized operations (status change, project moves, assignments). Role-based authorization implemented (Admin/PM/Write can create/update, Admin/PM can assign/move, Admin can delete). Organization scoping enforced via project relationships. Activity logging implemented for all 6 ticket operations (create, update, status change, assign, move, delete). Custom workflow integration (REQ-TICKET-16, REQ-TICKET-017) fully implemented with 8 comprehensive tests in test_custom_workflow_validation.py verifying workflow-based status validation, status defaults, and cross-project moves.
 
 ---
 
@@ -257,7 +257,7 @@ For compliance and transparency, the system tracks all changes to tickets, proje
 - ✅ REQ-ACTIVITY-006: Activity logs respect user permissions (users only see logs for data they can access)
 - ✅ REQ-ACTIVITY-007: Activity logs are immutable (cannot be modified/deleted)
 
-**Notes**: Complete activity logging with 100% coverage across 22 mutation operations (6 ticket operations, 5 project operations, 3 user operations, 5 epic operations, 2 organization operations). Query API provides comprehensive filtering (entity type, entity ID, actor, action, date range, organization) with permission-based access control. Super Admin sees all logs; other roles see only their organization's logs. Logs are read-only (no POST/PUT/DELETE endpoints). 13 comprehensive tests verify all scenarios.
+**Notes**: Complete activity logging with 100% coverage across all mutation operations: 6 ticket operations, 5 project operations, 3 user operations (create, update, delete), plus password changes. Sensitive data properly redacted (passwords never logged). Query API provides comprehensive filtering (entity type, entity ID, actor, action, date range, organization) with permission-based access control. Super Admin sees all logs; other roles see only their organization's logs. Logs are read-only (no POST/PUT/DELETE endpoints). 13 API tests + 21 repository tests + 4 user activity tests verify all scenarios.
 
 ---
 
