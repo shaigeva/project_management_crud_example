@@ -10,7 +10,7 @@ function App() {
     const checkHealth = async () => {
       try {
         const response = await apiClient.getHealth();
-        if (response.status === 'ok') {
+        if (response.status === 'healthy') {
           setHealthStatus('connected');
           setMessage('✓ Connected to backend');
         } else {
