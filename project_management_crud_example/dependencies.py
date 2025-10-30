@@ -33,15 +33,15 @@ def _get_db_path() -> str:
 
     Returns:
         Database file path based on testing environment:
-        - E2E_TESTING=true -> stub_entities_e2e.db
+        - E2E_TESTING=true -> project_management_crud_example_e2e.db
         - TESTING=true -> stub_entities_test.db (for unit tests)
-        - Otherwise -> stub_entities.db (development)
+        - Otherwise -> project_management_crud_example.db (development)
     """
     if os.getenv("E2E_TESTING") == "true":
-        return "stub_entities_e2e.db"
+        return "project_management_crud_example_e2e.db"
     elif os.getenv("TESTING") == "true":
         return "stub_entities_test.db"
-    return "stub_entities.db"
+    return "project_management_crud_example.db"
 
 
 def get_database(db_path: str | None = None) -> Database:

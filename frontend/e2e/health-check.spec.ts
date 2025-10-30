@@ -1,34 +1,33 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Health Check', () => {
-  test('should display hello world message', async ({ page }) => {
+  test('should load the application and redirect to login', async ({ page }) => {
     await page.goto('/');
+
+    // Should redirect to login page
+    await expect(page).toHaveURL('/login');
 
     // Check for the main heading
     await expect(page.getByRole('heading', { name: 'Project Management System' })).toBeVisible();
 
-    // Check for hello world message
-    await expect(page.getByText('Hello World from Project Management App')).toBeVisible();
+    // Check for login heading
+    await expect(page.getByRole('heading', { name: 'Login' })).toBeVisible();
   });
 
-  test('should connect to backend and show healthy status', async ({ page }) => {
-    await page.goto('/');
+  test('should display login form elements', async ({ page }) => {
+    await page.goto('/login');
 
-    // Wait for the status to change from loading
-    await page.waitForSelector('.status.connected, .status.disconnected', { timeout: 10000 });
-
-    // Check that we have a connected status
-    const statusElement = page.locator('.status');
-    await expect(statusElement).toHaveClass(/connected/);
-
-    // Check for the success message
-    await expect(page.getByText(/Connected to backend/i)).toBeVisible();
+    // Check for form elements
+    await expect(page.getByRole('textbox', { name: 'Username' })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Password' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Login' })).toBeVisible();
   });
 
-  test('should display frontend port information', async ({ page }) => {
-    await page.goto('/');
+  test('should be able to navigate to login page', async ({ page }) => {
+    await page.goto('/login');
 
-    // Check for port information
-    await expect(page.getByText(/Frontend running on port 3000/i)).toBeVisible();
+    // Check that we're on the login page
+    await expect(page).toHaveURL('/login');
+    await expect(page.getByRole('heading', { name: 'Login' })).toBeVisible();
   });
 });
