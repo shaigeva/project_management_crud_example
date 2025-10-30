@@ -169,6 +169,53 @@ h1 {
   margin: 0;
 }
 
+.header-actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.primary-button {
+  padding: 0.5rem 1rem;
+  background-color: #646cff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  font-weight: 500;
+}
+
+.primary-button:hover:not(:disabled) {
+  background-color: #535bf2;
+}
+
+.primary-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.secondary-button {
+  padding: 0.5rem 1rem;
+  background-color: #444;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.secondary-button:hover:not(:disabled) {
+  background-color: #555;
+}
+
+.secondary-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .logout-button {
   padding: 0.5rem 1rem;
   background-color: #444;
@@ -250,6 +297,99 @@ h1 {
 .status-cancelled {
   background-color: #4d1a1a;
   color: #ff9090;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: #1a1a1a;
+  border-radius: 8px;
+  padding: 2rem;
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.5em;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #888;
+  cursor: pointer;
+  padding: 0;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.close-button:hover {
+  background-color: #333;
+  color: #fff;
+}
+
+.project-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.project-form textarea {
+  padding: 0.75rem;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background-color: #2a2a2a;
+  color: #fff;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 100px;
+}
+
+.project-form textarea:focus {
+  outline: none;
+  border-color: #646cff;
+}
+
+.project-form textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.form-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 1rem;
 }
 
 @media (prefers-color-scheme: light) {
@@ -342,5 +482,42 @@ h1 {
   .status-cancelled {
     background-color: #f4d4d4;
     color: #4d1a1a;
+  }
+
+  .modal-content {
+    background-color: #fff;
+    border: 1px solid #e0e0e0;
+  }
+
+  .close-button {
+    color: #666;
+  }
+
+  .close-button:hover {
+    background-color: #f0f0f0;
+    color: #213547;
+  }
+
+  .project-form textarea {
+    background-color: #fff;
+    border-color: #ccc;
+    color: #213547;
+  }
+
+  .primary-button {
+    background-color: #646cff;
+  }
+
+  .primary-button:hover:not(:disabled) {
+    background-color: #535bf2;
+  }
+
+  .secondary-button {
+    background-color: #e0e0e0;
+    color: #213547;
+  }
+
+  .secondary-button:hover:not(:disabled) {
+    background-color: #d0d0d0;
   }
 }

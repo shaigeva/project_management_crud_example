@@ -74,6 +74,11 @@ class ApiClient {
     const response = await this.client.get<Project[]>('/api/projects');
     return response.data;
   }
+
+  async createProject(data: { name: string; description?: string }): Promise<Project> {
+    const response = await this.client.post<Project>('/api/projects', data);
+    return response.data;
+  }
 }
 
 export const apiClient = new ApiClient();
