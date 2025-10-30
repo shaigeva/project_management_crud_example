@@ -1,6 +1,9 @@
 import axios, { AxiosInstance } from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000';
+// Use E2E port during E2E testing, dev port otherwise
+const API_BASE_URL = import.meta.env.VITE_E2E_TESTING === 'true'
+  ? 'http://localhost:18000'
+  : 'http://localhost:8000';
 
 interface HealthResponse {
   status: string;

@@ -19,6 +19,7 @@ from project_management_crud_example.routers import (
     activity_log_api,
     auth_api,
     comment_api,
+    e2e_api,
     epic_api,
     health,
     organization_api,
@@ -100,6 +101,7 @@ app.include_router(ticket_api.router)
 app.include_router(comment_api.router)
 app.include_router(activity_log_api.router)
 app.include_router(stub_entity_api.router)
+app.include_router(e2e_api.router)  # E2E testing utilities (only available when E2E_TESTING=true)
 app.include_router(health.router)
 
 
