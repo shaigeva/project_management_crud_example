@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { LoginPage } from './pages/LoginPage';
 import { ProjectsPage } from './pages/ProjectsPage';
+import { UsersPage } from './pages/UsersPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import './index.css';
 
@@ -16,6 +17,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <ProjectsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/users"
+            element={
+              <ProtectedRoute>
+                <UsersPage />
               </ProtectedRoute>
             }
           />

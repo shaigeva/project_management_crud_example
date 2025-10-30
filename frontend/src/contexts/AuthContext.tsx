@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import apiClient from '../services/api';
 
 interface User {
@@ -15,13 +15,47 @@ interface AuthContextType {
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
+  isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const AUTH_STORAGE_KEY = 'auth_state';
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Restore auth state from localStorage on mount
+  useEffect(() => {
+    const storedAuth = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (storedAuth) {
+      try {
+        const { user: storedUser, token: storedToken } = JSON.parse(storedAuth);
+        if (storedUser && storedToken) {
+          setUser(storedUser);
+          setToken(storedToken);
+          apiClient.setToken(storedToken);
+        }
+      } catch (error) {
+        console.error('Failed to restore auth state:', error);
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+      }
+    }
+    setIsLoading(false);
+  }, []);
+
+  // Persist auth state to localStorage whenever it changes
+  useEffect(() => {
+    if (!isLoading) {
+      if (user && token) {
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ user, token }));
+      } else {
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+      }
+    }
+  }, [user, token, isLoading]);
 
   const login = async (username: string, password: string) => {
     try {
@@ -61,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         logout,
         isAuthenticated: !!user && !!token,
+        isLoading,
       }}
     >
       {children}

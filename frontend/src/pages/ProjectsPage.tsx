@@ -1,17 +1,6 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import apiClient from '../services/api';
-
-interface Project {
-  id: string;
-  name: string;
-  description: string;
-  status: string;
-  organization_id: string;
-  created_at: string;
-  updated_at: string;
-  is_archived: boolean;
-}
+import apiClient, { Project } from '../services/api';
 
 export function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);

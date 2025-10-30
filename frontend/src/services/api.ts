@@ -23,7 +23,7 @@ interface LoginResponse {
   role: string;
 }
 
-interface Project {
+export interface Project {
   id: string;
   name: string;
   description: string;
@@ -32,6 +32,31 @@ interface Project {
   created_at: string;
   updated_at: string;
   is_archived: boolean;
+}
+
+export interface User {
+  id: string;
+  username: string;
+  email: string;
+  full_name: string;
+  role: string;
+  organization_id: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserCreateResponse {
+  user: User;
+  generated_password: string;
 }
 
 class ApiClient {
@@ -77,6 +102,36 @@ class ApiClient {
 
   async createProject(data: { name: string; description?: string }): Promise<Project> {
     const response = await this.client.post<Project>('/api/projects', data);
+    return response.data;
+  }
+
+  async getUsers(): Promise<User[]> {
+    const response = await this.client.get<User[]>('/api/users');
+    return response.data;
+  }
+
+  async createUser(data: {
+    username: string;
+    email: string;
+    full_name: string;
+    organization_id: string;
+    role: string;
+  }): Promise<UserCreateResponse> {
+    const response = await this.client.post<UserCreateResponse>('/api/users', {
+      username: data.username,
+      email: data.email,
+      full_name: data.full_name,
+    }, {
+      params: {
+        organization_id: data.organization_id,
+        role: data.role,
+      },
+    });
+    return response.data;
+  }
+
+  async getOrganizations(): Promise<Organization[]> {
+    const response = await this.client.get<Organization[]>('/api/organizations');
     return response.data;
   }
 }
