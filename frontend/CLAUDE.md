@@ -47,10 +47,27 @@ If ANY of these fail, you MUST fix the issues before responding to the user.
 ### E2E Testing Best Practices
 
 1. **Always use list reporter**: Tests use `--reporter=list` to avoid HTML report blocking
-2. **Wait for elements**: Use `await expect().toBeVisible()` instead of timeouts
-3. **Parallel-safe tests**: Tests must work with 4 workers running in parallel
-4. **Test isolation**: Each test should be independent and not rely on others
-5. **Clean data**: Tests should create their own data and not depend on existing state
+
+2. **UI interactions only - NO direct API calls in tests**:
+   - ❌ **WRONG**: `await page.request.post('/api/tickets', {...})` inside a test
+   - ✅ **CORRECT**: Click buttons, fill forms, interact with UI elements
+   - **Exception**: API calls are acceptable in `beforeAll`/`beforeEach` for test setup/fixtures (creating users, orgs, projects)
+   - **Why**: E2E tests validate the entire user journey through the UI, not just the API
+
+3. **NEVER use `waitForTimeout()` - wait for actual UI changes**:
+   - ❌ **WRONG**: `await page.waitForTimeout(500)` - arbitrary wait
+   - ✅ **CORRECT**: `await expect(element).toBeVisible()` - wait for specific state
+   - ✅ **CORRECT**: `await expect(element).not.toBeDisabled()` - wait for interaction to complete
+   - ✅ **CORRECT**: `await expect(element).toHaveValue('expected')` - wait for value change
+   - **Why**: Playwright auto-waits and tests finish immediately when conditions are met, making tests faster and more reliable
+
+4. **Parallel-safe tests**: Tests must work with 4 workers running in parallel
+
+5. **Test isolation**: Each test should be independent and not rely on others
+
+6. **Clean data**: Tests should create their own data and not depend on existing state
+
+7. **Use `beforeAll` for shared fixtures**: When multiple tests can share the same setup (org/user/project), use `beforeAll` instead of `beforeEach` to reduce test time
 
 ### Running E2E Tests
 

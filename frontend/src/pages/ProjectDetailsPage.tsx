@@ -74,9 +74,15 @@ export function ProjectDetailsPage() {
           case 'created_at':
             return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
           case 'priority': {
-            const priorityOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3, null: 4 };
-            const aPriority = priorityOrder[a.priority || 'null'];
-            const bPriority = priorityOrder[b.priority || 'null'];
+            // Sort by priority: CRITICAL first, then HIGH, MEDIUM, LOW, unassigned last
+            const priorityOrder: Record<string, number> = {
+              CRITICAL: 0,
+              HIGH: 1,
+              MEDIUM: 2,
+              LOW: 3
+            };
+            const aPriority = a.priority ? (priorityOrder[a.priority] ?? 4) : 4;
+            const bPriority = b.priority ? (priorityOrder[b.priority] ?? 4) : 4;
             return aPriority - bPriority;
           }
           case 'title':
