@@ -1,4 +1,5 @@
 import { useState, useEffect, FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import apiClient, { Project } from '../services/api';
 import { Navigation } from '../components/Navigation';
 
@@ -93,7 +94,11 @@ export function ProjectsPage() {
               <tbody>
                 {projects.map((project) => (
                   <tr key={project.id}>
-                    <td>{project.name}</td>
+                    <td>
+                      <Link to={`/projects/${project.id}`} className="project-link">
+                        {project.name}
+                      </Link>
+                    </td>
                     <td>{project.description}</td>
                     <td>
                       <span className={`status-badge status-${project.status}`}>

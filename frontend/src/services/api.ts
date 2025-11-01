@@ -100,6 +100,11 @@ class ApiClient {
     return response.data;
   }
 
+  async getProject(projectId: string): Promise<Project> {
+    const response = await this.client.get<Project>(`/api/projects/${projectId}`);
+    return response.data;
+  }
+
   async createProject(data: { name: string; description?: string }): Promise<Project> {
     const response = await this.client.post<Project>('/api/projects', data);
     return response.data;
