@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import apiClient, { Ticket } from '../services/api';
+import apiClient, { Ticket, User } from '../services/api';
 import { Navigation } from '../components/Navigation';
 
 export function TicketDetailsPage() {
@@ -8,6 +8,9 @@ export function TicketDetailsPage() {
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [users, setUsers] = useState<User[]>([]);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [isUpdatingAssignee, setIsUpdatingAssignee] = useState(false);
 
   useEffect(() => {
     const fetchTicket = async () => {
@@ -18,8 +21,12 @@ export function TicketDetailsPage() {
       }
 
       try {
-        const data = await apiClient.getTicket(ticketId);
-        setTicket(data);
+        const [ticketData, usersData] = await Promise.all([
+          apiClient.getTicket(ticketId),
+          apiClient.getUsers(),
+        ]);
+        setTicket(ticketData);
+        setUsers(usersData);
       } catch (err) {
         if (err instanceof Error) {
           setError(err.message);
@@ -33,6 +40,39 @@ export function TicketDetailsPage() {
 
     fetchTicket();
   }, [ticketId]);
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (!ticketId) return;
+
+    setIsUpdatingStatus(true);
+    try {
+      const updatedTicket = await apiClient.updateTicketStatus(ticketId, newStatus);
+      setTicket(updatedTicket);
+    } catch (err) {
+      console.error('Failed to update status:', err);
+      alert('Failed to update ticket status');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleAssigneeChange = async (assigneeId: string) => {
+    if (!ticketId) return;
+
+    setIsUpdatingAssignee(true);
+    try {
+      const updatedTicket = await apiClient.updateTicketAssignee(
+        ticketId,
+        assigneeId || null
+      );
+      setTicket(updatedTicket);
+    } catch (err) {
+      console.error('Failed to update assignee:', err);
+      alert('Failed to update ticket assignee');
+    } finally {
+      setIsUpdatingAssignee(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -81,9 +121,16 @@ export function TicketDetailsPage() {
 
               <dt>Status</dt>
               <dd>
-                <span className={`status-badge status-${ticket.status.toLowerCase()}`}>
-                  {ticket.status}
-                </span>
+                <select
+                  value={ticket.status}
+                  onChange={(e) => handleStatusChange(e.target.value)}
+                  disabled={isUpdatingStatus}
+                  className="status-select"
+                >
+                  <option value="TODO">TODO</option>
+                  <option value="IN_PROGRESS">IN_PROGRESS</option>
+                  <option value="DONE">DONE</option>
+                </select>
               </dd>
 
               <dt>Priority</dt>
@@ -97,11 +144,25 @@ export function TicketDetailsPage() {
                 )}
               </dd>
 
-              <dt>Reporter ID</dt>
-              <dd>{ticket.reporter_id}</dd>
+              <dt>Reporter</dt>
+              <dd>{users.find(u => u.id === ticket.reporter_id)?.full_name || ticket.reporter_id}</dd>
 
-              <dt>Assignee ID</dt>
-              <dd>{ticket.assignee_id || 'Unassigned'}</dd>
+              <dt>Assignee</dt>
+              <dd>
+                <select
+                  value={ticket.assignee_id || ''}
+                  onChange={(e) => handleAssigneeChange(e.target.value)}
+                  disabled={isUpdatingAssignee}
+                  className="assignee-select"
+                >
+                  <option value="">Unassigned</option>
+                  {users.filter(u => u.is_active).map(user => (
+                    <option key={user.id} value={user.id}>
+                      {user.full_name} ({user.username})
+                    </option>
+                  ))}
+                </select>
+              </dd>
 
               <dt>Project ID</dt>
               <dd>{ticket.project_id}</dd>

@@ -1,6 +1,6 @@
 import { useState, useEffect, FormEvent, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import apiClient, { Project, Epic, Ticket, TicketPriority } from '../services/api';
+import apiClient, { Project, Epic, Ticket, TicketPriority, User } from '../services/api';
 import { Navigation } from '../components/Navigation';
 
 export function ProjectDetailsPage() {
@@ -23,6 +23,12 @@ export function ProjectDetailsPage() {
   const [newTicketTitle, setNewTicketTitle] = useState('');
   const [newTicketDescription, setNewTicketDescription] = useState('');
   const [newTicketPriority, setNewTicketPriority] = useState<TicketPriority | ''>('');
+  const [newTicketAssignee, setNewTicketAssignee] = useState<string>('');
+  const [users, setUsers] = useState<User[]>([]);
+  const [filterStatus, setFilterStatus] = useState<string>('');
+  const [filterPriority, setFilterPriority] = useState<string>('');
+  const [filterAssignee, setFilterAssignee] = useState<string>('');
+  const [sortBy, setSortBy] = useState<string>('created_at');
 
   const fetchEpics = async () => {
     setEpicsLoading(true);
@@ -36,19 +42,57 @@ export function ProjectDetailsPage() {
     }
   };
 
+  const fetchUsers = async () => {
+    try {
+      const data = await apiClient.getUsers();
+      setUsers(data);
+    } catch (err) {
+      console.error('Failed to load users:', err);
+    }
+  };
+
   const fetchTickets = useCallback(async () => {
     if (!projectId) return;
 
     setTicketsLoading(true);
     try {
-      const data = await apiClient.getTickets(projectId);
-      setTickets(data);
+      const data = await apiClient.getTickets(
+        projectId,
+        filterStatus || undefined,
+        filterAssignee || undefined
+      );
+
+      // Apply client-side filtering for priority
+      let filteredTickets = data;
+      if (filterPriority) {
+        filteredTickets = data.filter(t => t.priority === filterPriority);
+      }
+
+      // Apply client-side sorting
+      const sortedTickets = [...filteredTickets].sort((a, b) => {
+        switch (sortBy) {
+          case 'created_at':
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+          case 'priority': {
+            const priorityOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3, null: 4 };
+            const aPriority = priorityOrder[a.priority || 'null'];
+            const bPriority = priorityOrder[b.priority || 'null'];
+            return aPriority - bPriority;
+          }
+          case 'title':
+            return a.title.localeCompare(b.title);
+          default:
+            return 0;
+        }
+      });
+
+      setTickets(sortedTickets);
     } catch (err) {
       console.error('Failed to load tickets:', err);
     } finally {
       setTicketsLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, filterStatus, filterPriority, filterAssignee, sortBy]);
 
   useEffect(() => {
     const fetchProject = async () => {
@@ -61,7 +105,8 @@ export function ProjectDetailsPage() {
       try {
         const data = await apiClient.getProject(projectId);
         setProject(data);
-        // Fetch epics and tickets after project loads successfully
+        // Fetch users, epics, and tickets after project loads successfully
+        await fetchUsers();
         await fetchEpics();
         await fetchTickets();
       } catch (err) {
@@ -120,12 +165,14 @@ export function ProjectDetailsPage() {
         description: newTicketDescription || undefined,
         priority: newTicketPriority || undefined,
         projectId,
+        assigneeId: newTicketAssignee || undefined,
       });
 
       // Reset form and close modal
       setNewTicketTitle('');
       setNewTicketDescription('');
       setNewTicketPriority('');
+      setNewTicketAssignee('');
       setShowCreateTicketForm(false);
 
       // Refresh tickets list
@@ -257,6 +304,67 @@ export function ProjectDetailsPage() {
               </button>
             </div>
 
+            {/* Ticket Filters and Sorting */}
+            <div className="ticket-filters">
+              <div className="filter-group">
+                <label htmlFor="filter-status">Status:</label>
+                <select
+                  id="filter-status"
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                >
+                  <option value="">All</option>
+                  <option value="TODO">TODO</option>
+                  <option value="IN_PROGRESS">IN_PROGRESS</option>
+                  <option value="DONE">DONE</option>
+                </select>
+              </div>
+
+              <div className="filter-group">
+                <label htmlFor="filter-priority">Priority:</label>
+                <select
+                  id="filter-priority"
+                  value={filterPriority}
+                  onChange={(e) => setFilterPriority(e.target.value)}
+                >
+                  <option value="">All</option>
+                  <option value="CRITICAL">Critical</option>
+                  <option value="HIGH">High</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="LOW">Low</option>
+                </select>
+              </div>
+
+              <div className="filter-group">
+                <label htmlFor="filter-assignee">Assignee:</label>
+                <select
+                  id="filter-assignee"
+                  value={filterAssignee}
+                  onChange={(e) => setFilterAssignee(e.target.value)}
+                >
+                  <option value="">All</option>
+                  {users.filter(u => u.is_active).map(user => (
+                    <option key={user.id} value={user.id}>
+                      {user.full_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="filter-group">
+                <label htmlFor="sort-by">Sort By:</label>
+                <select
+                  id="sort-by"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                >
+                  <option value="created_at">Created Date</option>
+                  <option value="priority">Priority</option>
+                  <option value="title">Title</option>
+                </select>
+              </div>
+            </div>
+
             {ticketsLoading && <div className="loading">Loading tickets...</div>}
 
             {!ticketsLoading && tickets.length === 0 && (
@@ -270,34 +378,39 @@ export function ProjectDetailsPage() {
                     <th>Title</th>
                     <th>Status</th>
                     <th>Priority</th>
+                    <th>Assignee</th>
                     <th>Created</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {tickets.map((ticket) => (
-                    <tr key={ticket.id}>
-                      <td>
-                        <Link to={`/tickets/${ticket.id}`} className="ticket-link">
-                          {ticket.title}
-                        </Link>
-                      </td>
-                      <td>
-                        <span className={`status-badge status-${ticket.status.toLowerCase()}`}>
-                          {ticket.status}
-                        </span>
-                      </td>
-                      <td>
-                        {ticket.priority ? (
-                          <span className={`priority-badge priority-${ticket.priority.toLowerCase()}`}>
-                            {ticket.priority}
+                  {tickets.map((ticket) => {
+                    const assignee = users.find(u => u.id === ticket.assignee_id);
+                    return (
+                      <tr key={ticket.id}>
+                        <td>
+                          <Link to={`/tickets/${ticket.id}`} className="ticket-link">
+                            {ticket.title}
+                          </Link>
+                        </td>
+                        <td>
+                          <span className={`status-badge status-${ticket.status.toLowerCase()}`}>
+                            {ticket.status}
                           </span>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                      <td>{new Date(ticket.created_at).toLocaleDateString()}</td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td>
+                          {ticket.priority ? (
+                            <span className={`priority-badge priority-${ticket.priority.toLowerCase()}`}>
+                              {ticket.priority}
+                            </span>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                        <td>{assignee ? assignee.full_name : 'Unassigned'}</td>
+                        <td>{new Date(ticket.created_at).toLocaleDateString()}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}
@@ -428,6 +541,24 @@ export function ProjectDetailsPage() {
                     <option value={TicketPriority.MEDIUM}>Medium</option>
                     <option value={TicketPriority.HIGH}>High</option>
                     <option value={TicketPriority.CRITICAL}>Critical</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="ticket-assignee">Assign To</label>
+                  <select
+                    id="ticket-assignee"
+                    name="assignee"
+                    value={newTicketAssignee}
+                    onChange={(e) => setNewTicketAssignee(e.target.value)}
+                    disabled={isCreatingTicket}
+                  >
+                    <option value="">Unassigned</option>
+                    {users.filter(u => u.is_active).map(user => (
+                      <option key={user.id} value={user.id}>
+                        {user.full_name} ({user.username})
+                      </option>
+                    ))}
                   </select>
                 </div>
 

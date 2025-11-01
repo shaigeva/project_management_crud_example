@@ -105,8 +105,8 @@ test.describe('Project Details Page', () => {
     await expect(page.locator('.status-badge')).toBeVisible();
 
     // Should see timestamps
-    await expect(page.getByText('Created')).toBeVisible();
-    await expect(page.getByText('Last Updated')).toBeVisible();
+    await expect(page.locator('dt').filter({ hasText: 'Created' })).toBeVisible();
+    await expect(page.locator('dt').filter({ hasText: 'Last Updated' })).toBeVisible();
 
     // Should see placeholder sections
     await expect(page.getByRole('heading', { name: 'Epics' })).toBeVisible();

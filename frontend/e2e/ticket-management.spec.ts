@@ -246,15 +246,16 @@ test.describe('Ticket Management', () => {
     // Should see description
     await expect(page.getByText('Comprehensive test description')).toBeVisible();
 
-    // Should see status badge
-    await expect(page.locator('.status-badge')).toBeVisible();
+    // Should see status select dropdown
+    await expect(page.locator('.status-select')).toBeVisible();
+    await expect(page.locator('.status-select')).toHaveValue('TODO');
 
     // Should see priority badge
     await expect(page.locator('.priority-badge').filter({ hasText: 'MEDIUM' })).toBeVisible();
 
     // Should see timestamps
-    await expect(page.getByText('Created')).toBeVisible();
-    await expect(page.getByText('Last Updated')).toBeVisible();
+    await expect(page.locator('dt').filter({ hasText: 'Created' })).toBeVisible();
+    await expect(page.locator('dt').filter({ hasText: 'Last Updated' })).toBeVisible();
   });
 
   test('back link navigates to project details', async ({ page }) => {

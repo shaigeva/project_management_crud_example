@@ -223,6 +223,18 @@ class ApiClient {
     );
     return response.data;
   }
+
+  async updateTicketStatus(ticketId: string, status: string): Promise<Ticket> {
+    const response = await this.client.put<Ticket>(`/api/tickets/${ticketId}/status`, { status });
+    return response.data;
+  }
+
+  async updateTicketAssignee(ticketId: string, assigneeId: string | null): Promise<Ticket> {
+    const response = await this.client.put<Ticket>(`/api/tickets/${ticketId}/assignee`, {
+      assignee_id: assigneeId,
+    });
+    return response.data;
+  }
 }
 
 export const apiClient = new ApiClient();
