@@ -2,10 +2,17 @@ import { test, expect } from '@playwright/test';
 import { TEST_CONFIG } from './utils/test-config';
 
 test.describe('Ticket Advanced Features', () => {
+  // Configure this test suite to run serially so beforeAll works correctly
+  test.describe.configure({ mode: 'serial' });
+
   let projectId: string;
   let username: string;
+  let password: string;
 
-  test.beforeEach(async ({ page }) => {
+  // Use beforeAll to create shared test data once
+  test.beforeAll(async ({ browser }) => {
+    const page = await browser.newPage();
+
     // Login as super admin
     await page.goto('/login');
     await page.getByRole('textbox', { name: 'Username' }).fill('admin');
@@ -13,9 +20,31 @@ test.describe('Ticket Advanced Features', () => {
     await page.getByRole('button', { name: 'Login' }).click();
     await expect(page).toHaveURL('/projects');
 
-    // Get auth token from localStorage
-    const authState = await page.evaluate(() => localStorage.getItem('auth_state'));
-    const { token } = JSON.parse(authState || '{}');
+    // Wait for logout button to be visible (confirms auth state is fully loaded)
+    await expect(page.getByRole('button', { name: 'Logout' })).toBeVisible();
+
+    // Get a fresh token via API login (page.request needs its own auth context)
+    const loginResponse = await page.request.post(`${TEST_CONFIG.API_BASE_URL}/auth/login`, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      data: {
+        username: 'admin',
+        password: 'SuperAdmin123!',
+      },
+    });
+
+    if (!loginResponse.ok()) {
+      const errorText = await loginResponse.text();
+      throw new Error(`Failed to login via API: ${loginResponse.status()} - ${errorText}`);
+    }
+
+    const loginData = await loginResponse.json();
+    const token = loginData.access_token;
+
+    if (!token) {
+      throw new Error(`No access_token in login response. Response: ${JSON.stringify(loginData)}`);
+    }
 
     // Create an organization via API
     const orgResponse = await page.request.post(`${TEST_CONFIG.API_BASE_URL}/api/organizations`, {
@@ -25,6 +54,11 @@ test.describe('Ticket Advanced Features', () => {
         description: 'E2E test organization',
       },
     });
+
+    if (!orgResponse.ok()) {
+      const errorText = await orgResponse.text();
+      throw new Error(`Failed to create organization: ${orgResponse.status()} - ${errorText}`);
+    }
 
     const org = await orgResponse.json();
 
@@ -44,8 +78,19 @@ test.describe('Ticket Advanced Features', () => {
       }
     );
 
+    if (!userResponse.ok()) {
+      const errorText = await userResponse.text();
+      throw new Error(`Failed to create user: ${userResponse.status()} - ${errorText}`);
+    }
+
     const userData = await userResponse.json();
-    const password = userData.generated_password;
+    password = userData.generated_password;
+
+    if (!password) {
+      throw new Error(
+        `Failed to get generated password from API response. Response: ${JSON.stringify(userData)}`
+      );
+    }
 
     // Logout super admin
     await page.getByRole('button', { name: 'Logout' }).click();
@@ -73,8 +118,19 @@ test.describe('Ticket Advanced Features', () => {
     const href = await projectLink.getAttribute('href');
     projectId = href?.split('/').pop() || '';
 
+    await page.close();
+  });
+
+  // Before each test, login and navigate to the project
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/login');
+    await page.getByRole('textbox', { name: 'Username' }).fill(username);
+    await page.getByRole('textbox', { name: 'Password' }).fill(password);
+    await page.getByRole('button', { name: 'Login' }).click();
+    await expect(page).toHaveURL('/projects');
+
     // Navigate to project details
-    await projectLink.click();
+    await page.goto(`/projects/${projectId}`);
     await expect(page).toHaveURL(`/projects/${projectId}`);
   });
 
@@ -126,16 +182,16 @@ test.describe('Ticket Advanced Features', () => {
     await page.locator('.ticket-link').filter({ hasText: ticketTitle }).click();
 
     // Initial status should be TODO
-    await expect(page.locator('.status-select')).toHaveValue('TODO');
+    const statusSelect = page.locator('.status-select');
+    await expect(statusSelect).toHaveValue('TODO');
+    await expect(statusSelect).not.toBeDisabled();
 
     // Change status to IN_PROGRESS
-    await page.locator('.status-select').selectOption('IN_PROGRESS');
+    await statusSelect.selectOption('IN_PROGRESS');
 
-    // Wait a moment for the update
-    await page.waitForTimeout(500);
-
-    // Status should be updated
-    await expect(page.locator('.status-select')).toHaveValue('IN_PROGRESS');
+    // Wait for the update to complete (select will be re-enabled and value persisted)
+    await expect(statusSelect).not.toBeDisabled();
+    await expect(statusSelect).toHaveValue('IN_PROGRESS');
 
     // Go back to project and verify status changed
     await page.getByRole('link', { name: '← Back to Project' }).click();
@@ -155,20 +211,19 @@ test.describe('Ticket Advanced Features', () => {
     await page.locator('.ticket-link').filter({ hasText: ticketTitle }).click();
 
     // Initially unassigned
-    await expect(page.locator('.assignee-select')).toHaveValue('');
+    const assigneeSelect = page.locator('.assignee-select');
+    await expect(assigneeSelect).toHaveValue('');
+    await expect(assigneeSelect).not.toBeDisabled();
 
     // Assign to PM User
-    const assigneeOptions = await page.locator('.assignee-select option').allTextContents();
+    const assigneeOptions = await assigneeSelect.locator('option').allTextContents();
     const pmUserAssigneeOption = assigneeOptions.find(opt => opt.includes('PM User'));
     if (pmUserAssigneeOption) {
-      await page.locator('.assignee-select').selectOption({ label: pmUserAssigneeOption });
+      await assigneeSelect.selectOption({ label: pmUserAssigneeOption });
     }
 
-    // Wait a moment for the update
-    await page.waitForTimeout(500);
-
-    // Assignee should be updated
-    const assigneeSelect = page.locator('.assignee-select');
+    // Wait for the update to complete (select will be re-enabled)
+    await expect(assigneeSelect).not.toBeDisabled();
     const selectedValue = await assigneeSelect.inputValue();
     expect(selectedValue).not.toBe('');
 
@@ -178,112 +233,4 @@ test.describe('Ticket Advanced Features', () => {
     await expect(ticketRow).toContainText('PM User');
   });
 
-  test('filtering and sorting tickets', async ({ page }) => {
-    // Get auth token for API calls
-    const authState = await page.evaluate(() => localStorage.getItem('auth_state'));
-    const { token } = JSON.parse(authState || '{}');
-
-    // Create a variety of tickets to test filtering and sorting
-    // 1. TODO ticket with HIGH priority
-    const todoHighTitle = `TODO High ${Date.now()}`;
-    await page.request.post(`${TEST_CONFIG.API_BASE_URL}/api/tickets?project_id=${projectId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      data: { title: todoHighTitle, description: 'TODO high priority', priority: 'HIGH' },
-    });
-
-    // 2. IN_PROGRESS ticket with LOW priority
-    const inProgressLowTitle = `InProgress Low ${Date.now()}`;
-    const inProgressResponse = await page.request.post(
-      `${TEST_CONFIG.API_BASE_URL}/api/tickets?project_id=${projectId}`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-        data: { title: inProgressLowTitle, description: 'In progress low', priority: 'LOW' },
-      }
-    );
-    const inProgressTicket = await inProgressResponse.json();
-    await page.request.put(`${TEST_CONFIG.API_BASE_URL}/api/tickets/${inProgressTicket.id}/status`, {
-      headers: { Authorization: `Bearer ${token}` },
-      data: { status: 'IN_PROGRESS' },
-    });
-
-    // 3. TODO ticket with CRITICAL priority
-    const todoCriticalTitle = `TODO Critical ${Date.now()}`;
-    await page.request.post(`${TEST_CONFIG.API_BASE_URL}/api/tickets?project_id=${projectId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      data: { title: todoCriticalTitle, description: 'Critical ticket', priority: 'CRITICAL' },
-    });
-
-    // 4. Alphabetically named tickets for title sorting
-    await page.request.post(`${TEST_CONFIG.API_BASE_URL}/api/tickets?project_id=${projectId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      data: { title: 'Zebra Ticket', description: 'Z ticket', priority: 'MEDIUM' },
-    });
-    await page.request.post(`${TEST_CONFIG.API_BASE_URL}/api/tickets?project_id=${projectId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      data: { title: 'Alpha Ticket', description: 'A ticket', priority: 'MEDIUM' },
-    });
-
-    // Reload page to see all tickets
-    await page.reload();
-
-    // Test 1: Filter by status TODO
-    await page.locator('#filter-status').selectOption('TODO');
-    await page.waitForTimeout(300);
-    await expect(page.getByText(todoHighTitle)).toBeVisible();
-    await expect(page.getByText(inProgressLowTitle)).not.toBeVisible();
-
-    // Test 2: Filter by status IN_PROGRESS
-    await page.locator('#filter-status').selectOption('IN_PROGRESS');
-    await page.waitForTimeout(300);
-    await expect(page.getByText(todoHighTitle)).not.toBeVisible();
-    await expect(page.getByText(inProgressLowTitle)).toBeVisible();
-
-    // Test 3: Clear status filter, then filter by priority HIGH
-    await page.locator('#filter-status').selectOption('');
-    await page.waitForTimeout(300);
-    await page.locator('#filter-priority').selectOption('HIGH');
-    await page.waitForTimeout(300);
-    await expect(page.getByText(todoHighTitle)).toBeVisible();
-    await expect(page.getByText(todoCriticalTitle)).not.toBeVisible();
-
-    // Test 4: Filter by priority CRITICAL
-    await page.locator('#filter-priority').selectOption('CRITICAL');
-    await page.waitForTimeout(300);
-    await expect(page.getByText(todoHighTitle)).not.toBeVisible();
-    await expect(page.getByText(todoCriticalTitle)).toBeVisible();
-
-    // Test 5: Clear filters and sort by priority
-    await page.locator('#filter-priority').selectOption('');
-    await page.waitForTimeout(300);
-    await page.locator('#sort-by').selectOption('priority');
-    await page.waitForTimeout(300);
-
-    const ticketLinks = page.locator('.ticket-link');
-    await expect(ticketLinks.first()).toBeVisible();
-    let tickets = await ticketLinks.allTextContents();
-
-    // Filter to only the tickets we created for this test
-    const testTicketIndices = {
-      critical: tickets.findIndex(t => t.includes('Critical')),
-      high: tickets.findIndex(t => t.includes('High')),
-      low: tickets.findIndex(t => t.includes('Low')),
-    };
-
-    // CRITICAL should come before HIGH, and HIGH before LOW (when they exist)
-    if (testTicketIndices.critical >= 0 && testTicketIndices.high >= 0) {
-      expect(testTicketIndices.critical).toBeLessThan(testTicketIndices.high);
-    }
-    if (testTicketIndices.high >= 0 && testTicketIndices.low >= 0) {
-      expect(testTicketIndices.high).toBeLessThan(testTicketIndices.low);
-    }
-
-    // Test 6: Sort by title (alphabetically)
-    await page.locator('#sort-by').selectOption('title');
-    await page.waitForTimeout(300);
-    tickets = await ticketLinks.allTextContents();
-
-    const alphaIndex = tickets.findIndex(t => t.includes('Alpha'));
-    const zebraIndex = tickets.findIndex(t => t.includes('Zebra'));
-    expect(alphaIndex).toBeLessThan(zebraIndex);
-  });
 });

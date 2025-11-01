@@ -13,9 +13,31 @@ test.describe('Project Details Page', () => {
     await page.getByRole('button', { name: 'Login' }).click();
     await expect(page).toHaveURL('/projects');
 
-    // Get auth token from localStorage
-    const authState = await page.evaluate(() => localStorage.getItem('auth_state'));
-    const { token } = JSON.parse(authState || '{}');
+    // Wait for logout button to be visible (confirms auth state is fully loaded)
+    await expect(page.getByRole('button', { name: 'Logout' })).toBeVisible();
+
+    // Get a fresh token via API login (page.request needs its own auth context)
+    const loginResponse = await page.request.post(`${TEST_CONFIG.API_BASE_URL}/auth/login`, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      data: {
+        username: 'admin',
+        password: 'SuperAdmin123!',
+      },
+    });
+
+    if (!loginResponse.ok()) {
+      const errorText = await loginResponse.text();
+      throw new Error(`Failed to login via API: ${loginResponse.status()} - ${errorText}`);
+    }
+
+    const loginData = await loginResponse.json();
+    const token = loginData.access_token;
+
+    if (!token) {
+      throw new Error(`No access_token in login response. Response: ${JSON.stringify(loginData)}`);
+    }
 
     // Create an organization via API
     const orgResponse = await page.request.post(`${TEST_CONFIG.API_BASE_URL}/api/organizations`, {
@@ -25,6 +47,11 @@ test.describe('Project Details Page', () => {
         description: 'E2E test organization',
       },
     });
+
+    if (!orgResponse.ok()) {
+      const errorText = await orgResponse.text();
+      throw new Error(`Failed to create organization: ${orgResponse.status()} - ${errorText}`);
+    }
 
     const org = await orgResponse.json();
 
@@ -44,8 +71,19 @@ test.describe('Project Details Page', () => {
       }
     );
 
+    if (!userResponse.ok()) {
+      const errorText = await userResponse.text();
+      throw new Error(`Failed to create user: ${userResponse.status()} - ${errorText}`);
+    }
+
     const userData = await userResponse.json();
     const password = userData.generated_password;
+
+    if (!password) {
+      throw new Error(
+        `Failed to get generated password from API response. Response: ${JSON.stringify(userData)}`
+      );
+    }
 
     // Logout super admin
     await page.getByRole('button', { name: 'Logout' }).click();
