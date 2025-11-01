@@ -1,6 +1,6 @@
 import { useState, useEffect, FormEvent } from 'react';
-import { useAuth } from '../contexts/AuthContext';
 import apiClient, { Project } from '../services/api';
+import { Navigation } from '../components/Navigation';
 
 export function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -11,7 +11,6 @@ export function ProjectsPage() {
   const [createError, setCreateError] = useState('');
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDescription, setNewProjectDescription] = useState('');
-  const { logout } = useAuth();
 
   const fetchProjects = async () => {
     try {
@@ -62,18 +61,17 @@ export function ProjectsPage() {
   };
 
   return (
-    <div className="projects-page">
-      <header className="page-header">
-        <h1>Projects</h1>
-        <div className="header-actions">
-          <button onClick={() => setShowCreateForm(true)} className="primary-button">
-            New Project
-          </button>
-          <button onClick={logout} className="logout-button">
-            Logout
-          </button>
-        </div>
-      </header>
+    <>
+      <Navigation />
+      <div className="projects-page">
+        <header className="page-header">
+          <h1>Projects</h1>
+          <div className="header-actions">
+            <button onClick={() => setShowCreateForm(true)} className="primary-button">
+              New Project
+            </button>
+          </div>
+        </header>
 
       {isLoading && <div className="loading">Loading projects...</div>}
 
@@ -174,6 +172,7 @@ export function ProjectsPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

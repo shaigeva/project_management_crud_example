@@ -1,6 +1,6 @@
 import { useState, useEffect, FormEvent } from 'react';
-import { useAuth } from '../contexts/AuthContext';
 import apiClient, { User, Organization, UserCreateResponse } from '../services/api';
+import { Navigation } from '../components/Navigation';
 
 export function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -16,7 +16,6 @@ export function UsersPage() {
   const [newUserOrganizationId, setNewUserOrganizationId] = useState('');
   const [newUserRole, setNewUserRole] = useState('read_access');
   const [createdUser, setCreatedUser] = useState<UserCreateResponse | null>(null);
-  const { logout } = useAuth();
 
   const fetchUsers = async () => {
     try {
@@ -93,18 +92,17 @@ export function UsersPage() {
   };
 
   return (
-    <div className="users-page">
-      <header className="page-header">
-        <h1>Users</h1>
-        <div className="header-actions">
-          <button onClick={() => setShowCreateForm(true)} className="primary-button">
-            New User
-          </button>
-          <button onClick={logout} className="logout-button">
-            Logout
-          </button>
-        </div>
-      </header>
+    <>
+      <Navigation />
+      <div className="users-page">
+        <header className="page-header">
+          <h1>Users</h1>
+          <div className="header-actions">
+            <button onClick={() => setShowCreateForm(true)} className="primary-button">
+              New User
+            </button>
+          </div>
+        </header>
 
       {isLoading && <div className="loading">Loading users...</div>}
 
@@ -317,6 +315,7 @@ export function UsersPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
