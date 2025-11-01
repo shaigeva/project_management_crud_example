@@ -54,6 +54,15 @@ export interface Organization {
   updated_at: string;
 }
 
+export interface Epic {
+  id: string;
+  name: string;
+  description: string | null;
+  organization_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface UserCreateResponse {
   user: User;
   generated_password: string;
@@ -137,6 +146,22 @@ class ApiClient {
 
   async getOrganizations(): Promise<Organization[]> {
     const response = await this.client.get<Organization[]>('/api/organizations');
+    return response.data;
+  }
+
+  async getEpics(projectId?: string): Promise<Epic[]> {
+    const params = projectId ? { project_id: projectId } : undefined;
+    const response = await this.client.get<Epic[]>('/api/epics', { params });
+    return response.data;
+  }
+
+  async getEpic(epicId: string): Promise<Epic> {
+    const response = await this.client.get<Epic>(`/api/epics/${epicId}`);
+    return response.data;
+  }
+
+  async createEpic(data: { name: string; description?: string }): Promise<Epic> {
+    const response = await this.client.post<Epic>('/api/epics', data);
     return response.data;
   }
 }

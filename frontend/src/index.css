@@ -937,3 +937,76 @@ h1 {
     color: #999;
   }
 }
+
+/* Epic Management Styles */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.section-header h2 {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.epics-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+.epics-table thead {
+  background-color: rgba(100, 108, 255, 0.1);
+}
+
+.epics-table th {
+  text-align: left;
+  padding: 0.75rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.epics-table td {
+  padding: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.epics-table tbody tr:hover {
+  background-color: rgba(100, 108, 255, 0.05);
+}
+
+.epic-name {
+  font-weight: 500;
+  color: #90c9ee;
+}
+
+.epic-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+@media (prefers-color-scheme: light) {
+  .epics-table thead {
+    background-color: #f5f5f5;
+  }
+
+  .epics-table th {
+    color: #213547;
+  }
+
+  .epics-table td {
+    border-top: 1px solid #e0e0e0;
+  }
+
+  .epics-table tbody tr:hover {
+    background-color: #f9f9f9;
+  }
+
+  .epic-name {
+    color: #646cff;
+  }
+}
