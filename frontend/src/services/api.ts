@@ -63,6 +63,26 @@ export interface Epic {
   updated_at: string;
 }
 
+export enum TicketPriority {
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
+  CRITICAL = 'CRITICAL',
+}
+
+export interface Ticket {
+  id: string;
+  title: string;
+  description: string | null;
+  priority: TicketPriority | null;
+  status: string;
+  assignee_id: string | null;
+  reporter_id: string;
+  project_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface UserCreateResponse {
   user: User;
   generated_password: string;
@@ -162,6 +182,45 @@ class ApiClient {
 
   async createEpic(data: { name: string; description?: string }): Promise<Epic> {
     const response = await this.client.post<Epic>('/api/epics', data);
+    return response.data;
+  }
+
+  async getTickets(projectId?: string, status?: string, assigneeId?: string): Promise<Ticket[]> {
+    const params: Record<string, string> = {};
+    if (projectId) params.project_id = projectId;
+    if (status) params.status = status;
+    if (assigneeId) params.assignee_id = assigneeId;
+
+    const response = await this.client.get<Ticket[]>('/api/tickets', {
+      params: Object.keys(params).length > 0 ? params : undefined
+    });
+    return response.data;
+  }
+
+  async getTicket(ticketId: string): Promise<Ticket> {
+    const response = await this.client.get<Ticket>(`/api/tickets/${ticketId}`);
+    return response.data;
+  }
+
+  async createTicket(data: {
+    title: string;
+    description?: string;
+    priority?: TicketPriority;
+    projectId: string;
+    assigneeId?: string;
+  }): Promise<Ticket> {
+    const params: Record<string, string> = { project_id: data.projectId };
+    if (data.assigneeId) params.assignee_id = data.assigneeId;
+
+    const response = await this.client.post<Ticket>(
+      '/api/tickets',
+      {
+        title: data.title,
+        description: data.description || undefined,
+        priority: data.priority || undefined,
+      },
+      { params }
+    );
     return response.data;
   }
 }

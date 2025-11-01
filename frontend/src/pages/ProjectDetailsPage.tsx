@@ -1,6 +1,6 @@
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect, FormEvent, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import apiClient, { Project, Epic } from '../services/api';
+import apiClient, { Project, Epic, Ticket, TicketPriority } from '../services/api';
 import { Navigation } from '../components/Navigation';
 
 export function ProjectDetailsPage() {
@@ -15,6 +15,14 @@ export function ProjectDetailsPage() {
   const [createEpicError, setCreateEpicError] = useState('');
   const [newEpicName, setNewEpicName] = useState('');
   const [newEpicDescription, setNewEpicDescription] = useState('');
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [ticketsLoading, setTicketsLoading] = useState(false);
+  const [showCreateTicketForm, setShowCreateTicketForm] = useState(false);
+  const [isCreatingTicket, setIsCreatingTicket] = useState(false);
+  const [createTicketError, setCreateTicketError] = useState('');
+  const [newTicketTitle, setNewTicketTitle] = useState('');
+  const [newTicketDescription, setNewTicketDescription] = useState('');
+  const [newTicketPriority, setNewTicketPriority] = useState<TicketPriority | ''>('');
 
   const fetchEpics = async () => {
     setEpicsLoading(true);
@@ -28,6 +36,20 @@ export function ProjectDetailsPage() {
     }
   };
 
+  const fetchTickets = useCallback(async () => {
+    if (!projectId) return;
+
+    setTicketsLoading(true);
+    try {
+      const data = await apiClient.getTickets(projectId);
+      setTickets(data);
+    } catch (err) {
+      console.error('Failed to load tickets:', err);
+    } finally {
+      setTicketsLoading(false);
+    }
+  }, [projectId]);
+
   useEffect(() => {
     const fetchProject = async () => {
       if (!projectId) {
@@ -39,8 +61,9 @@ export function ProjectDetailsPage() {
       try {
         const data = await apiClient.getProject(projectId);
         setProject(data);
-        // Fetch epics after project loads successfully
+        // Fetch epics and tickets after project loads successfully
         await fetchEpics();
+        await fetchTickets();
       } catch (err) {
         if (err instanceof Error) {
           setError(err.message);
@@ -53,7 +76,7 @@ export function ProjectDetailsPage() {
     };
 
     fetchProject();
-  }, [projectId]);
+  }, [projectId, fetchTickets]);
 
   const handleCreateEpic = async (e: FormEvent) => {
     e.preventDefault();
@@ -81,6 +104,40 @@ export function ProjectDetailsPage() {
       }
     } finally {
       setIsCreatingEpic(false);
+    }
+  };
+
+  const handleCreateTicket = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!projectId) return;
+
+    setCreateTicketError('');
+    setIsCreatingTicket(true);
+
+    try {
+      await apiClient.createTicket({
+        title: newTicketTitle,
+        description: newTicketDescription || undefined,
+        priority: newTicketPriority || undefined,
+        projectId,
+      });
+
+      // Reset form and close modal
+      setNewTicketTitle('');
+      setNewTicketDescription('');
+      setNewTicketPriority('');
+      setShowCreateTicketForm(false);
+
+      // Refresh tickets list
+      await fetchTickets();
+    } catch (err) {
+      if (err instanceof Error) {
+        setCreateTicketError(err.message);
+      } else {
+        setCreateTicketError('Failed to create ticket');
+      }
+    } finally {
+      setIsCreatingTicket(false);
     }
   };
 
@@ -190,8 +247,60 @@ export function ProjectDetailsPage() {
           </div>
 
           <div className="details-section">
-            <h2>Tickets</h2>
-            <p className="placeholder-text">Ticket management coming soon...</p>
+            <div className="section-header">
+              <h2>Tickets</h2>
+              <button
+                onClick={() => setShowCreateTicketForm(true)}
+                className="primary-button"
+              >
+                New Ticket
+              </button>
+            </div>
+
+            {ticketsLoading && <div className="loading">Loading tickets...</div>}
+
+            {!ticketsLoading && tickets.length === 0 && (
+              <p className="placeholder-text">No tickets yet. Create one to get started.</p>
+            )}
+
+            {!ticketsLoading && tickets.length > 0 && (
+              <table className="tickets-table">
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Status</th>
+                    <th>Priority</th>
+                    <th>Created</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tickets.map((ticket) => (
+                    <tr key={ticket.id}>
+                      <td>
+                        <Link to={`/tickets/${ticket.id}`} className="ticket-link">
+                          {ticket.title}
+                        </Link>
+                      </td>
+                      <td>
+                        <span className={`status-badge status-${ticket.status.toLowerCase()}`}>
+                          {ticket.status}
+                        </span>
+                      </td>
+                      <td>
+                        {ticket.priority ? (
+                          <span className={`priority-badge priority-${ticket.priority.toLowerCase()}`}>
+                            {ticket.priority}
+                          </span>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td>{new Date(ticket.created_at).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
 
@@ -253,6 +362,88 @@ export function ProjectDetailsPage() {
                   </button>
                   <button type="submit" className="primary-button" disabled={isCreatingEpic}>
                     {isCreatingEpic ? 'Creating...' : 'Create Epic'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Create Ticket Modal */}
+        {showCreateTicketForm && (
+          <div className="modal-overlay" onClick={() => setShowCreateTicketForm(false)}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>Create New Ticket</h2>
+                <button
+                  className="close-button"
+                  onClick={() => setShowCreateTicketForm(false)}
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateTicket} className="ticket-form">
+                <div className="form-group">
+                  <label htmlFor="ticket-title">Title *</label>
+                  <input
+                    type="text"
+                    id="ticket-title"
+                    name="title"
+                    value={newTicketTitle}
+                    onChange={(e) => setNewTicketTitle(e.target.value)}
+                    required
+                    maxLength={500}
+                    disabled={isCreatingTicket}
+                    placeholder="Enter ticket title"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="ticket-description">Description</label>
+                  <textarea
+                    id="ticket-description"
+                    name="description"
+                    value={newTicketDescription}
+                    onChange={(e) => setNewTicketDescription(e.target.value)}
+                    maxLength={2000}
+                    disabled={isCreatingTicket}
+                    placeholder="Enter ticket description (optional)"
+                    rows={4}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="ticket-priority">Priority</label>
+                  <select
+                    id="ticket-priority"
+                    name="priority"
+                    value={newTicketPriority}
+                    onChange={(e) => setNewTicketPriority(e.target.value as TicketPriority | '')}
+                    disabled={isCreatingTicket}
+                  >
+                    <option value="">None</option>
+                    <option value={TicketPriority.LOW}>Low</option>
+                    <option value={TicketPriority.MEDIUM}>Medium</option>
+                    <option value={TicketPriority.HIGH}>High</option>
+                    <option value={TicketPriority.CRITICAL}>Critical</option>
+                  </select>
+                </div>
+
+                {createTicketError && <div className="error-message">{createTicketError}</div>}
+
+                <div className="form-actions">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateTicketForm(false)}
+                    className="secondary-button"
+                    disabled={isCreatingTicket}
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="primary-button" disabled={isCreatingTicket}>
+                    {isCreatingTicket ? 'Creating...' : 'Create Ticket'}
                   </button>
                 </div>
               </form>

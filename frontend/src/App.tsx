@@ -3,6 +3,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { LoginPage } from './pages/LoginPage';
 import { ProjectsPage } from './pages/ProjectsPage';
 import { ProjectDetailsPage } from './pages/ProjectDetailsPage';
+import { TicketDetailsPage } from './pages/TicketDetailsPage';
 import { UsersPage } from './pages/UsersPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import './index.css';
@@ -26,6 +27,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <ProjectDetailsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tickets/:ticketId"
+            element={
+              <ProtectedRoute>
+                <TicketDetailsPage />
               </ProtectedRoute>
             }
           />
