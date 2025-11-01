@@ -61,7 +61,15 @@
       "mcp__playwright__browser_close",
       "Read(//Users/shai/proj/shaig/learn/ai_framework_posts/**)",
       "mcp__playwright__browser_console_messages",
-      "Bash(time npm run e2e)"
+      "Bash(time npm run e2e)",
+      "Bash(time npm run e2e:*)",
+      "Bash(for:*)",
+      "Bash(do echo \"=== Run $i ===\")",
+      "Bash(done)",
+      "Bash(E2E_TESTING=true python -m uvicorn:*)",
+      "Bash(python -m json.tool:*)",
+      "Bash(npx playwright test:*)",
+      "Bash(do)"
     ],
     "deny": [],
     "ask": [],
