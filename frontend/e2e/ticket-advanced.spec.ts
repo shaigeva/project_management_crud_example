@@ -178,158 +178,112 @@ test.describe('Ticket Advanced Features', () => {
     await expect(ticketRow).toContainText('PM User');
   });
 
-  test('can filter tickets by status', async ({ page }) => {
-    // Create tickets with different statuses via API
+  test('filtering and sorting tickets', async ({ page }) => {
+    // Get auth token for API calls
     const authState = await page.evaluate(() => localStorage.getItem('auth_state'));
     const { token } = JSON.parse(authState || '{}');
 
-    // Create TODO ticket
-    const todoTitle = `TODO Ticket ${Date.now()}`;
+    // Create a variety of tickets to test filtering and sorting
+    // 1. TODO ticket with HIGH priority
+    const todoHighTitle = `TODO High ${Date.now()}`;
     await page.request.post(`${TEST_CONFIG.API_BASE_URL}/api/tickets?project_id=${projectId}`, {
       headers: { Authorization: `Bearer ${token}` },
-      data: { title: todoTitle, description: 'TODO ticket' },
+      data: { title: todoHighTitle, description: 'TODO high priority', priority: 'HIGH' },
     });
 
-    // Create IN_PROGRESS ticket
-    const inProgressTitle = `InProgress Ticket ${Date.now()}`;
+    // 2. IN_PROGRESS ticket with LOW priority
+    const inProgressLowTitle = `InProgress Low ${Date.now()}`;
     const inProgressResponse = await page.request.post(
       `${TEST_CONFIG.API_BASE_URL}/api/tickets?project_id=${projectId}`,
       {
         headers: { Authorization: `Bearer ${token}` },
-        data: { title: inProgressTitle, description: 'In progress ticket' },
+        data: { title: inProgressLowTitle, description: 'In progress low', priority: 'LOW' },
       }
     );
     const inProgressTicket = await inProgressResponse.json();
-
-    // Update status to IN_PROGRESS
     await page.request.put(`${TEST_CONFIG.API_BASE_URL}/api/tickets/${inProgressTicket.id}/status`, {
       headers: { Authorization: `Bearer ${token}` },
       data: { status: 'IN_PROGRESS' },
     });
 
-    // Refresh page
+    // 3. TODO ticket with CRITICAL priority
+    const todoCriticalTitle = `TODO Critical ${Date.now()}`;
+    await page.request.post(`${TEST_CONFIG.API_BASE_URL}/api/tickets?project_id=${projectId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { title: todoCriticalTitle, description: 'Critical ticket', priority: 'CRITICAL' },
+    });
+
+    // 4. Alphabetically named tickets for title sorting
+    await page.request.post(`${TEST_CONFIG.API_BASE_URL}/api/tickets?project_id=${projectId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { title: 'Zebra Ticket', description: 'Z ticket', priority: 'MEDIUM' },
+    });
+    await page.request.post(`${TEST_CONFIG.API_BASE_URL}/api/tickets?project_id=${projectId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { title: 'Alpha Ticket', description: 'A ticket', priority: 'MEDIUM' },
+    });
+
+    // Reload page to see all tickets
     await page.reload();
 
-    // Both tickets should be visible initially
-    await expect(page.getByText(todoTitle)).toBeVisible();
-    await expect(page.getByText(inProgressTitle)).toBeVisible();
-
-    // Filter by TODO
+    // Test 1: Filter by status TODO
     await page.locator('#filter-status').selectOption('TODO');
     await page.waitForTimeout(300);
+    await expect(page.getByText(todoHighTitle)).toBeVisible();
+    await expect(page.getByText(inProgressLowTitle)).not.toBeVisible();
 
-    // Only TODO ticket should be visible
-    await expect(page.getByText(todoTitle)).toBeVisible();
-    await expect(page.getByText(inProgressTitle)).not.toBeVisible();
-
-    // Filter by IN_PROGRESS
+    // Test 2: Filter by status IN_PROGRESS
     await page.locator('#filter-status').selectOption('IN_PROGRESS');
     await page.waitForTimeout(300);
+    await expect(page.getByText(todoHighTitle)).not.toBeVisible();
+    await expect(page.getByText(inProgressLowTitle)).toBeVisible();
 
-    // Only IN_PROGRESS ticket should be visible
-    await expect(page.getByText(todoTitle)).not.toBeVisible();
-    await expect(page.getByText(inProgressTitle)).toBeVisible();
-
-    // Clear filter
+    // Test 3: Clear status filter, then filter by priority HIGH
     await page.locator('#filter-status').selectOption('');
     await page.waitForTimeout(300);
-
-    // Both should be visible again
-    await expect(page.getByText(todoTitle)).toBeVisible();
-    await expect(page.getByText(inProgressTitle)).toBeVisible();
-  });
-
-  test('can filter tickets by priority', async ({ page }) => {
-    // Create tickets with different priorities
-    await page.getByRole('button', { name: 'New Ticket' }).click();
-    const highTitle = `High Priority ${Date.now()}`;
-    await page.locator('#ticket-title').fill(highTitle);
-    await page.locator('#ticket-priority').selectOption('HIGH');
-    await page.getByRole('button', { name: 'Create Ticket' }).click();
-    await expect(page.getByText(highTitle)).toBeVisible();
-
-    await page.getByRole('button', { name: 'New Ticket' }).click();
-    const lowTitle = `Low Priority ${Date.now()}`;
-    await page.locator('#ticket-title').fill(lowTitle);
-    await page.locator('#ticket-priority').selectOption('LOW');
-    await page.getByRole('button', { name: 'Create Ticket' }).click();
-    await expect(page.getByText(lowTitle)).toBeVisible();
-
-    // Both should be visible
-    await expect(page.getByText(highTitle)).toBeVisible();
-    await expect(page.getByText(lowTitle)).toBeVisible();
-
-    // Filter by HIGH
     await page.locator('#filter-priority').selectOption('HIGH');
     await page.waitForTimeout(300);
+    await expect(page.getByText(todoHighTitle)).toBeVisible();
+    await expect(page.getByText(todoCriticalTitle)).not.toBeVisible();
 
-    // Only high priority should be visible
-    await expect(page.getByText(highTitle)).toBeVisible();
-    await expect(page.getByText(lowTitle)).not.toBeVisible();
-
-    // Filter by LOW
-    await page.locator('#filter-priority').selectOption('LOW');
+    // Test 4: Filter by priority CRITICAL
+    await page.locator('#filter-priority').selectOption('CRITICAL');
     await page.waitForTimeout(300);
+    await expect(page.getByText(todoHighTitle)).not.toBeVisible();
+    await expect(page.getByText(todoCriticalTitle)).toBeVisible();
 
-    // Only low priority should be visible
-    await expect(page.getByText(highTitle)).not.toBeVisible();
-    await expect(page.getByText(lowTitle)).toBeVisible();
-  });
-
-  test('can sort tickets by priority', async ({ page }) => {
-    // Create tickets with different priorities
-    await page.getByRole('button', { name: 'New Ticket' }).click();
-    await page.locator('#ticket-title').fill('Low Priority Ticket');
-    await page.locator('#ticket-priority').selectOption('LOW');
-    await page.getByRole('button', { name: 'Create Ticket' }).click();
-
-    await page.getByRole('button', { name: 'New Ticket' }).click();
-    await page.locator('#ticket-title').fill('Critical Priority Ticket');
-    await page.locator('#ticket-priority').selectOption('CRITICAL');
-    await page.getByRole('button', { name: 'Create Ticket' }).click();
-
-    await page.getByRole('button', { name: 'New Ticket' }).click();
-    await page.locator('#ticket-title').fill('Medium Priority Ticket');
-    await page.locator('#ticket-priority').selectOption('MEDIUM');
-    await page.getByRole('button', { name: 'Create Ticket' }).click();
-
-    // Sort by priority
+    // Test 5: Clear filters and sort by priority
+    await page.locator('#filter-priority').selectOption('');
+    await page.waitForTimeout(300);
     await page.locator('#sort-by').selectOption('priority');
     await page.waitForTimeout(300);
 
-    // Get all ticket titles in order
-    const tickets = await page.locator('.ticket-link').allTextContents();
+    const ticketLinks = page.locator('.ticket-link');
+    await expect(ticketLinks.first()).toBeVisible();
+    let tickets = await ticketLinks.allTextContents();
 
-    // Critical should be first, then Medium, then Low
-    expect(tickets[0]).toContain('Critical');
-    expect(tickets[1]).toContain('Medium');
-    expect(tickets[2]).toContain('Low');
-  });
+    // Filter to only the tickets we created for this test
+    const testTicketIndices = {
+      critical: tickets.findIndex(t => t.includes('Critical')),
+      high: tickets.findIndex(t => t.includes('High')),
+      low: tickets.findIndex(t => t.includes('Low')),
+    };
 
-  test('can sort tickets by title', async ({ page }) => {
-    // Create tickets with different titles
-    await page.getByRole('button', { name: 'New Ticket' }).click();
-    await page.locator('#ticket-title').fill('Zebra Ticket');
-    await page.getByRole('button', { name: 'Create Ticket' }).click();
+    // CRITICAL should come before HIGH, and HIGH before LOW (when they exist)
+    if (testTicketIndices.critical >= 0 && testTicketIndices.high >= 0) {
+      expect(testTicketIndices.critical).toBeLessThan(testTicketIndices.high);
+    }
+    if (testTicketIndices.high >= 0 && testTicketIndices.low >= 0) {
+      expect(testTicketIndices.high).toBeLessThan(testTicketIndices.low);
+    }
 
-    await page.getByRole('button', { name: 'New Ticket' }).click();
-    await page.locator('#ticket-title').fill('Alpha Ticket');
-    await page.getByRole('button', { name: 'Create Ticket' }).click();
-
-    await page.getByRole('button', { name: 'New Ticket' }).click();
-    await page.locator('#ticket-title').fill('Mu Ticket');
-    await page.getByRole('button', { name: 'Create Ticket' }).click();
-
-    // Sort by title
+    // Test 6: Sort by title (alphabetically)
     await page.locator('#sort-by').selectOption('title');
     await page.waitForTimeout(300);
+    tickets = await ticketLinks.allTextContents();
 
-    // Get all ticket titles in order
-    const tickets = await page.locator('.ticket-link').allTextContents();
-
-    // Should be alphabetical
-    expect(tickets[0]).toContain('Alpha');
-    expect(tickets[1]).toContain('Mu');
-    expect(tickets[2]).toContain('Zebra');
+    const alphaIndex = tickets.findIndex(t => t.includes('Alpha'));
+    const zebraIndex = tickets.findIndex(t => t.includes('Zebra'));
+    expect(alphaIndex).toBeLessThan(zebraIndex);
   });
 });

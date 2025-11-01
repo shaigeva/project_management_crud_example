@@ -60,7 +60,8 @@
       "mcp__playwright__browser_click",
       "mcp__playwright__browser_close",
       "Read(//Users/shai/proj/shaig/learn/ai_framework_posts/**)",
-      "mcp__playwright__browser_console_messages"
+      "mcp__playwright__browser_console_messages",
+      "Bash(time npm run e2e)"
     ],
     "deny": [],
     "ask": [],
