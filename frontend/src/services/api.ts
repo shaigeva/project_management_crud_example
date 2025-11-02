@@ -194,6 +194,21 @@ class ApiClient {
     return response.data;
   }
 
+  async addTicketToEpic(epicId: string, ticketId: string): Promise<void> {
+    await this.client.post(`/api/epics/${epicId}/tickets`, null, {
+      params: { ticket_id: ticketId },
+    });
+  }
+
+  async removeTicketFromEpic(epicId: string, ticketId: string): Promise<void> {
+    await this.client.delete(`/api/epics/${epicId}/tickets/${ticketId}`);
+  }
+
+  async getEpicTickets(epicId: string): Promise<Ticket[]> {
+    const response = await this.client.get<Ticket[]>(`/api/epics/${epicId}/tickets`);
+    return response.data;
+  }
+
   async getTickets(projectId?: string, status?: string, assigneeId?: string): Promise<Ticket[]> {
     const params: Record<string, string> = {};
     if (projectId) params.project_id = projectId;

@@ -1,6 +1,6 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import apiClient, { Ticket, User, Comment } from '../services/api';
+import apiClient, { Ticket, User, Comment, Epic } from '../services/api';
 import { Navigation } from '../components/Navigation';
 
 export function TicketDetailsPage() {
@@ -9,8 +9,11 @@ export function TicketDetailsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [users, setUsers] = useState<User[]>([]);
+  const [epics, setEpics] = useState<Epic[]>([]);
+  const [ticketEpics, setTicketEpics] = useState<string[]>([]);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isUpdatingAssignee, setIsUpdatingAssignee] = useState(false);
+  const [isUpdatingEpic, setIsUpdatingEpic] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [newCommentContent, setNewCommentContent] = useState('');
@@ -26,12 +29,24 @@ export function TicketDetailsPage() {
       }
 
       try {
-        const [ticketData, usersData] = await Promise.all([
+        const [ticketData, usersData, epicsData] = await Promise.all([
           apiClient.getTicket(ticketId),
           apiClient.getUsers(),
+          apiClient.getEpics(),
         ]);
         setTicket(ticketData);
         setUsers(usersData);
+        setEpics(epicsData);
+
+        // Find which epics contain this ticket
+        const epicIds: string[] = [];
+        for (const epic of epicsData) {
+          const epicTickets = await apiClient.getEpicTickets(epic.id);
+          if (epicTickets.some(t => t.id === ticketId)) {
+            epicIds.push(epic.id);
+          }
+        }
+        setTicketEpics(epicIds);
       } catch (err) {
         if (err instanceof Error) {
           setError(err.message);
@@ -126,6 +141,38 @@ export function TicketDetailsPage() {
     }
   };
 
+  const handleEpicChange = async (epicId: string) => {
+    if (!ticketId) return;
+
+    setIsUpdatingEpic(true);
+    try {
+      // Get current epic (first one if multiple)
+      const currentEpicId = ticketEpics[0];
+
+      // If there's a current epic and it's different, remove from it
+      if (currentEpicId && currentEpicId !== epicId) {
+        await apiClient.removeTicketFromEpic(currentEpicId, ticketId);
+      }
+
+      // If new epic is selected, add to it
+      if (epicId) {
+        await apiClient.addTicketToEpic(epicId, ticketId);
+        setTicketEpics([epicId]);
+      } else {
+        // No epic selected - remove from current if any
+        if (currentEpicId) {
+          await apiClient.removeTicketFromEpic(currentEpicId, ticketId);
+        }
+        setTicketEpics([]);
+      }
+    } catch (err) {
+      console.error('Failed to update epic:', err);
+      alert('Failed to update ticket epic');
+    } finally {
+      setIsUpdatingEpic(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <>
@@ -211,6 +258,23 @@ export function TicketDetailsPage() {
                   {users.filter(u => u.is_active).map(user => (
                     <option key={user.id} value={user.id}>
                       {user.full_name} ({user.username})
+                    </option>
+                  ))}
+                </select>
+              </dd>
+
+              <dt>Epic</dt>
+              <dd>
+                <select
+                  value={ticketEpics[0] || ''}
+                  onChange={(e) => handleEpicChange(e.target.value)}
+                  disabled={isUpdatingEpic}
+                  className="epic-select"
+                >
+                  <option value="">No Epic</option>
+                  {epics.map(epic => (
+                    <option key={epic.id} value={epic.id}>
+                      {epic.name}
                     </option>
                   ))}
                 </select>
@@ -348,7 +412,8 @@ export function TicketDetailsPage() {
           }
 
           .status-select,
-          .assignee-select {
+          .assignee-select,
+          .epic-select {
             padding: 0.5rem;
             border: 1px solid #ddd;
             border-radius: 4px;
@@ -358,7 +423,8 @@ export function TicketDetailsPage() {
           }
 
           .status-select:disabled,
-          .assignee-select:disabled {
+          .assignee-select:disabled,
+          .epic-select:disabled {
             opacity: 0.6;
             cursor: not-allowed;
           }

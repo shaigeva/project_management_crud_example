@@ -26,6 +26,25 @@ Before responding to the user, ALL of the following validations MUST pass with Z
 - If you cannot fix the tests, you MUST ask the user for help
 - A feature is NOT complete until all tests pass
 
+## Test-First Development
+
+**🚨 ALWAYS WRITE TESTS FOR NEW CODE 🚨**
+
+When implementing new features:
+
+1. **Write E2E tests FIRST** - Before or immediately after writing the implementation
+2. **Use Playwright MCP when available** - Prefer using the Playwright MCP server tools for test development when possible
+3. **Comprehensive coverage** - Test all user flows, edge cases, and error conditions
+4. **NO code without tests** - Every new feature MUST have corresponding E2E tests
+5. **Run tests before committing** - Ensure all tests pass before marking work complete
+
+**Test Coverage Requirements**:
+- ✅ Happy path (feature works as expected)
+- ✅ Edge cases (empty states, boundary conditions)
+- ✅ Error handling (invalid inputs, permission errors)
+- ✅ State persistence (data survives page reload)
+- ✅ UI interactions (buttons, dropdowns, forms work correctly)
+
 ## Mandatory Validation Commands
 
 Run these commands before every response to the user:

@@ -24,6 +24,7 @@ export function ProjectDetailsPage() {
   const [newTicketDescription, setNewTicketDescription] = useState('');
   const [newTicketPriority, setNewTicketPriority] = useState<TicketPriority | ''>('');
   const [newTicketAssignee, setNewTicketAssignee] = useState<string>('');
+  const [newTicketEpic, setNewTicketEpic] = useState<string>('');
   const [users, setUsers] = useState<User[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [filterPriority, setFilterPriority] = useState<string>('');
@@ -166,7 +167,7 @@ export function ProjectDetailsPage() {
     setIsCreatingTicket(true);
 
     try {
-      await apiClient.createTicket({
+      const ticket = await apiClient.createTicket({
         title: newTicketTitle,
         description: newTicketDescription || undefined,
         priority: newTicketPriority || undefined,
@@ -174,11 +175,17 @@ export function ProjectDetailsPage() {
         assigneeId: newTicketAssignee || undefined,
       });
 
+      // If epic is selected, link the ticket to the epic
+      if (newTicketEpic) {
+        await apiClient.addTicketToEpic(newTicketEpic, ticket.id);
+      }
+
       // Reset form and close modal
       setNewTicketTitle('');
       setNewTicketDescription('');
       setNewTicketPriority('');
       setNewTicketAssignee('');
+      setNewTicketEpic('');
       setShowCreateTicketForm(false);
 
       // Refresh tickets list
@@ -563,6 +570,24 @@ export function ProjectDetailsPage() {
                     {users.filter(u => u.is_active).map(user => (
                       <option key={user.id} value={user.id}>
                         {user.full_name} ({user.username})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="ticket-epic">Epic</label>
+                  <select
+                    id="ticket-epic"
+                    name="epic"
+                    value={newTicketEpic}
+                    onChange={(e) => setNewTicketEpic(e.target.value)}
+                    disabled={isCreatingTicket}
+                  >
+                    <option value="">No Epic</option>
+                    {epics.map(epic => (
+                      <option key={epic.id} value={epic.id}>
+                        {epic.name}
                       </option>
                     ))}
                   </select>
