@@ -10,6 +10,7 @@ export function ProjectDetailsPage() {
   const [error, setError] = useState('');
   const [epics, setEpics] = useState<Epic[]>([]);
   const [epicsLoading, setEpicsLoading] = useState(false);
+  const [epicProgress, setEpicProgress] = useState<Record<string, { total: number; completed: number; percentage: number }>>({});
   const [showCreateEpicForm, setShowCreateEpicForm] = useState(false);
   const [isCreatingEpic, setIsCreatingEpic] = useState(false);
   const [createEpicError, setCreateEpicError] = useState('');
@@ -36,6 +37,22 @@ export function ProjectDetailsPage() {
     try {
       const data = await apiClient.getEpics();
       setEpics(data);
+
+      // Calculate progress for each epic in parallel
+      const progressData: Record<string, { total: number; completed: number; percentage: number }> = {};
+
+      const progressPromises = data.map(async (epic) => {
+        const epicTickets = await apiClient.getEpicTickets(epic.id);
+        const total = epicTickets.length;
+        const completed = epicTickets.filter(t => t.status === 'DONE').length;
+        const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+        progressData[epic.id] = { total, completed, percentage };
+      });
+
+      await Promise.all(progressPromises);
+
+      setEpicProgress(progressData);
     } catch (err) {
       console.error('Failed to load epics:', err);
     } finally {
@@ -290,17 +307,40 @@ export function ProjectDetailsPage() {
                   <tr>
                     <th>Name</th>
                     <th>Description</th>
+                    <th>Progress</th>
                     <th>Created</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {epics.map((epic) => (
-                    <tr key={epic.id}>
-                      <td className="epic-name">{epic.name}</td>
-                      <td>{epic.description || '—'}</td>
-                      <td>{new Date(epic.created_at).toLocaleDateString()}</td>
-                    </tr>
-                  ))}
+                  {epics.map((epic) => {
+                    const progress = epicProgress[epic.id] || { total: 0, completed: 0, percentage: 0 };
+                    return (
+                      <tr key={epic.id}>
+                        <td className="epic-name">{epic.name}</td>
+                        <td>{epic.description || '—'}</td>
+                        <td className="epic-progress-cell">
+                          <div className="progress-info">
+                            <span className="progress-text">
+                              {progress.completed} of {progress.total} tickets
+                            </span>
+                            <span className="progress-percentage">
+                              {progress.percentage}%
+                            </span>
+                          </div>
+                          <div className="progress-bar-container">
+                            <div
+                              className={`progress-bar progress-${
+                                progress.percentage >= 70 ? 'high' :
+                                progress.percentage >= 30 ? 'medium' : 'low'
+                              }`}
+                              style={{ width: `${progress.percentage}%` }}
+                            />
+                          </div>
+                        </td>
+                        <td>{new Date(epic.created_at).toLocaleDateString()}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}
