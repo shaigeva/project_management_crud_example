@@ -69,7 +69,8 @@
       "Bash(E2E_TESTING=true python -m uvicorn:*)",
       "Bash(python -m json.tool:*)",
       "Bash(npx playwright test:*)",
-      "Bash(do)"
+      "Bash(do)",
+      "mcp__playwright__browser_type"
     ],
     "deny": [],
     "ask": [],

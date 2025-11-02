@@ -4,6 +4,7 @@ import { LoginPage } from './pages/LoginPage';
 import { ProjectsPage } from './pages/ProjectsPage';
 import { ProjectDetailsPage } from './pages/ProjectDetailsPage';
 import { TicketDetailsPage } from './pages/TicketDetailsPage';
+import { EpicDetailsPage } from './pages/EpicDetailsPage';
 import { UsersPage } from './pages/UsersPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import './index.css';
@@ -35,6 +36,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <TicketDetailsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/epics/:epicId"
+            element={
+              <ProtectedRoute>
+                <EpicDetailsPage />
               </ProtectedRoute>
             }
           />

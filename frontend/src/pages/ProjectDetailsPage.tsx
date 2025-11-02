@@ -316,7 +316,11 @@ export function ProjectDetailsPage() {
                     const progress = epicProgress[epic.id] || { total: 0, completed: 0, percentage: 0 };
                     return (
                       <tr key={epic.id}>
-                        <td className="epic-name">{epic.name}</td>
+                        <td className="epic-name">
+                          <Link to={`/epics/${epic.id}`} className="epic-link">
+                            {epic.name}
+                          </Link>
+                        </td>
                         <td>{epic.description || '—'}</td>
                         <td className="epic-progress-cell">
                           <div className="progress-info">

@@ -990,6 +990,16 @@ h1 {
 }
 
 /* Epic Progress Tracking Styles */
+.epic-link {
+  color: #1976d2;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.epic-link:hover {
+  text-decoration: underline;
+}
+
 .epic-progress-cell {
   min-width: 250px;
 }
