@@ -83,6 +83,15 @@ export interface Ticket {
   updated_at: string;
 }
 
+export interface Comment {
+  id: string;
+  ticket_id: string;
+  author_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface UserCreateResponse {
   user: User;
   generated_password: string;
@@ -234,6 +243,23 @@ class ApiClient {
       assignee_id: assigneeId,
     });
     return response.data;
+  }
+
+  // Comment endpoints
+  async getComments(ticketId: string): Promise<Comment[]> {
+    const response = await this.client.get<Comment[]>(`/api/tickets/${ticketId}/comments`);
+    return response.data;
+  }
+
+  async createComment(ticketId: string, content: string): Promise<Comment> {
+    const response = await this.client.post<Comment>(`/api/tickets/${ticketId}/comments`, {
+      content,
+    });
+    return response.data;
+  }
+
+  async deleteComment(commentId: string): Promise<void> {
+    await this.client.delete(`/api/comments/${commentId}`);
   }
 }
 

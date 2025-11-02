@@ -18,6 +18,14 @@ Before responding to the user, ALL of the following validations MUST pass with Z
 - ✅ `npm run typecheck` - ZERO TypeScript errors
 - ✅ `npm run e2e` - 100% pass rate, ZERO skipped tests, ZERO failures
 
+**🚨 CRITICAL: ALL TESTS MUST PASS 🚨**
+
+- You MUST NEVER leave failing tests
+- You MUST NEVER skip tests (except for known flaky infrastructure issues)
+- If tests fail, you MUST fix them before completing your work
+- If you cannot fix the tests, you MUST ask the user for help
+- A feature is NOT complete until all tests pass
+
 ## Mandatory Validation Commands
 
 Run these commands before every response to the user:

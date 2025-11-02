@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import apiClient, { Ticket, User } from '../services/api';
+import apiClient, { Ticket, User, Comment } from '../services/api';
 import { Navigation } from '../components/Navigation';
 
 export function TicketDetailsPage() {
@@ -11,6 +11,11 @@ export function TicketDetailsPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isUpdatingAssignee, setIsUpdatingAssignee] = useState(false);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [newCommentContent, setNewCommentContent] = useState('');
+  const [isAddingComment, setIsAddingComment] = useState(false);
+  const [addCommentError, setAddCommentError] = useState('');
 
   useEffect(() => {
     const fetchTicket = async () => {
@@ -40,6 +45,53 @@ export function TicketDetailsPage() {
 
     fetchTicket();
   }, [ticketId]);
+
+  useEffect(() => {
+    const fetchComments = async () => {
+      if (!ticketId) return;
+
+      setCommentsLoading(true);
+      try {
+        const data = await apiClient.getComments(ticketId);
+        setComments(data);
+      } catch (err) {
+        console.error('Failed to load comments:', err);
+      } finally {
+        setCommentsLoading(false);
+      }
+    };
+
+    fetchComments();
+  }, [ticketId]);
+
+  const handleAddComment = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!ticketId || !newCommentContent.trim()) return;
+
+    setIsAddingComment(true);
+    setAddCommentError('');
+
+    try {
+      const newComment = await apiClient.createComment(ticketId, newCommentContent.trim());
+      setComments([...comments, newComment]);
+      setNewCommentContent('');
+    } catch (err) {
+      setAddCommentError(err instanceof Error ? err.message : 'Failed to add comment');
+    } finally {
+      setIsAddingComment(false);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (!window.confirm('Are you sure you want to delete this comment?')) return;
+
+    try {
+      await apiClient.deleteComment(commentId);
+      setComments(comments.filter(c => c.id !== commentId));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete comment');
+    }
+  };
 
   const handleStatusChange = async (newStatus: string) => {
     if (!ticketId) return;
@@ -174,7 +226,301 @@ export function TicketDetailsPage() {
               <dd>{new Date(ticket.updated_at).toLocaleString()}</dd>
             </dl>
           </div>
+
+          <div className="comments-section">
+            <h2>Comments ({comments.length})</h2>
+
+            {commentsLoading ? (
+              <p>Loading comments...</p>
+            ) : (
+              <>
+                {comments.length === 0 ? (
+                  <p className="no-comments">No comments yet. Be the first to comment!</p>
+                ) : (
+                  <div className="comments-list">
+                    {comments.map(comment => {
+                      const author = users.find(u => u.id === comment.author_id);
+                      return (
+                        <div key={comment.id} className="comment" data-comment-id={comment.id}>
+                          <div className="comment-header">
+                            <span className="comment-author">
+                              {author ? `${author.full_name} (${author.username})` : 'Unknown User'}
+                            </span>
+                            <span className="comment-timestamp">
+                              {new Date(comment.created_at).toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="comment-content">{comment.content}</div>
+                          <button
+                            onClick={() => handleDeleteComment(comment.id)}
+                            className="delete-comment-btn"
+                            aria-label={`Delete comment by ${author?.full_name || 'Unknown User'}`}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <form onSubmit={handleAddComment} className="add-comment-form">
+                  <h3>Add Comment</h3>
+                  {addCommentError && <div className="error-message">{addCommentError}</div>}
+                  <textarea
+                    className="comment-input"
+                    value={newCommentContent}
+                    onChange={(e) => setNewCommentContent(e.target.value)}
+                    placeholder="Write a comment..."
+                    rows={4}
+                    disabled={isAddingComment}
+                    aria-label="New comment content"
+                  />
+                  <button
+                    type="submit"
+                    className="submit-comment-btn"
+                    disabled={isAddingComment || !newCommentContent.trim()}
+                  >
+                    {isAddingComment ? 'Adding...' : 'Add Comment'}
+                  </button>
+                </form>
+              </>
+            )}
+          </div>
         </div>
+
+        <style>{`
+          .ticket-details-page {
+            padding: 2rem;
+          }
+
+          .page-header {
+            margin-bottom: 2rem;
+          }
+
+          .header-with-back {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+          }
+
+          .back-link {
+            color: #1976d2;
+            text-decoration: none;
+            font-size: 0.95rem;
+          }
+
+          .back-link:hover {
+            text-decoration: underline;
+          }
+
+          .ticket-details-content {
+            max-width: 900px;
+          }
+
+          .details-section {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+          }
+
+          .details-section h2 {
+            margin-top: 0;
+            margin-bottom: 1.5rem;
+            color: #333;
+          }
+
+          .details-list {
+            display: grid;
+            grid-template-columns: 150px 1fr;
+            gap: 1rem;
+          }
+
+          .details-list dt {
+            font-weight: 600;
+            color: #666;
+          }
+
+          .details-list dd {
+            margin: 0;
+          }
+
+          .status-select,
+          .assignee-select {
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+            background: white;
+            cursor: pointer;
+          }
+
+          .status-select:disabled,
+          .assignee-select:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+          }
+
+          .priority-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-weight: 500;
+            font-size: 0.875rem;
+          }
+
+          .priority-critical {
+            background: #ffebee;
+            color: #c62828;
+          }
+
+          .priority-high {
+            background: #fff3e0;
+            color: #e65100;
+          }
+
+          .priority-medium {
+            background: #fff9c4;
+            color: #f57f17;
+          }
+
+          .priority-low {
+            background: #e8f5e9;
+            color: #2e7d32;
+          }
+
+          .comments-section {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          }
+
+          .comments-section h2 {
+            margin-top: 0;
+            margin-bottom: 1.5rem;
+            color: #333;
+          }
+
+          .no-comments {
+            color: #666;
+            font-style: italic;
+            margin-bottom: 2rem;
+          }
+
+          .comments-list {
+            margin-bottom: 2rem;
+          }
+
+          .comment {
+            background: #f9f9f9;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border-left: 3px solid #1976d2;
+          }
+
+          .comment-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+          }
+
+          .comment-author {
+            font-weight: 600;
+            color: #1976d2;
+          }
+
+          .comment-timestamp {
+            color: #666;
+          }
+
+          .comment-content {
+            margin-bottom: 0.75rem;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+          }
+
+          .delete-comment-btn {
+            padding: 0.25rem 0.75rem;
+            font-size: 0.875rem;
+            color: #d32f2f;
+            background: white;
+            border: 1px solid #d32f2f;
+            border-radius: 4px;
+            cursor: pointer;
+          }
+
+          .delete-comment-btn:hover {
+            background: #ffebee;
+          }
+
+          .add-comment-form {
+            background: #f5f5f5;
+            padding: 1.5rem;
+            border-radius: 8px;
+          }
+
+          .add-comment-form h3 {
+            margin-top: 0;
+            margin-bottom: 1rem;
+          }
+
+          .comment-input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 1rem;
+            resize: vertical;
+            margin-bottom: 1rem;
+            box-sizing: border-box;
+          }
+
+          .comment-input:disabled {
+            background: #f0f0f0;
+            cursor: not-allowed;
+          }
+
+          .submit-comment-btn {
+            padding: 0.75rem 1.5rem;
+            background: #1976d2;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+          }
+
+          .submit-comment-btn:hover:not(:disabled) {
+            background: #1565c0;
+          }
+
+          .submit-comment-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+          }
+
+          .error-message {
+            background: #ffebee;
+            color: #c62828;
+            padding: 0.75rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+          }
+
+          .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+          }
+        `}</style>
       </div>
     </>
   );
