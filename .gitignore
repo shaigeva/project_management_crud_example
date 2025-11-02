@@ -38,3 +38,10 @@ node_modules/
 
 # don't include the sqlite database
 *.db
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
