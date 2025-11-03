@@ -6,6 +6,7 @@ import { ProjectDetailsPage } from './pages/ProjectDetailsPage';
 import { TicketDetailsPage } from './pages/TicketDetailsPage';
 import { EpicDetailsPage } from './pages/EpicDetailsPage';
 import { UsersPage } from './pages/UsersPage';
+import { OrganizationsPage } from './pages/OrganizationsPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import './index.css';
 
@@ -52,6 +53,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <UsersPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/organizations"
+            element={
+              <ProtectedRoute>
+                <OrganizationsPage />
               </ProtectedRoute>
             }
           />

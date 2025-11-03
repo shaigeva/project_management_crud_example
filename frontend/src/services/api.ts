@@ -178,6 +178,11 @@ class ApiClient {
     return response.data;
   }
 
+  async createOrganization(data: { name: string; description?: string }): Promise<Organization> {
+    const response = await this.client.post<Organization>('/api/organizations', data);
+    return response.data;
+  }
+
   async getEpics(projectId?: string): Promise<Epic[]> {
     const params = projectId ? { project_id: projectId } : undefined;
     const response = await this.client.get<Epic[]>('/api/epics', { params });

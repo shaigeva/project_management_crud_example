@@ -5,6 +5,7 @@ CORS middleware, dependency injection, and core endpoints.
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -65,6 +66,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info(f"Created {workflow_count} default workflow(s) for existing organizations")
     else:
         logger.info("All organizations have default workflows")
+
+    # Bootstrap rich demo data if BOOTSTRAP_DEMO_DATA environment variable is set
+    if os.getenv("BOOTSTRAP_DEMO_DATA") == "true":
+        logger.info("BOOTSTRAP_DEMO_DATA=true detected - creating rich demo data...")
+        from project_management_crud_example.bootstrap_rich_data import bootstrap_rich_data
+
+        try:
+            bootstrap_rich_data()
+            logger.info("Rich demo data bootstrapped successfully")
+        except Exception as e:
+            logger.error(f"Failed to bootstrap demo data: {e}")
+            # Don't crash the app, just log the error
 
     yield
     # Cleanup resources on shutdown if needed

@@ -70,7 +70,13 @@
       "Bash(python -m json.tool:*)",
       "Bash(npx playwright test:*)",
       "Bash(do)",
-      "mcp__playwright__browser_type"
+      "mcp__playwright__browser_type",
+      "Bash(/dev/null)",
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_network_requests",
+      "Bash(xargs ps:*)",
+      "Bash(python -m project_management_crud_example.bootstrap_rich_data:*)",
+      "Bash(time python:*)"
     ],
     "deny": [],
     "ask": [],
