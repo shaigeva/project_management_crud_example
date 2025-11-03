@@ -188,7 +188,8 @@ def update_ticket_status(client: TestClient, user_token: str, ticket_id: str, st
 def assign_ticket_to_epic(client: TestClient, user_token: str, ticket_id: str, epic_id: str) -> None:
     """Assign a ticket to an epic."""
     response = client.post(
-        f"/api/epics/{epic_id}/tickets/{ticket_id}",
+        f"/api/epics/{epic_id}/tickets",
+        params={"ticket_id": ticket_id},
         headers=auth_headers(user_token),
     )
     if response.status_code not in [200, 201]:
@@ -365,6 +366,9 @@ def bootstrap_rich_data() -> None:
                         assignee_id=assignee,
                         status=status,  # Set status directly during creation
                     )
+
+                    # Assign ticket to epic
+                    assign_ticket_to_epic(client, pm_token, ticket["id"], epic["id"])
 
                     # Add some comments
                     if random.random() > 0.5:  # 50% chance of comments
