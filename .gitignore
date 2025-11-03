@@ -41,3 +41,10 @@ node_modules/
 
 # Playwright-mcp
 .playwright-mcp
+# Coverage reports
+htmlcov/
+.coverage
+.coverage-*
+.coverage.*
+coverage.xml
+*.cover

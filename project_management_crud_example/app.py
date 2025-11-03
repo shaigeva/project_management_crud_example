@@ -173,7 +173,7 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 
 
 @app.exception_handler(Exception)
-async def general_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+async def general_exception_handler(request: Request, exc: Exception) -> JSONResponse:  # pragma: no cover
     """Handle unexpected exceptions with generic error response."""
     logger.error(f"Unexpected error on {request.method} {request.url}: {type(exc).__name__}: {exc}")
     return JSONResponse(
