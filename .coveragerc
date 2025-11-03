@@ -2,6 +2,7 @@
 source = project_management_crud_example
 omit =
     */bootstrap.py
+    */bootstrap_data.py
     */tests/*
     */__pycache__/*
 
